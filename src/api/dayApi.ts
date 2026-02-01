@@ -31,7 +31,7 @@ export const getPlanDayDetail = async (dayId: number): Promise<PlanDayDetailResp
 
 // 4. 특정 여행의 계획 목록 조회
 export const getPlanDays = async (planId: number): Promise<PlanDayResponse[]> => {
-  const res = await fetch(`/api/days/plan/${planId}`, {
+  const res = await fetchWithAuth(`/api/days/plan/${planId}`, {
     method: 'GET',
     headers: getAuthHeaders(),
   });
