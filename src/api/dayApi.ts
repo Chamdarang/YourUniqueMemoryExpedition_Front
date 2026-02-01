@@ -77,3 +77,15 @@ export const detachPlanDay = async (dayId: number): Promise<PlanDayResponse> => 
   if (!json.success) throw new Error(json.message);
   return json.data;
 };
+
+export const deleteDay = async (dayId: number): Promise<void> => {
+  const res = await fetchWithAuth(`/api/days/${dayId}`, {
+    method: 'DELETE'
+  });
+
+  // 204 No Content 처리
+  if (res.status === 204) return;
+
+  const json = await res.json();
+  if (!json.success) throw new Error(json.message);
+};

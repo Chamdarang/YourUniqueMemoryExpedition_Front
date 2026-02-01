@@ -113,14 +113,25 @@ export default function SpotList({ spots, onDelete, onToggleVisit }: Props) {
       ------------------------------------------------------ */}
         <div className="hidden md:block bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
+            {/* ✅ table-fixed 추가: 너비 고정 */}
+            <table className="min-w-full divide-y divide-gray-200 table-fixed">
+
+              {/* ✅ 컬럼 비율 설정 (합계 100%) */}
+              <colgroup>
+                <col className="w-[10%]" /> {/* 유형 */}
+                <col className="w-[40%]" /> {/* 장소명 (가장 넓게) */}
+                <col className="w-[30%]" /> {/* 주소 */}
+                <col className="w-[10%]" /> {/* 방문여부 */}
+                <col className="w-[10%]" /> {/* 관리 */}
+              </colgroup>
+
               <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-24">유형</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">유형</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">장소명</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">주소</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-24">방문여부</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-24">관리</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">방문여부</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">관리</th>
               </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">

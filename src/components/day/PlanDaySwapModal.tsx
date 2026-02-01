@@ -76,7 +76,7 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
               <p className="text-xs text-gray-500 mt-2 bg-gray-50 p-3 rounded-lg break-keep leading-relaxed border border-gray-100">
                 {swapMode === 'REPLACE' && '⚠️ 대상 위치에 원래 있던 일정을 완전히 삭제하고, 이 일정으로 덮어씁니다.'}
                 {swapMode === 'SHIFT' && '➡️ 대상 위치부터 뒤에 있는 일정들을 하루씩 뒤로 미룹니다.'}
-                {swapMode === 'INDEPENDENT' && '📦 대상 위치에 원래 있던 일정을 여행에서 빼내어 "보관함(나의 계획)"으로 옮기고, 이 일정을 넣습니다.'}
+                {swapMode === 'INDEPENDENT' && '📦 대상 위치에 원래 있던 일정을 여행에서 빼내어 "보관함(내 계획)"으로 옮기고, 이 일정을 넣습니다.'}
               </p>
             </div>
 

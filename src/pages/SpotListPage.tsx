@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 // API
-import { createSpot, deleteSpot, getMySpots, updateSpot } from "../api/spotApi";
+import { deleteSpot, getMySpots, updateSpot } from "../api/spotApi";
 
 // Types
-import type { SpotCreateRequest, SpotResponse, SpotUpdateRequest } from "../types/spot";
-import type { SpotType } from "../types/enums";
+import type { SpotResponse, SpotUpdateRequest } from "../types/spot";
 
 // Components
 import SpotFilter, { type SpotSearchParams } from "../components/spot/SpotFilter";
@@ -43,24 +42,8 @@ export default function SpotListPage() {
     // 2. 데이터 상태 관리
     const [spots, setSpots] = useState<SpotResponse[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isCreating, setIsCreating] = useState(false);
     const [filter, setFilter] = useState<SpotSearchParams>({ keyword: '', type: 'ALL', isVisit: 'ALL' });
     const [targetSpotId, setTargetSpotId] = useState<number | null>(null);
-
-    // 폼 상태 (새 장소 추가용) - 새 필드들 초기화 포함
-    const [form, setForm] = useState<SpotCreateRequest>({
-        spotName: '',
-        spotType: 'OTHER',
-        address: '',
-        shortAddress: '',
-        website: '',
-        googleMapUrl: '',
-        description: '',
-        lat: 0.0,
-        lng: 0.0,
-        isVisit: false,
-        metadata: {}
-    });
 
     // 장소 목록 로드
     const fetchSpots = async () => {
@@ -130,24 +113,6 @@ export default function SpotListPage() {
         });
     }, [spots, filter]);
 
-    // 5. 새 장소 저장 핸들러
-    const handleCreate = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!form.spotName.trim()) return;
-        try {
-            await createSpot(form);
-            alert('추가되었습니다.');
-            setIsCreating(false);
-            // 폼 초기화
-            setForm({
-                spotName: '', spotType: 'OTHER', address: '',
-                shortAddress: '', website: '', googleMapUrl: '', description: '',
-                lat: 0.0, lng: 0.0, isVisit: false, metadata: {}
-            });
-            fetchSpots();
-        } catch { alert('저장 실패'); }
-    };
-
     // 장소 삭제 핸들러
     const handleDelete = async (id: number) => {
         if (!window.confirm("삭제하시겠습니까?")) return;
@@ -179,8 +144,7 @@ export default function SpotListPage() {
             return;
         }
         try {
-            // true 파라미터를 넘겨서 "강제 삭제" 요청 (API 수정 필요, 2단계 참고)
-            await deleteSpot(targetSpotId);
+            await deleteSpot(targetSpotId); // API 수정 필요 시 확인 (force 파라미터 등)
 
             alert("삭제되었습니다.");
             setIsConflictModalOpen(false); // 모달 닫기
@@ -192,13 +156,9 @@ export default function SpotListPage() {
         }
     };
 
-    const spotTypes: SpotType[] = [
-        'LANDMARK', 'HISTORICAL_SITE', 'RELIGIOUS_SITE', 'MUSEUM', 'PARK',
-        'NATURE', 'SHOPPING', 'ACTIVITY', 'FOOD', 'CAFE', 'STATION', 'ACCOMMODATION', 'OTHER'
-    ];
-
     return (
-        <div className="max-w-5xl mx-auto p-4 md:p-6 pb-20">
+        // ✅ 수정됨: max-w-5xl -> max-w-7xl (화면을 더 넓게 써서 잘림 방지)
+        <div className="max-w-7xl mx-auto p-4 md:p-6 pb-20">
 
             {/* 헤더 영역 */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
@@ -211,41 +171,26 @@ export default function SpotListPage() {
                         <button onClick={switchToListMode} className={`px-3 py-1.5 text-sm font-bold rounded-md transition ${viewMode === 'LIST' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>📋 전체</button>
                         <button onClick={switchToGroupMode} className={`px-3 py-1.5 text-sm font-bold rounded-md transition ${viewMode === 'GROUP' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>📂 그룹별</button>
                     </div>
-                    <button onClick={() => setIsCreating(!isCreating)} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg shadow-green-200 transition text-sm">{isCreating ? '닫기' : '+ 장소 추가'}</button>
                 </div>
             </div>
 
-            {/* 장소 추가 폼 (토글) */}
-            {isCreating && (
-                <div className="mb-6 bg-gray-50 p-6 rounded-xl border border-gray-200 animate-fade-in-down">
-                    <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                        <input className="px-4 py-2 border rounded-lg" placeholder="이름" value={form.spotName} onChange={e => setForm({...form, spotName: e.target.value})} required />
-                        <select className="px-4 py-2 border rounded-lg bg-white" value={form.spotType} onChange={e => setForm({...form, spotType: e.target.value as SpotType})}>
-                            {spotTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                        <input className="px-4 py-2 border rounded-lg md:col-span-2" placeholder="주소" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
-                        <div className="flex items-center gap-2 md:col-span-4">
-                            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-                                <input type="checkbox" checked={form.isVisit} onChange={e => setForm({...form, isVisit: e.target.checked})} className="w-4 h-4 text-green-600 rounded" />
-                                방문 완료
-                            </label>
-                            <button type="submit" className="ml-auto bg-green-600 text-white font-bold py-2 px-6 rounded-lg text-sm">저장</button>
-                        </div>
-                    </form>
-                </div>
-            )}
+
             <SpotInUseModal
                 isOpen={isConflictModalOpen}
                 onClose={() => setIsConflictModalOpen(false)}
                 usageList={conflictList}
                 onSpotDeleteRetry={handleForceDelete}
             />
+
             {/* 뷰 모드에 따른 렌더링 */}
             {viewMode === 'LIST' ? (
                 <>
                     <SpotFilter onSearch={setFilter} />
                     {loading ? <div className="text-center p-20">로딩 중...</div> :
-                        <SpotList spots={visibleSpots} onDelete={handleDelete} onToggleVisit={handleToggleVisit} />
+                        // 만약 화면이 여전히 좁다면 가로 스크롤을 허용하는 래퍼 추가
+                        <div className="overflow-x-auto">
+                            <SpotList spots={visibleSpots} onDelete={handleDelete} onToggleVisit={handleToggleVisit} />
+                        </div>
                     }
                 </>
             ) : (

@@ -98,7 +98,7 @@ export default function PlanCreatePage() {
     try {
       await createPlan(form);
       alert(`'${form.planName}' 여행이 생성되었습니다! ✈️`);
-      navigate('/');
+      navigate('/plans');
     } catch (err: unknown) {
       console.error(err);
       if (err instanceof Error) alert(err.message);
@@ -132,7 +132,6 @@ export default function PlanCreatePage() {
               <input
                   name="planStartDate"
                   type="date"
-                  required
                   value={form.planStartDate}
                   className="w-full px-3 py-2 border rounded-lg outline-none focus:border-blue-500"
                   onChange={handleStartDateChange}
@@ -147,7 +146,6 @@ export default function PlanCreatePage() {
                     name="planDays"
                     type="number"
                     min="1"
-                    required
                     value={form.planDays}
                     className="w-full px-3 py-2 border rounded-lg outline-none focus:border-blue-500 text-center font-bold text-blue-600"
                     onChange={handleDaysChange}
@@ -162,7 +160,6 @@ export default function PlanCreatePage() {
               <input
                   name="planEndDate"
                   type="date"
-                  required
                   value={form.planEndDate}
                   className="w-full px-3 py-2 border rounded-lg outline-none focus:border-blue-500"
                   onChange={handleEndDateChange}

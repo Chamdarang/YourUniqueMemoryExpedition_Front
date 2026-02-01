@@ -75,3 +75,15 @@ export const updatePlan = async (planId: number, data: PlanUpdateRequest): Promi
   if (!json.success) throw new Error(json.message);
   return json.data;
 };
+
+export const deletePlan = async (id: number): Promise<void> => {
+    const res = await fetchWithAuth(`/api/plans/${id}`, {
+        method: 'DELETE'
+    });
+
+    // 204 No Content면 성공
+    if (res.status === 204) return;
+
+    const json = await res.json();
+    if (!json.success) throw new Error(json.message);
+};

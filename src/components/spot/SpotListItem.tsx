@@ -43,41 +43,47 @@ export default function SpotListItem({ spot, onDelete, onToggleVisit }: Props) {
 
             {/* 1. 유형 아이콘 */}
             <td className="px-4 py-4 whitespace-nowrap">
-        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold border ${info.color}`}>
-          {info.icon} {info.label}
-        </span>
+                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold border ${info.color}`}>
+                  {info.icon} {info.label}
+                </span>
             </td>
 
             {/* 2. 장소명 및 설명 */}
-            <td className="px-4 py-4">
-                <div className="flex items-center gap-2">
-                    <Link to={`/spots/${spot.id}`} className="font-bold text-gray-900 hover:text-blue-600 hover:underline">
+            {/* 🚨 핵심 1: max-w-[0px]를 줘야 table-fixed 비율 안에서만 늘어나고 멈춥니다. */}
+            <td className="px-4 py-4 max-w-[0px]">
+
+                {/* 🚨 핵심 2: min-w-0을 줘야 Flex 자식들이 공간 부족할 때 알아서 줄어듭니다. */}
+                <div className="flex items-center gap-2 min-w-0">
+                    <Link to={`/spots/${spot.id}`} className="font-bold text-gray-900 hover:text-blue-600 hover:underline truncate block">
                         {spot.spotName}
                     </Link>
-                    {/* 외부 링크 아이콘 */}
                     {spot.googleMapUrl && (
-                        <a href={spot.googleMapUrl} target="_blank" rel="noreferrer" title="구글맵 보기" className="text-gray-300 hover:text-blue-500 transition">
+                        <a href={spot.googleMapUrl} target="_blank" rel="noreferrer" title="구글맵 보기" className="text-gray-300 hover:text-blue-500 transition shrink-0">
                             🗺️
                         </a>
                     )}
                 </div>
+
                 {spot.description && (
-                    <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{spot.description}</p>
+                    <p className="text-xs text-gray-400 mt-0.5 truncate">
+                        {spot.description}
+                    </p>
                 )}
             </td>
 
             {/* 3. 주소 */}
-            <td className="px-4 py-4 max-w-xs">
+            {/* 🚨 핵심 3: 여기도 max-w-[0px]를 줘서 30% 비율을 넘지 못하게 강제합니다. */}
+            <td className="px-4 py-4 max-w-[0px]">
                 <div className="text-sm text-gray-500 truncate" title={spot.address}>
                     {spot.shortAddress || spot.address || '-'}
                 </div>
             </td>
 
             {/* 4. 방문 여부 토글 */}
-            <td className="px-4 py-4 whitespace-nowrap">
+            <td className="px-4 py-4 whitespace-nowrap text-center">
                 <button
                     onClick={() => onToggleVisit && onToggleVisit(spot)}
-                    className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full border transition
+                    className={`inline-flex items-center justify-center gap-1 text-xs font-bold px-2 py-1 rounded-full border transition
             ${spot.isVisit
                         ? 'text-green-600 bg-green-50 border-green-100 hover:bg-green-100 cursor-pointer'
                         : 'text-gray-400 bg-gray-50 border-gray-100 hover:bg-gray-100 hover:text-gray-600 cursor-pointer'
