@@ -13,7 +13,7 @@ import SpotFilter, { type SpotSearchParams } from "../components/spot/SpotFilter
 import SpotList from "../components/spot/SpotList";
 import SpotGroupList from "../components/spot/SpotGroupList";
 import SpotInUseModal from "../components/spot/SpotInUseModal.tsx";
-import type {UsedScheduleResponse} from "../types/schedule.ts";
+import type {UsedScheduleResponse} from "../types/error.ts";
 
 export default function SpotListPage() {
     const [searchParams, setSearchParams] = useSearchParams();
