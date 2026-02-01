@@ -2,8 +2,7 @@ import type { ApiResponse } from "../types/common";
 import type { SpotType } from "../types/enums";
 import type { SpotCreateRequest, SpotDetailResponse, SpotResponse, SpotUpdateRequest } from "../types/spot";
 import { fetchWithAuth } from "./utils";
-import type {UsedScheduleResponse} from "../types/schedule.ts";
-import type {SpotInUseError} from "../types/error.ts";
+import type {SpotInUseError, UsedScheduleResponse} from "../types/error.ts";
 
 export const getMySpots = async (): Promise<SpotResponse[]> => {
   const res = await fetchWithAuth('/api/spots', {

@@ -1,5 +1,7 @@
+declare let google: any;
+
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { useParams, useNavigate, useBlocker } from "react-router-dom";
+import {useParams, useNavigate, useBlocker} from "react-router-dom";
 import {
     DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent
 } from "@dnd-kit/core";
@@ -324,6 +326,7 @@ function SortableDayItem({
         if(index > 0 && schedules[index-1]) startTime = schedules[index-1].endTime;
 
         const newItem: DayScheduleResponse = {
+            endTime: "", isVisit: false, lat: 0, lng: 0,
             id: -Date.now(), dayId: data.id, scheduleOrder: index + 1, spotId: 0, spotName: "", spotType: "OTHER",
             startTime, duration: 60, movingDuration: 0, transportation: 'WALK', memo: '', movingMemo: ''
         };
@@ -425,7 +428,7 @@ function SortableDayItem({
                                             </div>
                                         )}
                                         {safeSchedules.map((schedule: any, index: number) => (
-                                            <ScheduleItem
+                                            schedule ?(<ScheduleItem
                                                 key={schedule.id}
                                                 schedule={schedule}
                                                 index={index}
@@ -434,14 +437,14 @@ function SortableDayItem({
                                                 onUpdate={handleItemUpdate}
                                                 onDelete={() => handleItemDelete(schedule.id)}
                                                 onInsert={handleItemInsert}
-                                                pickingTarget={pickingTarget}
-                                                setPickingTarget={setPickingTarget}
+                                                // pickingTarget={pickingTarget}
+                                                // setPickingTarget={setPickingTarget}
                                                 onRequestMapPick={() => {
                                                     if (pickingTarget?.scheduleId === schedule.id) setPickingTarget(null);
                                                     else setPickingTarget({ dayId: data.id, scheduleId: schedule.id });
                                                 }}
                                                 isPickingMap={pickingTarget?.scheduleId === schedule.id}
-                                            />
+                                            />):null
                                         ))}
                                     </div>
                                 </SortableContext>
@@ -636,7 +639,7 @@ function PlanDetailContent() {
         else if (e.detail.latLng) {
             const lat = e.detail.latLng.lat;
             const lng = e.detail.latLng.lng;
-            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+            geocoder.geocode({ location: { lat, lng } }, (results: any, status: any) => {
                 if (status === google.maps.GeocoderStatus.OK && results && results[0]) {
                     const place = results[0];
                     const name = place.address_components[0]?.long_name || "지도에서 선택한 위치";
@@ -874,7 +877,7 @@ function PlanDetailContent() {
                                         {fullDays.map(item => (
                                             <SortableDayItem
                                                 key={item.id} id={item.id} dayOrder={item.dayOrder} data={item.data}
-                                                schedules={mapSchedulesMap[item.data?.id] || []}
+                                                schedules={item.data?.id ? mapSchedulesMap[item.data.id] || [] : []}
                                                 showInjury={showInjury}
                                                 onSchedulesChange={handleSchedulesChange}
                                                 onRefresh={fetchPlanDetail} onCreateNew={handleCreateNew} onImportSelect={handleImportSelect}

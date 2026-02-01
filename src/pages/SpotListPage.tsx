@@ -45,6 +45,7 @@ export default function SpotListPage() {
     const [loading, setLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
     const [filter, setFilter] = useState<SpotSearchParams>({ keyword: '', type: 'ALL', isVisit: 'ALL' });
+    const [targetSpotId, setTargetSpotId] = useState<number | null>(null);
 
     // 폼 상태 (새 장소 추가용) - 새 필드들 초기화 포함
     const [form, setForm] = useState<SpotCreateRequest>({
@@ -149,16 +150,45 @@ export default function SpotListPage() {
 
     // 장소 삭제 핸들러
     const handleDelete = async (id: number) => {
-        if(!window.confirm("삭제하시겠습니까?")) return;
-        try { await deleteSpot(id); fetchSpots(); }
-        catch (error:any) {
+        if (!window.confirm("삭제하시겠습니까?")) return;
+
+        // 일단 "이 녀석을 지우려고 시도했다"라고 기억해둠
+        setTargetSpotId(id);
+
+        try {
+            await deleteSpot(id);
+            fetchSpots();
+            setTargetSpotId(null); // 성공하면 기억 삭제
+        } catch (error: any) {
             console.log(error);
             if (error.code === 'SPOT_IN_USE') {
                 setConflictList(error.data);
-                setIsConflictModalOpen(true)
+                setIsConflictModalOpen(true);
+                // ⚠️ 여기서 targetSpotId를 초기화하지 않음 (모달에서 써야 하니까)
             } else {
                 alert("삭제 실패");
+                setTargetSpotId(null);
             }
+        }
+    };
+
+    // 3️⃣ [신규] 삭제 재시도 함수
+    const handleForceDelete = async () => {
+        if (!targetSpotId) return;
+        if (!window.confirm("정말로 삭제하시겠습니까?")) {
+            return;
+        }
+        try {
+            // true 파라미터를 넘겨서 "강제 삭제" 요청 (API 수정 필요, 2단계 참고)
+            await deleteSpot(targetSpotId);
+
+            alert("삭제되었습니다.");
+            setIsConflictModalOpen(false); // 모달 닫기
+            setTargetSpotId(null);         // 타겟 초기화
+            fetchSpots();                  // 목록 갱신
+        } catch (error) {
+            alert("실패했습니다.");
+            console.error(error);
         }
     };
 
@@ -208,6 +238,7 @@ export default function SpotListPage() {
                 isOpen={isConflictModalOpen}
                 onClose={() => setIsConflictModalOpen(false)}
                 usageList={conflictList}
+                onSpotDeleteRetry={handleForceDelete}
             />
             {/* 뷰 모드에 따른 렌더링 */}
             {viewMode === 'LIST' ? (

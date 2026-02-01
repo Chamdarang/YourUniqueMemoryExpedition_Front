@@ -111,7 +111,6 @@ const parseInjuryFromMemo = (memo: string, tag: string) => {
 const INJURY_OPTIONS = [0, 5, 10, 15];
 
 export default function ScheduleItem({ schedule, index, showInjury, onUpdate, onDelete, onInsert, onRequestMapPick, isPickingMap }: Props) {
-    if (!schedule) return null;
 
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: schedule.id });
     const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, zIndex: isDragging ? 999 : 'auto' };
@@ -148,7 +147,7 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
     const finalSpotName = schedule.spotName || tempSpotData?.name;
     const finalSpotType = schedule.spotType || tempSpotData?.type || 'OTHER';
 
-    const typeInfo = getSpotTypeInfo(finalSpotType || schedule.spot?.spotType);
+    const typeInfo = getSpotTypeInfo(finalSpotType || schedule.spotType);
     const displayMemo = cleanMemoTags(schedule.memo);
 
     const [selectedSpotInfo, setSelectedSpotInfo] = useState<{name: string, type: SpotType, lat?: number, lng?: number} | null>(null);
@@ -165,7 +164,7 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
     useEffect(() => {
         if (!schedule) return;
 
-        setIsVisited(schedule.isVisit || schedule.spot?.isVisit || false);
+        setIsVisited(schedule.isVisit || false);
 
         const sInjury = parseInjuryFromMemo(schedule.memo, '#si:');
         const mInjury = parseInjuryFromMemo(schedule.movingMemo, '#mi:');

@@ -158,7 +158,7 @@ export default function DayScheduleEditor({ dayId, dayName, onRefreshParent, onD
   };
 
   // 로컬 업데이트 (메모리 상에서만 수정)
-  const handleUpdateLocal = (id: number, updatedData: Partial<DayScheduleResponse>) => {
+  const handleUpdateLocal = (id: number, updatedData: any) => {
     setSchedules(prev => {
 
       const updatedList = prev.map(item =>
@@ -226,6 +226,7 @@ export default function DayScheduleEditor({ dayId, dayName, onRefreshParent, onD
     const newItem: DayScheduleResponse = {
       id: -Date.now(),
       dayId, scheduleOrder: 0, spotId: 0, spotName: "", spotType: "OTHER",
+      isVisit: false, lat: 0, lng: 0, endTime: "",
       startTime: defaultStartTime, duration: 60, movingDuration: 0, transportation: 'WALK',
       memo: '', movingMemo: ''
     };
@@ -294,7 +295,7 @@ export default function DayScheduleEditor({ dayId, dayName, onRefreshParent, onD
           <SortableContext items={schedules.map(s => s.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-0">
               {schedules.map((schedule, index) => (
-                  <ScheduleItem
+                  schedule? (<ScheduleItem
                       key={schedule.id}
                       schedule={schedule}
                       index={index}
@@ -302,7 +303,7 @@ export default function DayScheduleEditor({ dayId, dayName, onRefreshParent, onD
                       onUpdate={handleUpdateLocal}
                       onDelete={() => handleDeleteLocal(schedule.id)}
                       onInsert={handleInsertEmpty}
-                  />
+                  />):null
               ))}
 
               {schedules.length === 0 && (

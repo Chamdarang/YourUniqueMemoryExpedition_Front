@@ -592,7 +592,7 @@ export default function DayDetailPage() {
                                 className={`transition-all duration-200 ${selectedScheduleId === schedule.id ? 'ring-2 ring-blue-500 ring-offset-2 rounded-xl bg-blue-50/50' : ''}`}
                                 onClick={() => setSelectedScheduleId(schedule.id)}
                             >
-                              <ScheduleItem
+                              schedule ? (<ScheduleItem
                                   schedule={schedule}
                                   index={index}
                                   isLast={index === schedules.length - 1}
@@ -605,6 +605,7 @@ export default function DayDetailPage() {
                                   onRequestMapPick={() => {}}
                                   isPickingMap={false}
                               />
+                              ):null
                             </div>
                         ))}
 

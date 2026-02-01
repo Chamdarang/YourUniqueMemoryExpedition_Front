@@ -1,5 +1,6 @@
 //deleteSpot 중 사용중인 스케쥴이 있을 경우
 export interface UsedScheduleResponse {
+    scheduleId: number;
     planId: number | null;
     dayId: number;
     planName: string;
