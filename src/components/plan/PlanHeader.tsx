@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 // API
 import { deletePlan, updatePlan } from "../../api/planApi";
+import { detachPlanDay } from "../../api/dayApi"; // ✅ detachPlanDay 추가
 
 // Types & Utils
 import type { PlanDetailResponse } from "../../types/plan";
@@ -36,19 +37,49 @@ export default function PlanHeader({ plan, onRefresh }: Props) {
     setIsEditing(true);
   };
 
-  // 저장 로직
+  // ✅ [수정됨] 저장 핸들러: 기간 축소 시 독립 일정 처리 로직 추가
   const handleSave = async () => {
     if (!editForm.planName.trim()) return alert("여행 이름을 입력해주세요.");
 
+    // 1. 날짜 유효성 및 기간 계산
     const durationInfo = getDurationInfo(editForm.planStartDate, editForm.planEndDate);
     if (!durationInfo.valid) return alert(durationInfo.msg);
 
+    const newPlanDays = durationInfo.days;
+
     try {
-      await updatePlan(plan.id, editForm);
+      // 2. 기간이 줄어드는 경우 체크 (기존 일수 > 새로운 일수)
+      // plan.days가 존재한다고 가정 (PlanDetailResponse에 포함되어야 함)
+      if (plan.days && plan.days.length > 0) {
+        // 새로운 기간(dayOrder)보다 큰 날짜들을 찾음 (즉, 잘려나갈 날짜들)
+        const daysToDetach = plan.days.filter(day => day.dayOrder > newPlanDays);
+
+        if (daysToDetach.length > 0) {
+          const dayNames = daysToDetach.map(d => `${d.dayOrder}일차`).join(', ');
+
+          // 사용자 확인 (경고 메시지)
+          const confirmMsg = `여행 기간이 ${newPlanDays}일로 줄어들었습니다.\n\n범위를 벗어나는 [ ${dayNames} ] 일정은 삭제되지 않고\n'내 계획(보관함)'으로 안전하게 이동됩니다.\n\n저장하시겠습니까?`;
+
+          if (!confirm(confirmMsg)) return; // 취소 시 중단
+
+          // 3. 잘려나가는 날짜들을 독립 일정으로 분리 (병렬 처리)
+          await Promise.all(daysToDetach.map(day => detachPlanDay(day.id)));
+        }
+      }
+
+      // 4. 여행 정보 업데이트 수행
+      await updatePlan(plan.id, {
+        ...editForm,
+        planDays: newPlanDays
+      });
+
       setIsEditing(false);
-      onRefresh(); // 데이터 갱신
-    } catch {
-      alert("수정 실패");
+      onRefresh(); // 데이터 갱신 (독립된 날짜는 리스트에서 사라짐)
+      alert("수정되었습니다.");
+
+    } catch (err) {
+      console.error(err);
+      alert("수정 중 오류가 발생했습니다.");
     }
   };
 
@@ -74,7 +105,7 @@ export default function PlanHeader({ plan, onRefresh }: Props) {
 
   return (
       <div className="mb-8">
-        {/* 🔙 목록으로 돌아가기 (작게 표시) */}
+        {/* 🔙 목록으로 돌아가기 */}
         <button onClick={() => navigate('/plans')} className="text-gray-400 text-sm hover:text-gray-600 mb-3 flex items-center gap-1 transition">
           ← 목록으로
         </button>
@@ -82,7 +113,7 @@ export default function PlanHeader({ plan, onRefresh }: Props) {
         {/* 📄 메인 카드 컨테이너 */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden relative group transition-all hover:shadow-md">
 
-          {/* 🎨 상단 컬러 바 (디자인 복구 포인트!) */}
+          {/* 🎨 상단 컬러 바 */}
           <div className="h-3 bg-blue-500 w-full" />
 
           <div className="p-6 md:p-8">
@@ -103,7 +134,7 @@ export default function PlanHeader({ plan, onRefresh }: Props) {
                       )}
                     </div>
 
-                    {/* 설정 버튼 (톱니바퀴 대신 텍스트 버튼으로 깔끔하게) */}
+                    {/* 설정 버튼 */}
                     <button
                         onClick={startEditing}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 text-xs font-bold hover:bg-gray-50 hover:text-blue-600 transition"
@@ -123,7 +154,7 @@ export default function PlanHeader({ plan, onRefresh }: Props) {
                     </div>
                   </div>
 
-                  {/* 메모 (줄바꿈 적용됨!) */}
+                  {/* 메모 */}
                   <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 mt-2">
                     {plan.planMemo ? (
                         <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
@@ -199,7 +230,7 @@ export default function PlanHeader({ plan, onRefresh }: Props) {
                     />
                   </div>
 
-                  {/* 삭제 버튼 (수정 모드 하단에 배치하여 실수 방지) */}
+                  {/* 삭제 버튼 */}
                   <div className="pt-4 border-t border-gray-100 flex justify-center">
                     <button onClick={handleDelete} className="text-xs font-bold text-red-400 hover:text-red-600 hover:bg-red-50 px-3 py-1.5 rounded transition">
                       🗑️ 이 여행 계획 삭제하기

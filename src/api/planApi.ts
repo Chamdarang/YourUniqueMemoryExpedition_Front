@@ -1,20 +1,24 @@
-import type { ApiResponse } from "../types/common";
+import type {ApiResponse, PageResponse} from "../types/common";
 import type { PlanCreateRequest, PlanDetailResponse, PlanResponse, PlanUpdateRequest } from "../types/plan";
 import { fetchWithAuth } from "./utils";
 
 export interface GetPlansParams {
+    page?: number;
+    size?: number;
     from?: string;    // 'yyyy-MM-dd' 형식
     to?: string;      // 'yyyy-MM-dd' 형식
     months?: number[]; // [1, 2, 12] 등 월 리스트
 }
 
 // 2. params를 선택적으로 받을 수 있게 수정
-export const getPlans = async (params?: GetPlansParams): Promise<PlanResponse[]> => {
+export const getPlans = async (params?: GetPlansParams): Promise<PageResponse<PlanResponse>> => {
     
     // 쿼리 스트링 생성 로직
     const queryParams = new URLSearchParams();
 
     if (params) {
+        queryParams.append('page', (params.page || 0).toString());
+        queryParams.append('size', (params.size || 10).toString());
         if (params.from) queryParams.append('from', params.from);
         if (params.to) queryParams.append('to', params.to);
         if (params.months && params.months.length > 0) {  
@@ -30,7 +34,7 @@ export const getPlans = async (params?: GetPlansParams): Promise<PlanResponse[]>
         method: 'GET'
     });
 
-    const json: ApiResponse<PlanResponse[]> = await res.json();
+    const json: ApiResponse<PageResponse<PlanResponse>> = await res.json();
     if(!json.success) throw new Error(json.message);
     return json.data;
 }

@@ -25,7 +25,21 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
   // 모달 열릴 때 여행 목록 로드
   useEffect(() => {
     if (isOpen) {
-      getPlans({}).then(setPlans).catch(console.error);
+      // ✅ [수정] 페이징 API 대응
+      // 1. size를 100으로 설정하여 선택 가능한 여행을 충분히 가져옵니다.
+      // 2. 응답이 PageResponse({ content: [...] }) 형태이므로 .content를 꺼내서 설정합니다.
+      getPlans({ page: 0, size: 100 })
+          .then((res: any) => {
+            // res.content가 있으면(페이징) content 사용, 없으면(배열) res 사용 (호환성 유지)
+            const list = res.content ? res.content : res;
+            if (Array.isArray(list)) {
+              setPlans(list);
+            } else {
+              console.error("여행 목록 형식이 올바르지 않습니다:", res);
+              setPlans([]);
+            }
+          })
+          .catch(console.error);
     }
   }, [isOpen]);
 
