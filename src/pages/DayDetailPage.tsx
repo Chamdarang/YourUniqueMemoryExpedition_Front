@@ -40,7 +40,7 @@ import {
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const scrollbarHideStyle = `.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`;
 
-// 🗺️ 지도 경로 컴포넌트 (스마트 핏 적용)
+// 🗺️ 지도 경로 컴포넌트
 function MapDirections({ schedules, mapViewMode }: { schedules: DayScheduleResponse[], mapViewMode: 'ALL' | 'PINS' | 'NONE' }) {
     const map = useMap();
     const mapsLibrary = useMapsLibrary("maps");
@@ -48,13 +48,7 @@ function MapDirections({ schedules, mapViewMode }: { schedules: DayScheduleRespo
 
     useEffect(() => {
         if (!map || !mapsLibrary) return;
-
-        // 이전 경로 제거
-        if (polylineRef.current) {
-            polylineRef.current.setMap(null);
-            polylineRef.current = null;
-        }
-
+        if (polylineRef.current) { polylineRef.current.setMap(null); polylineRef.current = null; }
         if (mapViewMode !== 'ALL') return;
 
         const path = schedules.map(s => {
@@ -67,37 +61,26 @@ function MapDirections({ schedules, mapViewMode }: { schedules: DayScheduleRespo
         }).filter(p => !isNaN(p.lat) && !isNaN(p.lng) && p.lat !== 0 && p.lng !== 0);
 
         if (path.length > 0) {
-            // 경로 그리기
             const newPolyline = new mapsLibrary.Polyline({
                 path, geodesic: true, strokeColor: "#3B82F6", strokeOpacity: 0.8, strokeWeight: 5,
                 icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW }, offset: '50%', repeat: '100px' }]
             });
             newPolyline.setMap(map);
             polylineRef.current = newPolyline;
-
-            // ✅ [핵심 수정] 스마트 핏(Smart Fit) 로직
             const bounds = new google.maps.LatLngBounds();
             path.forEach(p => bounds.extend(p));
 
             if (!bounds.isEmpty()) {
                 const currentBounds = map.getBounds();
-
-                // 현재 지도 화면(currentBounds) 안에 모든 핀(bounds)이 다 들어와 있는지 확인
-                const isAllVisible = currentBounds &&
-                    currentBounds.contains(bounds.getNorthEast()) &&
-                    currentBounds.contains(bounds.getSouthWest());
-
-                // 핀이 화면 밖으로 나갔을 때만 지도를 이동시킴
-                if (!isAllVisible) {
-                    map.fitBounds(bounds, 50);
-                }
+                const isAllVisible = currentBounds && currentBounds.contains(bounds.getNorthEast()) && currentBounds.contains(bounds.getSouthWest());
+                if (!isAllVisible) map.fitBounds(bounds, 50);
             }
         }
+        return () => { if (polylineRef.current) { polylineRef.current.setMap(null); polylineRef.current = null; } };
     }, [map, mapsLibrary, schedules, mapViewMode]);
     return null;
 }
 
-// 📍 커스텀 마커
 function NumberedMarker({ number, color = "#3B82F6", onClick }: { number: number, color?: string, onClick?: () => void }) {
     return (
         <div onClick={onClick} className="relative flex flex-col items-center justify-center filter drop-shadow-md cursor-pointer hover:-translate-y-1 transition-transform group">
@@ -111,7 +94,6 @@ function NumberedMarker({ number, color = "#3B82F6", onClick }: { number: number
 
 export default function DayDetailPage() {
     return (
-        // ✅ [유지] 레이아웃 고정
         <div className="w-full h-full relative overflow-hidden bg-white">
             <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'geocoding', 'marker', 'maps']} language="ko" region="KR" version="beta">
                 <DayDetailContent />
@@ -139,7 +121,6 @@ function DayDetailContent() {
     const [mapViewMode, setMapViewMode] = useState<'ALL' | 'PINS' | 'NONE'>('ALL');
     const [showInjury, setShowInjury] = useState(false);
 
-    // Export & Picking
     const { isExportModalOpen, openExportModal, closeExportModal, exportOptions, setExportOptions, handleSaveImage } = useScheduleExport();
     const exportRef = useRef<HTMLDivElement>(null);
     const [generatedMapUrl, setGeneratedMapUrl] = useState<string | null>(null);
@@ -151,6 +132,14 @@ function DayDetailContent() {
     useEffect(() => { if (geocodingLibrary) setGeocoder(new geocodingLibrary.Geocoder()); }, [geocodingLibrary]);
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+
+    useEffect(() => {
+        setDay(null);
+        setSchedules([]);
+        setTitleForm("");
+        setMemoForm("");
+        setGeneratedMapUrl(null);
+    }, [dayId]);
 
     const fetchData = useCallback(async () => {
         if (!dayId) return;
@@ -272,7 +261,14 @@ function DayDetailContent() {
 
             <div style={{ position: "fixed", top: 0, left: "-9999px" }}>
                 <div ref={exportRef}>
-                    <ScheduleExportView dayName={titleForm} memo={memoForm} schedules={schedules} options={exportOptions} mapUrl={generatedMapUrl} />
+                    <ScheduleExportView
+                        key={dayId}
+                        dayName={titleForm}
+                        memo={memoForm}
+                        schedules={schedules}
+                        options={exportOptions}
+                        mapUrl={generatedMapUrl}
+                    />
                 </div>
             </div>
 
@@ -319,44 +315,93 @@ function DayDetailContent() {
                     </Map>
 
                     <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-50 w-full px-6 pointer-events-none">
-                        <button onClick={() => setMobileViewMode('LIST')} className="pointer-events-auto mx-auto bg-white text-gray-900 px-6 py-3 rounded-full shadow-2xl font-bold text-sm border flex items-center gap-2 active:scale-95 transition-transform">
-                            🔙 목록으로 돌아가기
+                        <button
+                            onClick={() => setMobileViewMode('LIST')}
+                            className="pointer-events-auto mx-auto bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform"
+                        >
+                            🔙 목록 보기
                         </button>
                     </div>
                 </div>
 
                 {/* 📋 [2] 리스트 영역 */}
                 <div className={`flex flex-col w-full h-full bg-white md:w-1/2 relative z-10 transition-transform duration-300 ${mobileViewMode === 'MAP' ? 'translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
-                    <div className="px-5 py-4 border-b border-gray-100 bg-white/95 backdrop-blur z-30 flex-shrink-0 flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <button onClick={() => navigate('/days')} className="text-gray-400 p-1 shrink-0">🔙</button>
-                                <input type="text" className="w-full text-xl font-bold outline-none bg-transparent truncate" value={titleForm} onChange={e => setTitleForm(e.target.value)} onBlur={handleUpdateDayInfo} />
-                                <button onClick={() => setIsSwapModalOpen(true)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg shrink-0" title="다른 여행으로 이동">📦</button>
-                            </div>
-                            <div className="flex gap-2 shrink-0 ml-2 items-center">
-                                <button onClick={() => setShowInjury(!showInjury)} className={`px-3 py-2 rounded-lg text-[11px] font-bold transition border shadow-sm ${showInjury ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>⚽ {showInjury ? '인저리 ON' : 'OFF'}</button>
-                                <button onClick={handleExportClick} className="p-2 text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition">📸</button>
-                                <button onClick={handleSaveAll} disabled={!isDirty} className={`px-4 py-2 rounded-lg font-bold text-sm transition ${isDirty ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-100 text-gray-400'}`}>저장</button>
-                            </div>
+                    {/* 상단 헤더 영역 */}
+                    <div className="px-4 py-3 md:px-5 md:py-4 border-b border-gray-100 bg-white/95 backdrop-blur z-30 flex-shrink-0 flex flex-col gap-3">
+                        {/* Row 1: 네비게이션, 제목(min-w-0 적용), 저장 */}
+                        <div className="flex items-center gap-2 w-full">
+                            <button onClick={() => navigate('/days')} className="text-gray-400 p-1 hover:bg-gray-100 rounded-full shrink-0">🔙</button>
+
+                            {/* ✅ [수정] min-w-0 추가: flex 컨테이너 안에서 input이 자동으로 줄어들게 함 */}
+                            <input
+                                type="text"
+                                className="flex-1 min-w-0 text-xl md:text-2xl font-black text-gray-900 outline-none bg-transparent placeholder-gray-300 truncate"
+                                value={titleForm}
+                                onChange={e => setTitleForm(e.target.value)}
+                                onBlur={handleUpdateDayInfo}
+                                placeholder="계획 이름"
+                            />
+
+                            {/* ✅ [수정] 버튼 스타일: 모바일에서 글자 크기 줄이고 여백 조정 */}
+                            <button
+                                onClick={handleSaveAll}
+                                disabled={!isDirty}
+                                className={`px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-bold text-xs md:text-sm transition shrink-0 whitespace-nowrap ${isDirty ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-100 text-gray-400'}`}
+                            >
+                                저장
+                            </button>
                         </div>
+
+                        {/* Row 2: 도구 모음 */}
+                        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+                            <button
+                                onClick={() => setShowInjury(!showInjury)}
+                                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm shrink-0 whitespace-nowrap ${showInjury ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                            >
+                                ⚽ {showInjury ? '인저리 ON' : 'OFF'}
+                            </button>
+                            <button onClick={handleExportClick} className="p-1.5 px-3 text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition text-xs font-bold flex items-center gap-1 shrink-0 whitespace-nowrap">
+                                📸 저장
+                            </button>
+                            <button onClick={() => setIsSwapModalOpen(true)} className="p-1.5 px-3 text-blue-500 bg-blue-50 rounded-lg hover:bg-blue-100 transition text-xs font-bold flex items-center gap-1 shrink-0 whitespace-nowrap" title="다른 여행으로 이동">
+                                📦 이동
+                            </button>
+                        </div>
+
+                        {/* Row 3: 메모 */}
                         <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
-                            <textarea className="w-full bg-transparent outline-none text-sm text-gray-600 resize-none font-medium" rows={2} value={memoForm} onChange={e => setMemoForm(e.target.value)} onBlur={handleUpdateDayInfo} placeholder="메모를 입력하세요." />
+                            <textarea className="w-full bg-transparent outline-none text-sm text-gray-600 resize-none font-medium" rows={2} value={memoForm} onChange={e => setMemoForm(e.target.value)} onBlur={handleUpdateDayInfo} placeholder="오늘 일정에 대한 메모를 입력하세요." />
                         </div>
                     </div>
 
+                    {/* 리스트 스크롤 영역 */}
                     <div className="flex-1 overflow-y-auto p-4 pb-32 bg-white scrollbar-hide relative z-0">
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                            <DayScheduleList variant="page" schedules={schedules} selectedScheduleId={selectedScheduleId} showInjury={showInjury} onSelect={setSelectedScheduleId} onUpdate={handleUpdateLocal} onDelete={id => setSchedules(prev => prev.filter(s => s.id !== id))} onInsert={idx => setSchedules(prev => {
-                                const newList = [...prev];
-                                newList.splice(idx, 0, { id: -Date.now(), dayId, scheduleOrder: 0, spotId: 0, spotName: "", spotType: "OTHER", startTime: "10:00", duration: 60, movingDuration: 0, transportation: 'WALK', memo: '', movingMemo: '', isVisit: false, lat: 0, lng: 0 });
-                                return recalculateSchedules(newList);
-                            })} dayId={dayId} pickingTarget={pickingTarget} setPickingTarget={setPickingTarget} />
+                            <DayScheduleList
+                                variant="page"
+                                schedules={schedules}
+                                selectedScheduleId={selectedScheduleId}
+                                showInjury={showInjury}
+                                onSelect={setSelectedScheduleId}
+                                onUpdate={handleUpdateLocal}
+                                onDelete={id => setSchedules(prev => prev.filter(s => s.id !== id))}
+                                onInsert={idx => setSchedules(prev => {
+                                    const newList = [...prev];
+                                    newList.splice(idx, 0, { id: -Date.now(), dayId, scheduleOrder: 0, spotId: 0, spotName: "", spotType: "OTHER", startTime: "10:00", duration: 60, movingDuration: 0, transportation: 'WALK', memo: '', movingMemo: '', isVisit: false, lat: 0, lng: 0 });
+                                    return recalculateSchedules(newList);
+                                })}
+                                dayId={dayId}
+                                pickingTarget={pickingTarget}
+                                setPickingTarget={setPickingTarget}
+                            />
                         </DndContext>
                     </div>
 
                     <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-[100] w-full px-6 pointer-events-none">
-                        <button onClick={() => setMobileViewMode('MAP')} className="pointer-events-auto mx-auto bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform">
+                        <button
+                            onClick={() => setMobileViewMode('MAP')}
+                            className="pointer-events-auto mx-auto bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform"
+                        >
                             🗺️ 지도 보기
                         </button>
                     </div>

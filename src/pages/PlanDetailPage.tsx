@@ -422,7 +422,14 @@ function PlanDetailContent() {
                                     </InfoWindow></>
                             )}
                         </Map>
-                        <div className="md:hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-50"><button onClick={() => setMobileViewMode('LIST')} className="bg-white px-4 py-2 rounded-full shadow-lg font-bold text-xs">🔙 목록</button></div>
+                        <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-50 w-full px-6 pointer-events-none">
+                            <button
+                                onClick={() => setMobileViewMode('LIST')}
+                                className="pointer-events-auto mx-auto bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform"
+                            >
+                                🔙 목록 보기
+                            </button>
+                        </div>
                     </div>
 
                     {/* [2] 일정 리스트 영역 */}
@@ -468,7 +475,14 @@ function PlanDetailContent() {
                                 </SortableContext>
                             </DndContext>
                         </div>
-                        <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-40 w-full px-6 pointer-events-none"><button onClick={() => setMobileViewMode('MAP')} className="pointer-events-auto mx-auto bg-gray-900 text-white px-6 py-3 rounded-full shadow-xl font-bold text-sm">🗺️ 지도 보기</button></div>
+                        <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-40 w-full px-6 pointer-events-none">
+                            <button
+                                onClick={() => setMobileViewMode('MAP')}
+                                className="pointer-events-auto mx-auto bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform"
+                            >
+                                🗺️ 지도 보기
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
