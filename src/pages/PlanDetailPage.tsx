@@ -1,6 +1,7 @@
+// ✅ [필수] google 객체 전역 선언
 declare let google: any;
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useParams, useBlocker } from "react-router-dom";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -11,6 +12,8 @@ import { getPlanDetail } from "../api/planApi";
 import { createDayInPlan, swapPlanDay, getIndependentDays } from "../api/dayApi";
 import { getSchedulesByDay } from "../api/scheduleApi";
 import { createSpot } from "../api/spotApi";
+// ✅ [추가] 지도 생성 API
+import { makeStaticGoogleMap } from "../api/mapApi";
 
 // Components
 import PlanHeader from "../components/plan/PlanHeader";
@@ -23,6 +26,15 @@ import type { DayScheduleResponse } from "../types/schedule";
 import type { SpotCreateRequest } from "../types/spot";
 import { recalculateSchedules } from "../utils/scheduleUtils";
 
+// ✅ Export 관련 컴포넌트
+import {
+    ImageExportModal,
+    useScheduleExport,
+    getStaticMapQuery,
+    decodeTempSpot,
+    type ExportSection, PlanScheduleExportView, DayScheduleExportView
+} from "../components/common/ScheduleExport";
+
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
 const scrollbarHideStyle = `
@@ -32,19 +44,8 @@ const scrollbarHideStyle = `
 
 // 🛠️ 임시 장소 파싱/인코딩 유틸
 const TEMP_SPOT_PREFIX = " #tmp:";
-const decodeTempSpot = (memo: string) => {
-    if (!memo) return null;
-    const idx = memo.indexOf(TEMP_SPOT_PREFIX);
-    if (idx === -1) return null;
-    try { return JSON.parse(memo.substring(idx + TEMP_SPOT_PREFIX.length)); } catch { return null; }
-};
-const cleanMemoTags = (memo: string) => {
-    if (!memo) return '';
-    const text = memo.replace(/#si:\s*\d+/g, '').replace(/#mi:\s*\d+/g, '').replace(/#visited/g, '');
-    return text.split(TEMP_SPOT_PREFIX)[0].trim();
-};
 const encodeTempSpot = (memo: string, spot: { name: string; type: string; lat: number; lng: number }) => {
-    const clean = cleanMemoTags(memo);
+    const clean = memo.replace(/#si:\s*\d+/g, '').replace(/#mi:\s*\d+/g, '').replace(/#visited/g, '').split(TEMP_SPOT_PREFIX)[0].trim();
     const data = JSON.stringify({ n: spot.name, t: spot.type, la: spot.lat, lo: spot.lng });
     return `${clean}${TEMP_SPOT_PREFIX}${data}`;
 };
@@ -108,7 +109,12 @@ function MapDirections({ daySchedulesMap, dayOrderMap, mapViewMode, visibleDays 
             }
         });
         setPolylines(newPolylines);
-        if (hasPoints && !bounds.isEmpty()) map.fitBounds(bounds);
+
+        if (hasPoints && !bounds.isEmpty()) {
+            const currentBounds = map.getBounds();
+            const isAllVisible = currentBounds && currentBounds.contains(bounds.getNorthEast()) && currentBounds.contains(bounds.getSouthWest());
+            if (!isAllVisible) map.fitBounds(bounds);
+        }
         return () => newPolylines.forEach(p => p.setMap(null));
     }, [map, mapsLibrary, daySchedulesMap, dayOrderMap, mapViewMode, visibleDays]);
     return null;
@@ -187,6 +193,20 @@ function PlanDetailContent() {
     const [pickingTarget, setPickingTarget] = useState<{ dayId: number, scheduleId: number } | null>(null);
     const [tempSelectedSpot, setTempSelectedSpot] = useState<SpotCreateRequest | null>(null);
 
+    // ✅ Export 관련 Hook
+    const { isExportModalOpen, openExportModal, closeExportModal, exportOptions, setExportOptions, handleSaveImage } = useScheduleExport();
+    const exportRef = useRef<HTMLDivElement>(null);
+    const [generatedMapUrl, setGeneratedMapUrl] = useState<string | null>(null);
+    const [mapVersion, setMapVersion] = useState(0); // 리렌더링 트리거
+    const [exportMode, setExportMode] = useState<'PLAN' | 'DAY'>('PLAN');
+    const [exportSections, setExportSections] = useState<ExportSection[]>([]); // PLAN 모드용 데이터
+    const [dayExportData, setDayExportData] = useState<{
+        title: string;
+        subTitle: string; // 👈 추가됨
+        memo: string;
+        schedules: DayScheduleResponse[]
+    } | null>(null); // DAY 모드용 데이터
+
     const geocodingLibrary = useMapsLibrary("geocoding");
     const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
     useEffect(() => { if (geocodingLibrary) setGeocoder(new geocodingLibrary.Geocoder()); }, [geocodingLibrary]);
@@ -203,11 +223,25 @@ function PlanDetailContent() {
             } else blocker.reset();
         }
     }, [blocker]);
+
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => { if (isAnyDirty) { e.preventDefault(); e.returnValue = ""; } };
         window.addEventListener("beforeunload", handleBeforeUnload);
         return () => window.removeEventListener("beforeunload", handleBeforeUnload);
     }, [isAnyDirty]);
+
+    // ✅ [핵심 1] 페이지 변경 시 Blob URL 해제 및 초기화
+    useEffect(() => {
+        setMapSchedulesMap({});
+        setDayOrderMap({});
+        setVisibleDays(new Set());
+        setGeneratedMapUrl(prev => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+        });
+        setDirtyMap({});
+        setMobileViewMode('LIST');
+    }, [planId]);
 
     const handleSetDirty = useCallback((itemId: string | number, isDirty: boolean) => {
         setDirtyMap(prev => (prev[itemId] === isDirty ? prev : { ...prev, [itemId]: isDirty }));
@@ -223,10 +257,114 @@ function PlanDetailContent() {
             const map: Record<number, number> = {};
             data.days.forEach(d => { map[d.id] = d.dayOrder; });
             setDayOrderMap(map);
-            setVisibleDays(new Set());
         }).finally(() => setLoading(false));
     };
     useEffect(() => { if (planId) fetchPlanDetail(); }, [planId]);
+
+
+    // ✅ [핵심 3] 지도 이미지 저장 핸들러
+    const handlePlanExportClick = async () => {
+        if (!plan || !plan.days) return;
+        const btn = document.getElementById('save-btn');
+        const originalText = btn?.innerText;
+        if(btn) btn.innerText = "⏳ 생성 중...";
+
+        try {
+            // 1. 미로드 일정 확인 및 패치
+            const missingDayIds = plan.days.filter((d: any) => !mapSchedulesMap[d.id]).map((d: any) => d.id);
+            let newSchedulesMap = { ...mapSchedulesMap };
+            if (missingDayIds.length > 0) {
+                const results = await Promise.all(missingDayIds.map((id: number) => getSchedulesByDay(id)));
+                missingDayIds.forEach((id: number, idx: number) => { newSchedulesMap[id] = recalculateSchedules(results[idx]); });
+                setMapSchedulesMap(newSchedulesMap);
+            }
+
+            // 2. 데이터 가공 (ExportSection[])
+            const sortedDays = [...plan.days].sort((a, b) => a.dayOrder - b.dayOrder);
+            const sections: ExportSection[] = sortedDays.map(day => ({
+                id: day.id,
+                title: `${day.dayOrder}일차`,
+                memo: day.memo || "",
+                schedules: newSchedulesMap[day.id] || []
+            }));
+
+            if (!sections.some(s => s.schedules.length > 0)) {
+                alert("저장할 일정이 없습니다.");
+                if(btn && originalText) btn.innerText = originalText;
+                return;
+            }
+
+            // 3. 상태 설정 및 모달 오픈
+            setExportMode('PLAN'); // ✨ 전체 모드
+            setExportSections(sections);
+            openExportModal();
+
+        } catch (e) {
+            console.error(e);
+            alert("일정 로딩 실패");
+        } finally {
+            if(btn && originalText) btn.innerText = originalText;
+        }
+    };
+
+    // 🚀 [2] 개별 일정 저장 핸들러
+    const handleDayExportClick = async (dayId: number) => {
+        const dayItem = plan?.days.find(d => d.id === dayId);
+        if (!dayItem) return;
+
+        try {
+            // 해당 일정 데이터 확인 및 패치
+            let schedules = mapSchedulesMap[dayId];
+            if (!schedules) {
+                const raw = await getSchedulesByDay(dayId);
+                schedules = recalculateSchedules(raw);
+                setMapSchedulesMap(prev => ({...prev, [dayId]: schedules}));
+            }
+
+            // 상태 설정 및 모달 오픈
+            setExportMode('DAY'); // ✨ 개별 모드
+            setDayExportData({
+                title: dayItem.dayName || `Day ${dayItem.dayOrder}`,
+                subTitle: `${plan?.planName || '여행'} • ${dayItem.dayOrder}일차`,
+                memo: dayItem.memo || "",
+                schedules: schedules
+            });
+            openExportModal();
+
+        } catch (e) {
+            console.error(e);
+            alert("일정 로딩 실패");
+        }
+    };
+
+    // 🚀 [3] 최종 저장(지도 생성) 핸들러 (모달 Confirm)
+    const onModalConfirm = async (mapState?: { center: { lat: number, lng: number }, zoom: number }) => {
+        // 모드에 따라 대상 스케줄 결정
+        const targetSchedules = exportMode === 'PLAN'
+            ? exportSections.flatMap(s => s.schedules)
+            : dayExportData?.schedules || [];
+
+        const query = getStaticMapQuery(targetSchedules, mapState);
+
+        if (query) {
+            try {
+                const blobUrl = await makeStaticGoogleMap(query);
+                setGeneratedMapUrl(prev => { if(prev) URL.revokeObjectURL(prev); return blobUrl; });
+                setMapVersion(v => v + 1);
+            } catch(e) {
+                console.error(e);
+                alert("지도 생성 실패");
+                return;
+            }
+        }
+
+        // 캡처 파일명 설정
+        const filename = exportMode === 'PLAN'
+            ? plan?.planName || "여행_전체일정"
+            : dayExportData?.title || "여행_일정";
+
+        requestAnimationFrame(() => handleSaveImage(filename, exportRef.current));
+    };
 
     const handleToggleMapVisibility = async (dayId: number) => {
         if (!mapSchedulesMap[dayId]) {
@@ -266,25 +404,13 @@ function PlanDetailContent() {
     const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;
         if (!over || active.id === over.id) return;
-
         const sourceDayId = Number(active.id);
-        if (isNaN(sourceDayId)) return;
-
         const targetItem = fullDays.find(d => d.id === over.id);
         if (!targetItem) return;
-
         try {
-            await swapPlanDay({
-                sourceDayId: sourceDayId,
-                targetPlanId: planId,
-                targetDayOrder: targetItem.dayOrder,
-                swapMode: 'SWAP'
-            });
+            await swapPlanDay({ sourceDayId, targetPlanId: planId, targetDayOrder: targetItem.dayOrder, swapMode: 'SWAP' });
             fetchPlanDetail();
-        } catch (err) {
-            console.error("순서 변경 실패:", err);
-            alert("일정 순서 변경에 실패했습니다.");
-        }
+        } catch { alert("순서 변경 실패"); }
     };
 
     const handleMapClick = useCallback(async (e: any) => {
@@ -383,11 +509,54 @@ function PlanDetailContent() {
     return (
         <>
             <style>{scrollbarHideStyle}</style>
+
+            {/* 📸 Export용 숨겨진 뷰 */}
+            <div style={{ position: "fixed", top: 0, left: "-9999px" }}>
+                <div ref={exportRef}>
+                    {exportMode === 'PLAN' ? (
+                        <PlanScheduleExportView
+                            key={`plan-export-${planId}-${mapVersion}`}
+                            planTitle={plan.planName}
+                            planMemo={plan.planMemo || ""}
+                            sections={exportSections}
+                            options={exportOptions}
+                            mapUrl={generatedMapUrl}
+                        />
+                    ) : (
+                        dayExportData && (
+                            <DayScheduleExportView
+                                key={`day-export-${dayExportData.title}-${mapVersion}`}
+                                dayName={dayExportData.title}
+                                subTitle={dayExportData.subTitle}
+                                memo={dayExportData.memo}
+                                schedules={dayExportData.schedules}
+                                options={exportOptions}
+                                mapUrl={generatedMapUrl}
+                            />
+                        )
+                    )}
+                </div>
+            </div>
+
+            {/* ✅ ImageExportModal: 모달 내부 지도는 핀만 찍어주면 되므로 schedules 통합 전달 */}
+            <ImageExportModal
+                isOpen={isExportModalOpen}
+                onClose={closeExportModal}
+                onConfirm={onModalConfirm}
+                options={exportOptions}
+                setOptions={setExportOptions}
+                mapUrl={generatedMapUrl}
+                schedules={
+                    exportMode === 'PLAN'
+                        ? exportSections.flatMap(s => s.schedules)
+                        : dayExportData?.schedules || []
+                }
+            />
+
             <div className="flex flex-col h-full w-full relative overflow-hidden bg-white">
                 <div className="flex w-full h-full relative">
                     {/* [1] 지도 영역 */}
                     <div className={`absolute inset-0 z-20 bg-gray-50 transition-transform duration-300 md:relative md:w-1/2 md:translate-x-0 md:z-auto ${mobileViewMode === 'MAP' ? 'translate-x-0' : '-translate-x-full'}`}>
-                        {/* ✅ [수정] 지도 상단 버튼에서 인저리 타임 버튼 제거 */}
                         <div className="absolute top-4 right-4 z-50 flex gap-2">
                             <button onClick={toggleMapViewMode} className={`px-4 py-2 rounded-full text-xs font-bold shadow-md transition border bg-white text-blue-600 border-blue-200 hover:bg-blue-50`}>{getMapViewModeLabel()}</button>
                         </div>
@@ -435,18 +604,32 @@ function PlanDetailContent() {
                     {/* [2] 일정 리스트 영역 */}
                     <div className={`flex flex-col w-full h-full bg-white md:w-1/2 relative z-10 transition-transform duration-300 ${mobileViewMode === 'MAP' ? 'translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
                         <div className="px-5 py-4 border-b border-gray-100 bg-white z-30 flex-shrink-0">
-                            <PlanHeader plan={plan} onRefresh={fetchPlanDetail} onDirtyChange={handleHeaderDirty} />
+                            {/* ✅ onDirtyChange 연결 */}
+                            <PlanHeader
+                                plan={plan}
+                                onRefresh={fetchPlanDetail}
+                                onDirtyChange={handleHeaderDirty}
+                            />
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 pb-24 bg-white scrollbar-hide">
-                            {/* ✅ [이동] 상세 일정 타이틀 옆으로 인저리 버튼 배치 */}
                             <div className="flex items-center justify-between mb-4 px-1">
                                 <h2 className="text-xl font-bold text-gray-800">상세 일정</h2>
-                                <button
-                                    onClick={() => setShowInjury(!showInjury)}
-                                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm ${showInjury ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
-                                >
-                                    ⚽ {showInjury ? '인저리 ON' : 'OFF'}
-                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setShowInjury(!showInjury)}
+                                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm ${showInjury ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                                    >
+                                        ⚽ {showInjury ? '인저리 ON' : 'OFF'}
+                                    </button>
+                                    {/* ✅ 저장 버튼 추가 */}
+                                    <button
+                                        id="save-btn"
+                                        onClick={handlePlanExportClick}
+                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                    >
+                                        📸 저장
+                                    </button>
+                                </div>
                             </div>
 
                             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -466,6 +649,8 @@ function PlanDetailContent() {
                                                     setPickingTarget={setPickingTarget}
                                                     isVisibleOnMap={visibleDays.has(item.data.id)}
                                                     onToggleMapVisibility={handleToggleMapVisibility}
+                                                    // ✅ [신규] 개별 일정 저장 함수 전달 (PlanDayItem에 해당 prop을 추가해야 함)
+                                                    onExportDay={() => handleDayExportClick(item.data!.id)}
                                                 />
                                             ) : (
                                                 <EmptySlot key={item.id} dayOrder={item.dayOrder} onCreateNew={() => handleCreateNew(item.dayOrder)} onImportSelect={(src) => handleImportSelect(item.dayOrder, src)} />

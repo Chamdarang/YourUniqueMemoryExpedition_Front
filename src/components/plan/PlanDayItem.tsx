@@ -11,7 +11,7 @@ import { timeToMinutes, minutesToTime } from "../../utils/timeUtils";
 import { syncSchedules } from "../../api/scheduleApi";
 import { updatePlanDay } from "../../api/dayApi";
 
-// ✅ [변경] ScheduleItem 직접 사용 X -> DayScheduleList 사용 O
+// Components
 import DayScheduleList from "../day/DayScheduleList";
 
 interface Props {
@@ -29,6 +29,7 @@ interface Props {
     setPickingTarget: (target: { dayId: number, scheduleId: number } | null) => void;
     isVisibleOnMap: boolean;
     onToggleMapVisibility: (dayId: number) => void;
+    onExportDay: () => void; // ✅ [추가] 부모에서 전달받은 개별 저장 함수
 }
 
 const DAY_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
@@ -44,7 +45,7 @@ const decodeTempSpot = (memo: string) => {
 export default function PlanDayItem({
                                         id, dayOrder, data, schedules, showInjury, onRefresh, onUpdateDayInfo,
                                         onSchedulesChange, setDirty, onToggle, pickingTarget, setPickingTarget,
-                                        isVisibleOnMap, onToggleMapVisibility
+                                        isVisibleOnMap, onToggleMapVisibility, onExportDay // ✅ prop 구조분해 할당
                                     }: Props) {
 
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -79,19 +80,11 @@ export default function PlanDayItem({
     const handleSaveInfo = async (e: React.MouseEvent) => {
         e.stopPropagation();
         if (!data) return;
-
         try {
-            // 1. 서버에 저장 요청 (비동기)
             await updatePlanDay(data.id, { dayName: editTitle, memo: editMemo });
-
-            // 2. 편집 모드 종료
             setIsEditingInfo(false);
-
             onUpdateDayInfo(data.id, editTitle, editMemo);
-
-        } catch {
-            alert("정보 수정에 실패했습니다.");
-        }
+        } catch { alert("정보 수정에 실패했습니다."); }
     };
 
     const handleCancelEdit = (e: React.MouseEvent) => {
@@ -232,6 +225,15 @@ export default function PlanDayItem({
 
                         {!isEditingInfo && (
                             <div className="flex items-center gap-2 self-start md:self-center">
+                                {/* ✅ [추가] 개별 일정 저장 버튼 (카메라 아이콘) */}
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onExportDay(); }}
+                                    className="w-9 h-9 flex items-center justify-center rounded-xl transition border bg-white text-gray-400 border-gray-100 hover:bg-gray-50 hover:text-gray-600 shadow-sm"
+                                    title="이 일정만 이미지로 저장"
+                                >
+                                    📸
+                                </button>
+
                                 <button onClick={(e) => { e.stopPropagation(); onToggleMapVisibility(data.id); }} className={`w-9 h-9 flex items-center justify-center rounded-xl transition border ${isVisibleOnMap ? 'bg-blue-50 text-blue-600 border-blue-200 shadow-sm' : 'bg-white text-gray-300 border-gray-100 hover:bg-gray-50 hover:text-gray-400'}`}>
                                     {isVisibleOnMap ? (
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" /><path fillRule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z" clipRule="evenodd" /></svg>
@@ -246,11 +248,10 @@ export default function PlanDayItem({
                     </div>
                 </div>
 
-                {/* ✅ [핵심] Content (이제 DayScheduleList 컴포넌트를 재사용!) */}
+                {/* Content */}
                 {isExpanded && (
                     <div className="border-t border-gray-100 p-4 bg-gray-50/30">
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                            {/* variant="card"를 전달하여 카드 내부 스타일로 렌더링 */}
                             <DayScheduleList
                                 variant="card"
                                 schedules={safeSchedules}

@@ -1,4 +1,6 @@
 // ✅ [필수] google 객체 전역 선언
+import {makeStaticGoogleMap} from "../api/mapApi.ts";
+
 declare let google: any;
 
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -30,11 +32,12 @@ import DayScheduleList from "../components/day/DayScheduleList";
 import PlanDaySwapModal from "../components/day/PlanDaySwapModal";
 import { recalculateSchedules } from "../utils/scheduleUtils";
 import {
-    ScheduleExportView,
+    DayScheduleExportView,
     ImageExportModal,
     useScheduleExport,
-    getStaticMapUrl,
-    decodeTempSpot
+    getStaticMapQuery,
+    decodeTempSpot,
+    type ExportSection,
 } from "../components/common/ScheduleExport";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
@@ -124,6 +127,7 @@ function DayDetailContent() {
     const { isExportModalOpen, openExportModal, closeExportModal, exportOptions, setExportOptions, handleSaveImage } = useScheduleExport();
     const exportRef = useRef<HTMLDivElement>(null);
     const [generatedMapUrl, setGeneratedMapUrl] = useState<string | null>(null);
+    const [mapVersion, setMapVersion] = useState(0);
     const [pickingTarget, setPickingTarget] = useState<{ dayId: number, scheduleId: number } | null>(null);
     const [tempSelectedSpot, setTempSelectedSpot] = useState<SpotCreateRequest | null>(null);
 
@@ -234,8 +238,24 @@ function DayDetailContent() {
     const cleanMemoTags = (memo: string) => memo.replace(/#si:\s*\d+/g, '').replace(/#mi:\s*\d+/g, '').replace(/#visited/g, '').split(' #tmp:')[0].trim();
 
     const handleExportClick = () => {
-        setGeneratedMapUrl(getStaticMapUrl(schedules));
+        // 단일 일정은 이미 로드되어 있으므로 바로 모달 오픈
         openExportModal();
+    };
+    const onModalConfirm = async (mapState?: { center: { lat: number, lng: number }, zoom: number }) => {
+        const query = getStaticMapQuery(schedules, mapState);
+
+        if (query) {
+            try {
+                const blobUrl = await makeStaticGoogleMap(query);
+                setGeneratedMapUrl(prev => { if(prev) URL.revokeObjectURL(prev); return blobUrl; });
+                setMapVersion(v => v + 1);
+            } catch(e) {
+                console.error(e);
+                alert("지도 생성 실패");
+                return;
+            }
+        }
+        requestAnimationFrame(() => handleSaveImage(titleForm, exportRef.current));
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
@@ -253,6 +273,14 @@ function DayDetailContent() {
         setSchedules(prev => recalculateSchedules(prev.map(s => s.id === id ? {...s, ...data} : s)));
     };
 
+    const exportSections: ExportSection[] = [{
+        id: dayId,
+        title: titleForm || "Day Schedule",
+        memo: memoForm,
+        schedules: schedules
+    }];
+
+
     if (loading || !day) return <div className="p-10 text-center font-bold">로딩 중...</div>;
 
     return (
@@ -261,8 +289,8 @@ function DayDetailContent() {
 
             <div style={{ position: "fixed", top: 0, left: "-9999px" }}>
                 <div ref={exportRef}>
-                    <ScheduleExportView
-                        key={dayId}
+                    <DayScheduleExportView
+                        key={`day-export-${dayId}-${mapVersion}`}
                         dayName={titleForm}
                         memo={memoForm}
                         schedules={schedules}
@@ -272,7 +300,14 @@ function DayDetailContent() {
                 </div>
             </div>
 
-            <ImageExportModal isOpen={isExportModalOpen} onClose={closeExportModal} onConfirm={() => handleSaveImage(titleForm, exportRef.current)} options={exportOptions} setOptions={setExportOptions} mapUrl={generatedMapUrl} />
+            <ImageExportModal
+                isOpen={isExportModalOpen}
+                onClose={closeExportModal}
+                onConfirm={onModalConfirm}
+                options={exportOptions}
+                setOptions={setExportOptions}
+                schedules={schedules}
+            />
 
             <div className="flex flex-1 w-full h-full relative overflow-hidden md:flex-row">
 
@@ -326,13 +361,9 @@ function DayDetailContent() {
 
                 {/* 📋 [2] 리스트 영역 */}
                 <div className={`flex flex-col w-full h-full bg-white md:w-1/2 relative z-10 transition-transform duration-300 ${mobileViewMode === 'MAP' ? 'translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
-                    {/* 상단 헤더 영역 */}
                     <div className="px-4 py-3 md:px-5 md:py-4 border-b border-gray-100 bg-white/95 backdrop-blur z-30 flex-shrink-0 flex flex-col gap-3">
-                        {/* Row 1: 네비게이션, 제목(min-w-0 적용), 저장 */}
                         <div className="flex items-center gap-2 w-full">
                             <button onClick={() => navigate('/days')} className="text-gray-400 p-1 hover:bg-gray-100 rounded-full shrink-0">🔙</button>
-
-                            {/* ✅ [수정] min-w-0 추가: flex 컨테이너 안에서 input이 자동으로 줄어들게 함 */}
                             <input
                                 type="text"
                                 className="flex-1 min-w-0 text-xl md:text-2xl font-black text-gray-900 outline-none bg-transparent placeholder-gray-300 truncate"
@@ -341,8 +372,6 @@ function DayDetailContent() {
                                 onBlur={handleUpdateDayInfo}
                                 placeholder="계획 이름"
                             />
-
-                            {/* ✅ [수정] 버튼 스타일: 모바일에서 글자 크기 줄이고 여백 조정 */}
                             <button
                                 onClick={handleSaveAll}
                                 disabled={!isDirty}
@@ -352,7 +381,6 @@ function DayDetailContent() {
                             </button>
                         </div>
 
-                        {/* Row 2: 도구 모음 */}
                         <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
                             <button
                                 onClick={() => setShowInjury(!showInjury)}
@@ -368,13 +396,11 @@ function DayDetailContent() {
                             </button>
                         </div>
 
-                        {/* Row 3: 메모 */}
                         <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
                             <textarea className="w-full bg-transparent outline-none text-sm text-gray-600 resize-none font-medium" rows={2} value={memoForm} onChange={e => setMemoForm(e.target.value)} onBlur={handleUpdateDayInfo} placeholder="오늘 일정에 대한 메모를 입력하세요." />
                         </div>
                     </div>
 
-                    {/* 리스트 스크롤 영역 */}
                     <div className="flex-1 overflow-y-auto p-4 pb-32 bg-white scrollbar-hide relative z-0">
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                             <DayScheduleList
