@@ -428,7 +428,7 @@ function PlanDetailContent() {
                     {/* [2] 일정 리스트 영역 */}
                     <div className={`flex flex-col w-full h-full bg-white md:w-1/2 relative z-10 transition-transform duration-300 ${mobileViewMode === 'MAP' ? 'translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
                         <div className="px-5 py-4 border-b border-gray-100 bg-white z-30 flex-shrink-0">
-                            <PlanHeader plan={plan} onRefresh={fetchPlanDetail} />
+                            <PlanHeader plan={plan} onRefresh={fetchPlanDetail} onDirtyChange={handleHeaderDirty} />
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 pb-24 bg-white scrollbar-hide">
                             {/* ✅ [이동] 상세 일정 타이틀 옆으로 인저리 버튼 배치 */}
