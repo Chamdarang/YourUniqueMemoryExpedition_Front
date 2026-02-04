@@ -4,7 +4,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useMapsLibrary, useMap } from "@vis.gl/react-google-maps";
 
 // API
-import {createSpot, updateSpot, getMySpots} from "../../api/spotApi";
+import { createSpot, updateSpot, getMySpots } from "../../api/spotApi";
 import { getSpotTypeInfo } from "../../utils/spotUtils";
 
 import type { DayScheduleResponse, ScheduleItemRequest } from "../../types/schedule";
@@ -208,7 +208,7 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
                         page: 0,
                         size: 20
                     });
-                    setSearchResults(res.content); // ✅ 페이징 결과의 content 사용
+                    setSearchResults(res.content);
                     setIsDropdownOpen(true);
                 } else {
                     if (!placesLibrary) return;
@@ -297,8 +297,10 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
 
         const finalStay = baseStay + stayInjury;
         const finalMove = baseMove + moveInjury;
+
         let finalMemo = form.memo;
         if (stayInjury > 0) finalMemo += ` #si:${stayInjury}`;
+
         if (form.spotId === 0 && currentSpotInfo) {
             finalMemo = encodeTempSpot(finalMemo, { name: finalName, type: currentSpotInfo.type, lat: currentSpotInfo.lat!, lng: currentSpotInfo.lng! });
         }
@@ -337,21 +339,18 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
     const displayMoveLabel = () => cleanMemoTags(schedule.movingMemo) || `${getTransLabel(schedule.transportation)} 이동`;
     const displayName = finalSpotName || "장소 선택";
 
-    // ⌚ 시간 표시 텍스트 생성
     const timeDisplay = schedule.startTime ? `${schedule.startTime.substring(0, 5)} - ${spotEndTime}` : "시간 미정";
     const durationDisplay = `체류 ${formatDurationWithInjury(schedule.duration, stayInjury, showInjury)}`;
 
     return (
         <div ref={setNodeRef} style={style} className="relative group mb-3">
             <div className="flex items-stretch gap-3">
-                {/* 1. 드래그 핸들 */}
                 <div className="flex flex-col items-center pt-4 w-8 shrink-0">
                     <div {...attributes} {...listeners} className="cursor-grab text-gray-300 hover:text-orange-500 mb-1 text-xl">⠿</div>
                     <div className="w-0.5 bg-gray-200 grow"></div>
                 </div>
 
                 <div className="flex-1 min-w-0 pb-2">
-                    {/* 2. 이동 카드 */}
                     {(schedule.movingDuration > 0 || editMode === 'MOVE') && (
                         <div className="mb-3 relative">
                             <div className={`rounded-xl border transition cursor-pointer relative z-10 ${editMode === 'MOVE' ? 'bg-white border-blue-400 ring-2 ring-blue-100 p-4' : 'bg-blue-50 border-blue-100 hover:border-blue-300 p-3 flex items-center justify-between'}`} onClick={() => editMode === 'NONE' && setEditMode('MOVE')}>
@@ -369,7 +368,6 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
                                         </div>
                                     </>
                                 ) : (
-                                    /* 이동 편집 모드 UI (기존과 동일) */
                                     <div className="w-full" onClick={e => e.stopPropagation()}>
                                         <div className="flex justify-between items-center mb-3"><div className="font-bold text-blue-800 text-sm">이동 경로 설정</div></div>
                                         <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
@@ -388,14 +386,12 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
                         </div>
                     )}
 
-                    {/* 3. 이동 추가 버튼 */}
                     {index !== 0 && schedule.movingDuration === 0 && editMode === 'NONE' && (
                         <div className="mb-2 flex justify-center group/add-move">
                             <button onClick={() => { setForm({ ...form, movingDuration: 30 }); setEditMode('MOVE'); }} className="text-xs text-gray-400 font-bold bg-gray-50 px-3 py-1 rounded-full border border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition opacity-0 group-hover:opacity-100 group-hover/add-move:opacity-100 flex items-center gap-1"><span>➕</span> 이동 시간 추가</button>
                         </div>
                     )}
 
-                    {/* 4. 장소 카드 (메인) */}
                     <div className={`rounded-2xl border transition relative z-10 overflow-hidden shadow-sm 
                         ${editMode === 'MAIN' ? 'border-orange-400 ring-2 ring-orange-100 bg-white' : 'bg-white border-gray-200 hover:border-orange-300 cursor-pointer'}
                         ${isPickingMap ? 'ring-4 ring-green-400 border-green-500' : ''}`}
@@ -404,51 +400,35 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
                         {editMode !== 'MAIN' ? (
                             <div className="p-3 md:p-4">
                                 <div className="flex gap-3 md:gap-4 items-start">
-
-                                    {/* 좌측: 체크박스 & 아이콘 */}
                                     <div className="flex flex-col items-center gap-2 shrink-0 pt-1">
-                                        <div onClick={toggleVisit} className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition hover:scale-110 z-20 cursor-pointer ${isVisited ? 'bg-green-500 border-green-500 shadow-sm' : 'bg-white border-gray-300 hover:border-orange-400'}`}>
+                                        <div onClick={toggleVisit} className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition hover:scale-110 z-20 cursor-pointer ${isVisited ? 'bg-green-50 border-green-500 shadow-sm' : 'bg-white border-gray-300 hover:border-orange-400'}`}>
                                             {isVisited && <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
                                         </div>
                                         <div className="text-3xl shrink-0 filter drop-shadow-sm">{typeInfo.icon}</div>
                                     </div>
-
-                                    {/* 우측: 컨텐츠 영역 */}
                                     <div className="flex-1 min-w-0">
-                                        {/* 제목 & PC용 시간 */}
                                         <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-1">
                                             <h3 className="text-base md:text-lg font-bold truncate leading-tight text-gray-900">{displayName}</h3>
-
-                                            {/* PC에서만 보이는 우측 시간 (모바일은 아래로 내림) */}
                                             <div className="hidden md:block text-right shrink-0">
                                                 <div className="text-base font-bold font-mono tracking-tight text-gray-800 whitespace-nowrap">{schedule.startTime ? timeDisplay : <span className="text-xs text-orange-400">시간 미정</span>}</div>
                                                 <div className="text-xs text-gray-400 mt-1 whitespace-nowrap">{durationDisplay}</div>
                                             </div>
                                         </div>
-
-                                        {/* 뱃지 & 모바일용 시간 (줄바꿈 허용) */}
                                         <div className="flex flex-wrap items-center gap-2 mt-1.5 md:mt-1">
-                                            {/* 장소 유형 뱃지 */}
                                             <span className="text-xs px-2 py-0.5 rounded border bg-gray-100 text-gray-500 border-gray-200 whitespace-nowrap">{typeInfo.label}</span>
-
-                                            {/* 모바일용 시간 표시 (PC 숨김) */}
                                             <div className="flex md:hidden items-center gap-2 text-xs text-gray-600 font-medium">
                                                 <span className="font-mono whitespace-nowrap">{schedule.startTime ? timeDisplay : "시간 미정"}</span>
                                                 <span className="text-gray-300">|</span>
                                                 <span className="whitespace-nowrap">{durationDisplay}</span>
                                             </div>
-
-                                            {/* 이동 시간 뱃지 */}
                                             {schedule.movingDuration > 0 && <span className="text-xs text-blue-500 bg-blue-50 px-2 py-0.5 rounded flex items-center gap-1 font-medium whitespace-nowrap">⏱ {pureMovingDuration}분 이동</span>}
                                         </div>
                                     </div>
                                 </div>
-
                                 {displayMemo && <div className="mt-3 text-sm p-2.5 rounded-lg border-l-4 bg-gray-50 text-gray-600 border-gray-200">{displayMemo}</div>}
                                 {isPickingMap && <div className="mt-2 text-center text-xs font-bold text-green-600 animate-pulse bg-green-50 py-1 rounded border border-green-200">🗺️ 지도에서 장소를 클릭하세요!</div>}
                             </div>
                         ) : (
-                            /* 메인 장소 편집 모드 (기존과 동일) */
                             <div className="p-5 bg-white" onClick={e => e.stopPropagation()}>
                                 <div className="flex justify-between mb-4 pb-2 border-b border-gray-100"><h3 className="font-bold text-base text-gray-800">일정 편집</h3><button onClick={() => onDelete(schedule.id)} className="text-sm text-red-500 font-bold hover:underline">삭제</button></div>
                                 <div className="mb-4 relative" ref={dropdownRef}>
@@ -472,8 +452,24 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 mb-4">
                                     <div><label className="text-sm text-gray-500 font-bold block mb-1">시작 시간</label><input type="time" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm font-bold outline-none" value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})} /></div>
-                                    <div><label className="text-sm text-gray-500 font-bold block mb-1">체류(분)</label><input type="number" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm font-bold outline-none" value={baseStay} onChange={e => setBaseStay(Math.max(0, Number(e.target.value)))} /></div>
+                                    <div><label className="text-sm text-gray-500 font-bold block mb-1">기본 체류(분)</label><input type="number" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm font-bold outline-none" value={baseStay} onChange={e => setBaseStay(Math.max(0, Number(e.target.value)))} /></div>
                                 </div>
+
+                                {/* ✅ [신규 추가] 일정 인저리 타임 설정 영역 */}
+                                <div className="mb-4 p-3 bg-orange-50 rounded-xl border border-orange-100">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <label className="text-xs text-orange-600 font-bold">⚽ 일정 인저리 타임 (여유 시간)</label>
+                                        <div className="flex items-center gap-1">
+                                            {INJURY_OPTIONS.map(m => (
+                                                <button key={m} onClick={() => setStayInjury(m)} className={`text-[10px] px-2 py-0.5 rounded border transition font-bold ${stayInjury === m ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-500 border-gray-200'}`}>{m === 0 ? "0" : `+${m}`}</button>
+                                            ))}
+                                            <input type="number" className="w-12 p-1 text-right border rounded text-xs font-bold text-orange-600 outline-none" value={stayInjury} onChange={e => setStayInjury(Math.max(0, Number(e.target.value)))} />
+                                            <span className="text-[10px] text-orange-400 font-bold">분</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-right text-[10px] font-bold text-orange-400">총 체류 예정: {formatSimple(baseStay + stayInjury)}</div>
+                                </div>
+
                                 <div className="mb-4"><label className="text-sm text-gray-500 font-bold block mb-1">메모</label><textarea className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm outline-none resize-none" rows={2} value={form.memo} onChange={e => setForm({...form, memo: e.target.value})} /></div>
                                 <div className="flex gap-3 pt-2"><button onClick={handleCancel} className="flex-1 bg-white border border-gray-200 py-3 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">취소</button><button onClick={handleDone} className="flex-1 bg-orange-500 text-white py-3 rounded-xl text-sm font-bold hover:bg-orange-600 shadow-md">완료</button></div>
                             </div>

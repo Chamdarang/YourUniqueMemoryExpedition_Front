@@ -341,14 +341,12 @@ function PlanDetailContent() {
         handleSetDirty(`day-${dayId}`, true); setTempSelectedSpot(null); setPickingTarget(null);
     };
 
-    // ✅ [추가] 지도 보기 모드 토글 함수
     const toggleMapViewMode = () => {
         if (mapViewMode === 'ALL') setMapViewMode('PINS');
         else if (mapViewMode === 'PINS') setMapViewMode('NONE');
         else setMapViewMode('ALL');
     };
 
-    // ✅ [추가] 버튼 텍스트 라벨 함수
     const getMapViewModeLabel = () => {
         switch(mapViewMode) {
             case 'ALL': return '🗺️ 핀+경로';
@@ -389,9 +387,8 @@ function PlanDetailContent() {
                 <div className="flex w-full h-full relative">
                     {/* [1] 지도 영역 */}
                     <div className={`absolute inset-0 z-20 bg-gray-50 transition-transform duration-300 md:relative md:w-1/2 md:translate-x-0 md:z-auto ${mobileViewMode === 'MAP' ? 'translate-x-0' : '-translate-x-full'}`}>
-                        {/* 지도 컨트롤 버튼들 */}
+                        {/* ✅ [수정] 지도 상단 버튼에서 인저리 타임 버튼 제거 */}
                         <div className="absolute top-4 right-4 z-50 flex gap-2">
-                            <button onClick={() => setShowInjury(!showInjury)} className={`px-4 py-2 rounded-full text-xs font-bold shadow-md transition border ${showInjury ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-gray-200'}`}>{showInjury ? '⚽ 인저리타임 ON' : '⚽ 인저리타임 OFF'}</button>
                             <button onClick={toggleMapViewMode} className={`px-4 py-2 rounded-full text-xs font-bold shadow-md transition border bg-white text-blue-600 border-blue-200 hover:bg-blue-50`}>{getMapViewModeLabel()}</button>
                         </div>
                         {pickingTarget && (
@@ -430,12 +427,21 @@ function PlanDetailContent() {
 
                     {/* [2] 일정 리스트 영역 */}
                     <div className={`flex flex-col w-full h-full bg-white md:w-1/2 relative z-10 transition-transform duration-300 ${mobileViewMode === 'MAP' ? 'translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
-                        {/* ✅ [수정] 중복된 "목록으로" 버튼 제거함 */}
                         <div className="px-5 py-4 border-b border-gray-100 bg-white z-30 flex-shrink-0">
-                            <PlanHeader plan={plan} onRefresh={fetchPlanDetail} onDirtyChange={handleHeaderDirty} />
+                            <PlanHeader plan={plan} onRefresh={fetchPlanDetail} />
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 pb-24 bg-white scrollbar-hide">
-                            <h2 className="text-xl font-bold text-gray-800 mb-4 px-1">상세 일정</h2>
+                            {/* ✅ [이동] 상세 일정 타이틀 옆으로 인저리 버튼 배치 */}
+                            <div className="flex items-center justify-between mb-4 px-1">
+                                <h2 className="text-xl font-bold text-gray-800">상세 일정</h2>
+                                <button
+                                    onClick={() => setShowInjury(!showInjury)}
+                                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm ${showInjury ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                                >
+                                    ⚽ {showInjury ? '인저리 ON' : 'OFF'}
+                                </button>
+                            </div>
+
                             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                                 <SortableContext items={fullDays.map(d => d.id)} strategy={verticalListSortingStrategy}>
                                     <div className="space-y-4">
