@@ -34,3 +34,13 @@ export const deleteSchedule = async (scheduleId: number): Promise<void> => {
   const json: ApiResponse<void> = await res.json();
   if (!json.success) throw new Error(json.message);
 };
+
+export const toggleScheduleVisit = async (scheduleId: number): Promise<void> => {
+  const res = await fetchWithAuth(`/api/schedules/${scheduleId}/visit`, {
+    method: 'PATCH'
+  });
+  if (res.status === 204) return;
+
+  const json = await res.json();
+  if (!json.success) throw new Error(json.message);
+}

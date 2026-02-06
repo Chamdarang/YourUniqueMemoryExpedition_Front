@@ -10,9 +10,7 @@ interface Props {
     onToggleVisit?: (spot: SpotResponse) => void;
 }
 
-// ----------------------------------------------------------------
 // 🎨 스타일 & 아이콘 매핑 헬퍼
-// ----------------------------------------------------------------
 const getTypeInfo = (type: SpotType) => {
     switch (type) {
         case 'FOOD': return { icon: '🍚', label: '음식점', color: 'text-red-600 bg-red-50 border-red-100' };
@@ -31,13 +29,16 @@ const getTypeInfo = (type: SpotType) => {
     }
 };
 
-// ----------------------------------------------------------------
-// 🚀 컴포넌트
-// ----------------------------------------------------------------
 export default function SpotListItem({ spot, onDelete, onToggleVisit }: Props) {
     const navigate = useNavigate();
     const info = getTypeInfo(spot.spotType);
 
+    // ✅ [안전한 링크 생성]
+    // 1. http로 시작하는 정상 URL이 있으면 그대로 사용
+    // 2. 없거나 비정상적이면 위도/경도를 이용해 구글맵 검색 페이지로 연결
+    const safeGoogleMapUrl = (spot.googleMapUrl && spot.googleMapUrl.startsWith('http'))
+        ? spot.googleMapUrl
+        : `https://www.google.com/maps/search/?api=1&query=${spot.lat},${spot.lng}`;
     return (
         <tr className="hover:bg-gray-50 transition group border-b border-gray-100 last:border-none">
 
@@ -49,19 +50,22 @@ export default function SpotListItem({ spot, onDelete, onToggleVisit }: Props) {
             </td>
 
             {/* 2. 장소명 및 설명 */}
-            {/* 🚨 핵심 1: max-w-[0px]를 줘야 table-fixed 비율 안에서만 늘어나고 멈춥니다. */}
             <td className="px-4 py-4 max-w-[0px]">
-
-                {/* 🚨 핵심 2: min-w-0을 줘야 Flex 자식들이 공간 부족할 때 알아서 줄어듭니다. */}
                 <div className="flex items-center gap-2 min-w-0">
                     <Link to={`/spots/${spot.id}`} className="font-bold text-gray-900 hover:text-blue-600 hover:underline truncate block">
                         {spot.spotName}
                     </Link>
-                    {spot.googleMapUrl && (
-                        <a href={spot.googleMapUrl} target="_blank" rel="noreferrer" title="구글맵 보기" className="text-gray-300 hover:text-blue-500 transition shrink-0">
-                            🗺️
-                        </a>
-                    )}
+                    {/* ✅ 수정된 safeGoogleMapUrl 적용 */}
+                    <a
+                        href={safeGoogleMapUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="구글맵에서 보기"
+                        className="text-gray-300 hover:text-blue-500 transition shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        🗺️
+                    </a>
                 </div>
 
                 {spot.description && (
@@ -72,7 +76,6 @@ export default function SpotListItem({ spot, onDelete, onToggleVisit }: Props) {
             </td>
 
             {/* 3. 주소 */}
-            {/* 🚨 핵심 3: 여기도 max-w-[0px]를 줘서 30% 비율을 넘지 못하게 강제합니다. */}
             <td className="px-4 py-4 max-w-[0px]">
                 <div className="text-sm text-gray-500 truncate" title={spot.address}>
                     {spot.shortAddress || spot.address || '-'}

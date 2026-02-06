@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"; // ✅ useEffect 추가
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 // API
@@ -12,7 +12,7 @@ import { getDurationInfo } from "../../utils/timeUtils";
 interface Props {
   plan: PlanDetailResponse;
   onRefresh: () => void;
-  onDirtyChange?: (isDirty: boolean) => void; // ✅ [추가] 변경 감지 핸들러
+  onDirtyChange?: (isDirty: boolean) => void;
 }
 
 export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
@@ -26,16 +26,14 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
     planMemo: ""
   });
 
-  // ✅ [신규] 변경 사항 감지 로직
   useEffect(() => {
     if (!onDirtyChange) return;
 
     if (!isEditing) {
-      onDirtyChange(false); // 편집 모드가 아니면 Dirty 해제
+      onDirtyChange(false);
       return;
     }
 
-    // 원본과 현재 입력값 비교
     const isChanged =
         editForm.planName !== plan.planName ||
         editForm.planStartDate !== plan.planStartDate ||
@@ -97,11 +95,18 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
   const editDuration = getDurationInfo(editForm.planStartDate, editForm.planEndDate);
 
   const getStatusLabel = () => {
-    const today = new Date().toISOString().split('T')[0];
+    // ✅ [수정] UTC 대신 로컬 타임존 기준으로 오늘 날짜 가져오기
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`; // "2026-02-07"
+
     if (plan.planStartDate > today) return { text: "UPCOMING", color: "bg-blue-100 text-blue-600" };
     if (plan.planEndDate < today) return { text: "DONE", color: "bg-gray-100 text-gray-500" };
     return { text: "NOW ✈️", color: "bg-orange-100 text-orange-600" };
   };
+
   const status = getStatusLabel();
 
   return (

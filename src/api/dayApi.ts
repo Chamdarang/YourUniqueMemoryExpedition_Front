@@ -1,5 +1,5 @@
 import type { ApiResponse, PageResponse } from "../types/common";
-import type { PlanDayDetailResponse, PlanDayIndependentCreateRequest, PlanDayResponse, PlanDaySwapRequest, PlanDayUpdateRequest } from "../types/planday";
+import type { PlanDayDetailResponse, PlanDayIndependentCreateRequest, PlanDayResponse, PlanDaySwapRequest, PlanDayUpdateRequest } from "../types/planDay.ts";
 import { fetchWithAuth, getAuthHeaders } from "./utils";
 
 // ✅ 검색 및 페이징 조건 파라미터
@@ -108,8 +108,13 @@ export const deleteDay = async (dayId: number): Promise<void> => {
     method: 'DELETE'
   });
 
-  if (res.status === 204) return;
+  if (res.ok) return;
 
-  const json = await res.json();
-  if (!json.success) throw new Error(json.message);
+  try {
+    const json = await res.json();
+    throw new Error(json.message || "삭제 중 오류가 발생했습니다.");
+  } catch (e) {
+    // JSON 파싱 실패
+    throw new Error("서버 응답을 처리할 수 없습니다.");
+  }
 };

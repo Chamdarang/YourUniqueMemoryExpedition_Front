@@ -3,15 +3,13 @@ import { useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useSensor, useSensors, PointerSensor, DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 
-// Types & Utils
 import type { DayScheduleResponse } from "../../types/schedule";
-import type { PlanDayResponse } from "../../types/planday";
+import type { PlanDayResponse } from "../../types/planDay.ts";
 import { recalculateSchedules } from "../../utils/scheduleUtils";
 import { timeToMinutes, minutesToTime } from "../../utils/timeUtils";
 import { syncSchedules } from "../../api/scheduleApi";
 import { updatePlanDay } from "../../api/dayApi";
 
-// Components
 import DayScheduleList from "../day/DayScheduleList";
 
 interface Props {
@@ -29,23 +27,18 @@ interface Props {
     setPickingTarget: (target: { dayId: number, scheduleId: number } | null) => void;
     isVisibleOnMap: boolean;
     onToggleMapVisibility: (dayId: number) => void;
-    onExportDay: () => void; // ✅ [추가] 부모에서 전달받은 개별 저장 함수
+    onExportDay: () => void;
 }
 
 const DAY_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
 const getDayColor = (dayOrder: number) => DAY_COLORS[(dayOrder - 1) % DAY_COLORS.length];
 
-const decodeTempSpot = (memo: string) => {
-    if (!memo) return null;
-    const idx = memo.indexOf(" #tmp:");
-    if (idx === -1) return null;
-    try { return JSON.parse(memo.substring(idx + 6)); } catch { return null; }
-};
+// ❌ decodeTempSpot 제거됨
 
 export default function PlanDayItem({
                                         id, dayOrder, data, schedules, showInjury, onRefresh, onUpdateDayInfo,
                                         onSchedulesChange, setDirty, onToggle, pickingTarget, setPickingTarget,
-                                        isVisibleOnMap, onToggleMapVisibility, onExportDay // ✅ prop 구조분해 할당
+                                        isVisibleOnMap, onToggleMapVisibility, onExportDay
                                     }: Props) {
 
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -54,7 +47,6 @@ export default function PlanDayItem({
     const [isExpanded, setIsExpanded] = useState(false);
     const [isDayDirty, setIsDayDirty] = useState(false);
 
-    // 수정 모드 상태
     const [isEditingInfo, setIsEditingInfo] = useState(false);
     const [editTitle, setEditTitle] = useState("");
     const [editMemo, setEditMemo] = useState("");
@@ -124,13 +116,7 @@ export default function PlanDayItem({
         }
 
         const currentList = schedules.map((item, i) => {
-            if (i === index) {
-                const newItem = { ...item, ...updatedData };
-                if (updatedData.isVisit !== undefined && newItem.spot) {
-                    newItem.spot = { ...newItem.spot, isVisit: updatedData.isVisit };
-                }
-                return newItem;
-            }
+            if (i === index) return { ...item, ...updatedData };
             if (i > index) return { ...item, startTime: null };
             return item;
         });
@@ -150,7 +136,9 @@ export default function PlanDayItem({
 
         const newItem: DayScheduleResponse = {
             endTime: "", isVisit: false, lat: 0, lng: 0,
-            id: -Date.now(), dayId: data.id, scheduleOrder: index + 1, spotId: 0, spotName: "", spotType: "OTHER",
+            id: -Date.now(), dayId: data.id, scheduleOrder: index + 1,
+            spotUserId: 0, // ✅ spotUserId 사용
+            spotName: "", spotType: "OTHER",
             startTime, duration: 60, movingDuration: 0, transportation: 'WALK', memo: '', movingMemo: ''
         };
         const newList = [...schedules];
@@ -172,9 +160,19 @@ export default function PlanDayItem({
     const handleSaveDay = async (e: React.MouseEvent) => {
         e.stopPropagation();
         if (!data) return;
-        if (schedules.some(s => s.spotId === 0 && !decodeTempSpot(s.memo) && !s.spotName)) return alert("장소를 선택해주세요.");
+
+        // ✅ [수정] decodeTempSpot 제거됨. spotUserId 또는 spotName 확인
+        if (schedules.some(s => (!s.spotUserId || s.spotUserId === 0) && !s.spotName)) {
+            return alert("장소를 선택해주세요.");
+        }
+
         try {
-            const syncReq = schedules.map((s, idx) => ({ ...s, id: s.id < 0 ? null : s.id, scheduleOrder: idx + 1, spotId: s.spotId === 0 ? null : s.spotId }));
+            const syncReq = schedules.map((s, idx) => ({
+                ...s,
+                id: s.id < 0 ? null : s.id,
+                scheduleOrder: idx + 1,
+                spotUserId: s.spotUserId === 0 ? null : s.spotUserId // ✅ spotUserId 전송
+            }));
             await syncSchedules(data.id, { schedules: syncReq });
             setIsDayDirty(false);
             setDirty(`day-${data.id}`, false);
@@ -191,7 +189,6 @@ export default function PlanDayItem({
         <div ref={setNodeRef} style={style} className="mb-4">
             <div className={`bg-white rounded-2xl border transition overflow-hidden shadow-sm ${isExpanded ? `border-[${dayColor}]` : 'border-gray-200'}`} style={isExpanded ? { borderColor: dayColor } : {}}>
 
-                {/* Header (Accordion Title) */}
                 <div className="p-4 cursor-pointer relative z-10 flex flex-col justify-center min-h-[72px]" onClick={handleToggle}>
                     <div className="flex items-start md:items-center gap-4 w-full">
                         {!isEditingInfo && (
@@ -225,7 +222,6 @@ export default function PlanDayItem({
 
                         {!isEditingInfo && (
                             <div className="flex items-center gap-2 self-start md:self-center">
-                                {/* ✅ [추가] 개별 일정 저장 버튼 (카메라 아이콘) */}
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onExportDay(); }}
                                     className="w-9 h-9 flex items-center justify-center rounded-xl transition border bg-white text-gray-400 border-gray-100 hover:bg-gray-50 hover:text-gray-600 shadow-sm"
@@ -248,7 +244,6 @@ export default function PlanDayItem({
                     </div>
                 </div>
 
-                {/* Content */}
                 {isExpanded && (
                     <div className="border-t border-gray-100 p-4 bg-gray-50/30">
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

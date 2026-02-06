@@ -1,4 +1,4 @@
-import type { PlanDayResponse } from "./planday";
+import type { PlanDayResponse } from "./planDay.ts";
 
 export interface PlanResponse{
     id: number;

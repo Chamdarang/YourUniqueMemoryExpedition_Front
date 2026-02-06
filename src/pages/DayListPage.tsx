@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createIndependentDay, deleteDay, getIndependentDays } from "../api/dayApi";
-import type { PlanDayResponse } from "../types/planday";
+import type { PlanDayResponse } from "../types/planDay.ts";
 
 // Components
 import DayList from "../components/day/DayList";

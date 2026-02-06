@@ -4,40 +4,18 @@ import { CSS } from "@dnd-kit/utilities";
 import { useMapsLibrary, useMap } from "@vis.gl/react-google-maps";
 
 // API
-import { createSpot, updateSpot, getMySpots } from "../../api/spotApi";
+import { createSpot, getMySpots } from "../../api/spotApi";
 import { getSpotTypeInfo } from "../../utils/spotUtils";
 
 import type { DayScheduleResponse, ScheduleItemRequest } from "../../types/schedule";
 import type { SpotType, Transportation } from "../../types/enums";
 import type { SpotResponse, SpotCreateRequest } from "../../types/spot";
+import {toggleScheduleVisit} from "../../api/scheduleApi.ts";
 
-// 🛠️ [유틸]
-const TEMP_SPOT_PREFIX = " #tmp:";
-
+// 🛠️ [유틸] 메모에서 인저리 타임 태그만 처리
 const cleanMemoTags = (memo: string) => {
     if (!memo) return '';
-    const text = memo.replace(/#si:\s*\d+/g, '').replace(/#mi:\s*\d+/g, '').replace(/#visited/g, '');
-    const split = text.split(TEMP_SPOT_PREFIX);
-    return split[0].trim();
-};
-
-const encodeTempSpot = (memo: string, spot: { name: string; type: string; lat: number; lng: number }) => {
-    const clean = cleanMemoTags(memo);
-    const data = JSON.stringify({ n: spot.name, t: spot.type, la: spot.lat, lo: spot.lng });
-    return `${clean}${TEMP_SPOT_PREFIX}${data}`;
-};
-
-const decodeTempSpot = (memo: string) => {
-    if (!memo) return null;
-    const idx = memo.indexOf(TEMP_SPOT_PREFIX);
-    if (idx === -1) return null;
-    try {
-        const jsonStr = memo.substring(idx + TEMP_SPOT_PREFIX.length);
-        const data = JSON.parse(jsonStr);
-        return { name: data.n, type: data.t as SpotType, lat: data.la, lng: data.lo };
-    } catch {
-        return null;
-    }
+    return memo.replace(/#si:\s*\d+/g, '').replace(/#mi:\s*\d+/g, '').replace(/#visited/g, '').trim();
 };
 
 const mapGoogleTypeToSpotType = (types: string[] = []): SpotType => {
@@ -133,7 +111,7 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
     const [baseMove, setBaseMove] = useState(0);
 
     const [form, setForm] = useState({
-        spotId: schedule.spotId,
+        spotUserId: schedule.spotUserId,
         startTime: schedule.startTime ? schedule.startTime.substring(0, 5) : '',
         duration: schedule.duration ?? 60,
         transportation: schedule.transportation || 'WALK',
@@ -142,30 +120,30 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
         memo: schedule.memo || '',
     });
 
-    const tempSpotData = decodeTempSpot(schedule.memo);
-    const finalSpotName = schedule.spotName || tempSpotData?.name;
-    const finalSpotType = schedule.spotType || tempSpotData?.type || 'OTHER';
+    const displaySpotName = schedule.spotName || "장소 선택";
+    const displaySpotType = schedule.spotType || 'OTHER';
 
-    const typeInfo = getSpotTypeInfo(finalSpotType || schedule.spotType);
+    const typeInfo = getSpotTypeInfo(displaySpotType);
     const displayMemo = cleanMemoTags(schedule.memo);
 
     const [selectedSpotInfo, setSelectedSpotInfo] = useState<{name: string, type: SpotType, lat?: number, lng?: number} | null>(null);
-    const [isVisited, setIsVisited] = useState(schedule.isVisit || false);
+    const [isVisited, setIsVisited] = useState(schedule.isChecked || false);
 
     const savedMoveInjury = parseInjuryFromMemo(schedule.movingMemo, '#mi:');
     const pureMovingDuration = Math.max(0, schedule.movingDuration - savedMoveInjury);
 
     useEffect(() => {
         if (!schedule) return;
-        setIsVisited(schedule.isVisit || false);
+        setIsVisited(schedule.isChecked || false);
         const sInjury = parseInjuryFromMemo(schedule.memo, '#si:');
         const mInjury = parseInjuryFromMemo(schedule.movingMemo, '#mi:');
         setStayInjury(sInjury);
         setMoveInjury(mInjury);
         setBaseStay(Math.max(0, (schedule.duration ?? 60) - sInjury));
         setBaseMove(Math.max(0, (schedule.movingDuration || 0) - mInjury));
+
         setForm({
-            spotId: schedule.spotId,
+            spotUserId: schedule.spotUserId,
             startTime: schedule.startTime ? schedule.startTime.substring(0, 5) : '',
             duration: schedule.duration ?? 60,
             transportation: schedule.transportation || 'WALK',
@@ -173,17 +151,18 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
             movingMemo: cleanMemoTags(schedule.movingMemo || ''),
             memo: cleanMemoTags(schedule.memo || ''),
         });
-        const savedTemp = decodeTempSpot(schedule.memo);
-        if (schedule.spotId !== 0) {
-            setSearchTerm(schedule.spotName || "");
-        } else if (savedTemp) {
-            setSearchTerm(savedTemp.name || "");
-            setSelectedSpotInfo({ name: savedTemp.name, type: savedTemp.type, lat: savedTemp.lat, lng: savedTemp.lng });
-        } else if (schedule.spotName) {
-            setSearchTerm(schedule.spotName || "");
-            setSelectedSpotInfo({ name: schedule.spotName, type: schedule.spotType || 'OTHER', lat: schedule.lat || schedule.spot?.lat, lng: schedule.lng || schedule.spot?.lng });
+
+        if (schedule.spotName) {
+            setSearchTerm(schedule.spotName);
+            setSelectedSpotInfo({
+                name: schedule.spotName,
+                type: schedule.spotType || 'OTHER',
+                lat: schedule.lat,
+                lng: schedule.lng
+            });
         } else {
             setSearchTerm("");
+            setSelectedSpotInfo(null);
         }
     }, [schedule]);
 
@@ -192,7 +171,9 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
     }, [placesLibrary]);
 
     useEffect(() => {
-        if (schedule.spotId === 0 && !schedule.spotName && !decodeTempSpot(schedule.memo) && editMode === 'NONE') setEditMode('MAIN');
+        if ((!schedule.spotUserId || schedule.spotUserId === 0) && !schedule.spotName && editMode === 'NONE') {
+            setEditMode('MAIN');
+        }
     }, []);
 
     useEffect(() => {
@@ -203,11 +184,7 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
         const timer = setTimeout(async () => {
             try {
                 if (searchMode === 'MINE') {
-                    const res = await getMySpots({
-                        keyword: safeSearchTerm,
-                        page: 0,
-                        size: 20
-                    });
+                    const res = await getMySpots({ keyword: safeSearchTerm, page: 0, size: 20 });
                     setSearchResults(res.content);
                     setIsDropdownOpen(true);
                 } else {
@@ -218,11 +195,29 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
                         const { suggestions } = await placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
                         const mappedResults: SpotResponse[] = suggestions.map((s: any) => {
                             const prediction = s.placePrediction;
+
+                            // structuredFormat이 있으면 mainText(이름)와 secondaryText(주소)를 명확히 분리
+                            // 없으면 text(전체 주소)에서 분리를 시도
+                            const mainText = prediction.structuredFormat?.mainText?.text
+                                || prediction.mainText?.text
+                                || prediction.text?.text.split(',')[0] // 최후의 보루: 첫 번째 쉼표 앞이 보통 이름
+                                || "";
+
+                            const secondaryText = prediction.structuredFormat?.secondaryText?.text
+                                || prediction.secondaryText?.text
+                                || prediction.text?.text.replace(mainText, '').replace(/^,\s*/, '') // 이름을 제외한 나머지를 주소로
+                                || "";
+
                             return {
-                                id: 0, placeId: prediction.placeId,
-                                spotName: prediction.structuredFormat?.mainText?.text || prediction.text?.text || "",
-                                address: prediction.structuredFormat?.secondaryText?.text || "",
-                                spotType: 'OTHER', lat: 0, lng: 0, isVisit: false, metadata: {}
+                                id: 0,
+                                placeId: prediction.placeId,
+                                spotName: mainText.trim(),
+                                address: secondaryText.trim(),
+                                spotType: 'OTHER',
+                                lat: 0,
+                                lng: 0,
+                                isVisit: false,
+                                metadata: {}
                             };
                         });
                         setSearchResults(mappedResults);
@@ -244,36 +239,58 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
 
     const handleSpotSelect = async (spot: SpotResponse) => {
         try {
-            let finalId = spot.id;
-            let finalSpot = spot;
             if (!spot.id || spot.id === 0) {
                 if (!spot.placeId) return;
                 setIsRegistering(true);
                 try {
                     // @ts-ignore
                     const place = new google.maps.places.Place({ id: spot.placeId });
-                    await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location', 'types', 'googleMapsURI', 'websiteURI'] });
+                    await place.fetchFields({
+                        // ✅ 영업시간, 사진, 원본 타입 필드 추가
+                        fields: ['displayName', 'formattedAddress', 'location', 'types', 'googleMapsURI', 'websiteURI', 'regularOpeningHours', 'photos']
+                    });
+
                     if (place.location) {
+                        // 1. 데이터 가공
+                        const addrParts = place.formattedAddress?.split(' ') || [];
+                        const shortAddr = addrParts.length > 2 ? addrParts.slice(1).join(' ') : (place.formattedAddress || "");
+                        const openingHours = place.regularOpeningHours?.weekdayDescriptions || [];
+                        const photoUrl = place.photos && place.photos.length > 0
+                            ? place.photos[0].getURI({ maxWidth: 800 })
+                            : null;
+
                         const createReq: SpotCreateRequest = {
+                            placeId: spot.placeId,
                             spotName: place.displayName || spot.spotName,
                             spotType: mapGoogleTypeToSpotType(place.types),
                             address: place.formattedAddress || spot.address || '',
-                            lat: place.location.lat(), lng: place.location.lng(), placeId: spot.placeId,
-                            isVisit: false, metadata: { originalTypes: place.types || [] },
-                            shortAddress: '', googleMapUrl: place.googleMapsURI || '', website: place.websiteURI || '', description: ''
+                            lat: place.location.lat(),
+                            lng: place.location.lng(),
+                            isVisit: false,
+                            googleMapUrl: place.googleMapsURI || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.displayName || '')}&query_place_id=${spot.placeId}`,
+                            website: place.websiteURI || '',
+                            shortAddress: shortAddr,
+                            metadata: {
+                                originalTypes: place.types || [],
+                                openingHours: openingHours, // ✅ 영업시간 추가
+                                photoUrl: photoUrl          // ✅ 사진 추가
+                            }
                         };
+
                         const savedSpot = await createSpot(createReq);
-                        finalId = savedSpot.id; finalSpot = savedSpot;
-                        updateFormWithSpot(finalId, finalSpot);
+                        updateFormWithSpot(savedSpot.id, savedSpot);
                         if (placesLibrary) setSessionToken(new placesLibrary.AutocompleteSessionToken());
-                    } else alert("장소 정보 조회 실패");
-                } catch (err) { console.error(err); alert("장소 등록 실패"); } finally { setIsRegistering(false); }
-            } else updateFormWithSpot(finalId, finalSpot);
+                    }
+                } catch (err) { console.error(err); alert("장소 등록 실패"); }
+                finally { setIsRegistering(false); }
+            } else {
+                updateFormWithSpot(spot.id, spot);
+            }
         } catch (error) { console.error(error); setIsRegistering(false); }
     };
 
     const updateFormWithSpot = (id: number, spot: SpotResponse) => {
-        setForm({ ...form, spotId: id });
+        setForm({ ...form, spotUserId: id });
         setSearchTerm(spot.spotName || "");
         setSelectedSpotInfo({ name: spot.spotName, type: spot.spotType, lat: spot.lat, lng: spot.lng });
         setIsVisited(spot.isVisit);
@@ -284,16 +301,20 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
     const moveStartTime = subTimeStr(form.startTime, form.movingDuration);
 
     const handleDone = () => {
-        let currentSpotInfo = selectedSpotInfo;
-        if (form.spotId === 0 && (!currentSpotInfo || !currentSpotInfo.name)) {
-            const decoded = decodeTempSpot(schedule.memo);
-            if (decoded) currentSpotInfo = { name: decoded.name, type: decoded.type, lat: decoded.lat, lng: decoded.lng };
-            // @ts-ignore
-            else if (schedule.spotName) currentSpotInfo = { name: schedule.spotName, type: schedule.spotType || 'OTHER', lat: schedule.lat, lng: schedule.lng };
-        }
         const finalName = (searchTerm || "").trim();
         if (!finalName) return alert("장소 이름을 입력해주세요.");
-        if (form.spotId === 0 && (!currentSpotInfo || !currentSpotInfo.lat)) return alert("장소 정보를 찾을 수 없습니다.");
+
+        let finalSpotInfo = selectedSpotInfo;
+        if (!finalSpotInfo && schedule.spotName) {
+            finalSpotInfo = {
+                name: schedule.spotName,
+                type: schedule.spotType || 'OTHER',
+                lat: schedule.lat,
+                lng: schedule.lng
+            };
+        }
+
+        if (!finalSpotInfo || !finalSpotInfo.lat) return alert("장소 정보(좌표)가 없습니다. 목록에서 선택하거나 지도에서 찍어주세요.");
 
         const finalStay = baseStay + stayInjury;
         const finalMove = baseMove + moveInjury;
@@ -301,31 +322,57 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
         let finalMemo = form.memo;
         if (stayInjury > 0) finalMemo += ` #si:${stayInjury}`;
 
-        if (form.spotId === 0 && currentSpotInfo) {
-            finalMemo = encodeTempSpot(finalMemo, { name: finalName, type: currentSpotInfo.type, lat: currentSpotInfo.lat!, lng: currentSpotInfo.lng! });
-        }
         const finalMoveMemo = `${cleanMemoTags(form.movingMemo)} ${moveInjury > 0 ? `#mi:${moveInjury}` : ''}`.trim();
-        const updatePayload: any = { ...form, duration: finalStay, movingDuration: finalMove, memo: finalMemo, movingMemo: finalMoveMemo, isVisit: isVisited };
-        if (currentSpotInfo) Object.assign(updatePayload, { spotName: finalName, spotType: currentSpotInfo.type, lat: currentSpotInfo.lat, lng: currentSpotInfo.lng });
+
+        const updatePayload: any = {
+            ...form,
+            duration: finalStay,
+            movingDuration: finalMove,
+            memo: finalMemo,
+            movingMemo: finalMoveMemo,
+            isVisit: isVisited,
+            spotName: finalName,
+            spotType: finalSpotInfo.type,
+            lat: finalSpotInfo.lat,
+            lng: finalSpotInfo.lng,
+            spotUserId: form.spotUserId
+        };
 
         onUpdate(schedule.id, updatePayload);
         setEditMode('NONE');
     };
 
     const handleCancel = () => {
-        if (schedule.spotId === 0 && !schedule.spotName && !decodeTempSpot(schedule.memo)) onDelete(schedule.id);
-        else { setEditMode('NONE'); setSearchTerm(finalSpotName || ""); }
+        if ((!schedule.spotUserId || schedule.spotUserId === 0) && !schedule.spotName) onDelete(schedule.id);
+        else { setEditMode('NONE'); setSearchTerm(displaySpotName || ""); }
     };
 
     const toggleVisit = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!schedule.spotId || schedule.spotId === 0) return alert("내 장소로 등록된 곳만 방문 체크가 가능합니다.");
+
         const nextState = !isVisited;
-        setIsVisited(nextState);
+        setIsVisited(nextState); // 1. UI 먼저 반영 (낙관적 업데이트)
+
+        // 2. 부모 리스트의 상태도 업데이트 (저장 버튼 활성화 등을 위해)
+        onUpdate(schedule.id, { isChecked: nextState } as any);
+
+        // 3. 서버 통신 분기 처리
+        // 🔴 아직 저장되지 않은 임시 스케줄(ID가 음수)인 경우 -> API 호출 안 함 (나중에 전체 저장 때 반영)
+        if (schedule.id < 0) {
+            return;
+        }
+
+        // 🟢 이미 DB에 저장된 스케줄인 경우 -> 즉시 방문 체크 API 호출
         try {
-            await updateSpot(schedule.spotId, { isVisit: nextState } as any);
-            onUpdate(schedule.id, { isVisit: nextState } as any);
-        } catch { setIsVisited(!nextState); alert("상태 변경 실패"); }
+            await toggleScheduleVisit(schedule.id);
+            // 성공 시, 백엔드에서 SpotVisitHistory 등을 저장하도록 처리되어 있을 것임
+        } catch (error) {
+            console.error("방문 체크 실패", error);
+            // 실패 시 원상복구
+            setIsVisited(!nextState);
+            onUpdate(schedule.id, { isChecked: !nextState } as any);
+            alert("방문 체크에 실패했습니다.");
+        }
     };
 
     const getTransIcon = (type: Transportation) => {
@@ -337,8 +384,8 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
         return labels[type] || '이동';
     };
     const displayMoveLabel = () => cleanMemoTags(schedule.movingMemo) || `${getTransLabel(schedule.transportation)} 이동`;
-    const displayName = finalSpotName || "장소 선택";
 
+    const displayName = displaySpotName;
     const timeDisplay = schedule.startTime ? `${schedule.startTime.substring(0, 5)} - ${spotEndTime}` : "시간 미정";
     const durationDisplay = `체류 ${formatDurationWithInjury(schedule.duration, stayInjury, showInjury)}`;
 
@@ -431,6 +478,7 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
                         ) : (
                             <div className="p-5 bg-white" onClick={e => e.stopPropagation()}>
                                 <div className="flex justify-between mb-4 pb-2 border-b border-gray-100"><h3 className="font-bold text-base text-gray-800">일정 편집</h3><button onClick={() => onDelete(schedule.id)} className="text-sm text-red-500 font-bold hover:underline">삭제</button></div>
+
                                 <div className="mb-4 relative" ref={dropdownRef}>
                                     <div className="flex justify-between items-end mb-1">
                                         <label className="text-sm text-gray-500 font-bold">장소 이름</label>
@@ -440,22 +488,45 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
                                     <input type="text" className={`w-full p-3 border rounded-xl font-bold outline-none transition ${searchMode === 'MINE' ? 'bg-blue-50/50 border-blue-100 focus:bg-white focus:ring-2 focus:ring-blue-300 text-blue-900 placeholder-blue-300' : 'bg-orange-50/50 border-orange-100 focus:bg-white focus:ring-2 focus:ring-orange-300 text-orange-900 placeholder-orange-300'}`} placeholder="장소 검색..." value={searchTerm} onFocus={() => { if(searchTerm.trim()) setIsDropdownOpen(true); }} onChange={(e) => { setSearchTerm(e.target.value); setIsDropdownOpen(e.target.value.trim() !== ""); }} />
                                     {isDropdownOpen && searchTerm.trim() !== "" && (
                                         <div className="absolute z-50 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-48 overflow-y-auto">
-                                            {searchResults.length === 0 ? (<div className="p-4 text-center text-xs text-gray-400">결과 없음</div>) : (
-                                                searchResults.map((spot, i) => (
-                                                    <div key={i} className="px-4 py-3 hover:bg-orange-50 cursor-pointer border-b border-gray-50 flex justify-between items-center" onClick={() => handleSpotSelect(spot)}>
-                                                        <div className="flex flex-col min-w-0"><span className="font-bold text-gray-800 text-sm truncate">{spot.spotName}</span><span className="text-xs text-gray-400 truncate">{spot.address}</span></div>
-                                                    </div>
-                                                ))
+                                            {searchResults.length === 0 ? (
+                                                <div className="p-4 text-center text-xs text-gray-400">결과 없음</div>
+                                            ) : (
+                                                searchResults.map((spot, i) => {
+                                                    // ✅ [2] 구글 검색 결과인지 내 장소인지 구분
+                                                    const isGoogle = !!spot.placeId && (!spot.id || spot.id === 0);
+                                                    console.log(spot)
+                                                    return (
+                                                        <div
+                                                            key={i}
+                                                            className="px-4 py-3 hover:bg-orange-50 cursor-pointer border-b border-gray-50 flex flex-col gap-1"
+                                                            onClick={() => handleSpotSelect(spot)}
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                {/* 🏷️ 이름 표시 (굵게) */}
+                                                                <span className="font-bold text-gray-900 text-sm leading-tight">
+                                    {spot.spotName}
+                                </span>
+                                                                {isGoogle && (
+                                                                    <span className="text-[9px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded font-black border border-blue-100">GOOGLE</span>
+                                                                )}
+                                                            </div>
+                                                            {/* 📍 주소 표시 (작게) */}
+                                                            <span className="text-[11px] text-gray-400 truncate leading-normal">
+                                {spot.address}
+                            </span>
+                                                        </div>
+                                                    );
+                                                })
                                             )}
                                         </div>
                                     )}
                                 </div>
+
                                 <div className="grid grid-cols-2 gap-4 mb-4">
                                     <div><label className="text-sm text-gray-500 font-bold block mb-1">시작 시간</label><input type="time" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm font-bold outline-none" value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})} /></div>
                                     <div><label className="text-sm text-gray-500 font-bold block mb-1">기본 체류(분)</label><input type="number" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm font-bold outline-none" value={baseStay} onChange={e => setBaseStay(Math.max(0, Number(e.target.value)))} /></div>
                                 </div>
 
-                                {/* ✅ [신규 추가] 일정 인저리 타임 설정 영역 */}
                                 <div className="mb-4 p-3 bg-orange-50 rounded-xl border border-orange-100">
                                     <div className="flex justify-between items-center mb-2">
                                         <label className="text-xs text-orange-600 font-bold">⚽ 일정 인저리 타임 (여유 시간)</label>

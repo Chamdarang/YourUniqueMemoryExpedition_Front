@@ -1,5 +1,6 @@
 import type { SpotType } from './enums';
 import type { SpotPurchaseResponse } from './purchase';
+import type {SpotVisitHistoryResponse} from "./spotVisitHistory.ts";
 
 
 export interface SpotResponse {
@@ -38,6 +39,7 @@ export interface SpotCreateRequest {
 export interface SpotDetailResponse extends SpotResponse {
   groupName: string[];
   purchases: SpotPurchaseResponse[];
+  spotVisitHistory: SpotVisitHistoryResponse[];
 }
 
 // 3. [신규] 장소 수정 요청 (SpotUpdateRequest)

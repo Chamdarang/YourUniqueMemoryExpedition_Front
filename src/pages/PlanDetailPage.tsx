@@ -2,7 +2,7 @@
 declare let google: any;
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { useParams, useBlocker } from "react-router-dom";
+import { useParams, useNavigate, useBlocker } from "react-router-dom";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary, InfoWindow, Pin } from "@vis.gl/react-google-maps";
@@ -12,7 +12,7 @@ import { getPlanDetail } from "../api/planApi";
 import { createDayInPlan, swapPlanDay, getIndependentDays } from "../api/dayApi";
 import { getSchedulesByDay } from "../api/scheduleApi";
 import { createSpot } from "../api/spotApi";
-// ✅ [추가] 지도 생성 API
+// ✅ 지도 생성 API
 import { makeStaticGoogleMap } from "../api/mapApi";
 
 // Components
@@ -21,7 +21,7 @@ import PlanDayItem from "../components/plan/PlanDayItem";
 
 // Types & Utils
 import type { PlanDetailResponse } from "../types/plan";
-import type { PlanDayResponse } from "../types/planday";
+import type { PlanDayResponse } from "../types/planDay.ts";
 import type { DayScheduleResponse } from "../types/schedule";
 import type { SpotCreateRequest } from "../types/spot";
 import { recalculateSchedules } from "../utils/scheduleUtils";
@@ -31,24 +31,15 @@ import {
     ImageExportModal,
     useScheduleExport,
     getStaticMapQuery,
-    decodeTempSpot,
-    type ExportSection, PlanScheduleExportView, DayScheduleExportView
+    type ExportSection,
+    PlanScheduleExportView,
+    DayScheduleExportView
 } from "../components/common/ScheduleExport";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+const scrollbarHideStyle = `.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`;
 
-const scrollbarHideStyle = `
-  .scrollbar-hide::-webkit-scrollbar { display: none; }
-  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-`;
-
-// 🛠️ 임시 장소 파싱/인코딩 유틸
-const TEMP_SPOT_PREFIX = " #tmp:";
-const encodeTempSpot = (memo: string, spot: { name: string; type: string; lat: number; lng: number }) => {
-    const clean = memo.replace(/#si:\s*\d+/g, '').replace(/#mi:\s*\d+/g, '').replace(/#visited/g, '').split(TEMP_SPOT_PREFIX)[0].trim();
-    const data = JSON.stringify({ n: spot.name, t: spot.type, la: spot.lat, lo: spot.lng });
-    return `${clean}${TEMP_SPOT_PREFIX}${data}`;
-};
+// 🛠️ 임시 장소 파싱 제거됨 (필드 직접 사용)
 
 function NumberedMarker({ number, color, onClick }: { number: number, color: string, onClick?: () => void }) {
     return (
@@ -61,7 +52,6 @@ function NumberedMarker({ number, color, onClick }: { number: number, color: str
     );
 }
 
-// 🗺️ 지도 경로 컴포넌트
 function MapDirections({ daySchedulesMap, dayOrderMap, mapViewMode, visibleDays }: any) {
     const map = useMap();
     const mapsLibrary = useMapsLibrary("maps");
@@ -85,17 +75,12 @@ function MapDirections({ daySchedulesMap, dayOrderMap, mapViewMode, visibleDays 
 
             const dayOrder = dayOrderMap[dayId] || 1;
             const color = getDayColor(dayOrder);
-
+            console.log(schedules)
             // @ts-ignore
-            const path = schedules.map(s => {
-                const temp = decodeTempSpot(s.memo);
-                // @ts-ignore
-                const lat = Number(s.lat || s.spot?.lat || temp?.lat);
-                // @ts-ignore
-                const lng = Number(s.lng || s.spot?.lng || temp?.lng);
-                return { lat, lng };
-            }).filter((pos: any) => !isNaN(pos.lat) && !isNaN(pos.lng) && pos.lat !== 0 && pos.lng !== 0);
-
+            const path = schedules.map(s => ({
+                lat: Number(s.lat),
+                lng: Number(s.lng)
+            })).filter((pos: any) => !isNaN(pos.lat) && !isNaN(pos.lng) && pos.lat !== 0 && pos.lng !== 0);
             if (path.length > 0) {
                 // @ts-ignore
                 path.forEach(pos => bounds.extend(pos));
@@ -120,7 +105,6 @@ function MapDirections({ daySchedulesMap, dayOrderMap, mapViewMode, visibleDays 
     return null;
 }
 
-// 📭 빈 슬롯 컴포넌트
 function EmptySlot({ dayOrder, onCreateNew, onImportSelect }: { dayOrder: number, onCreateNew: () => void, onImportSelect: (id: number) => void }) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [mode, setMode] = useState<'MENU' | 'LIST'>('MENU');
@@ -178,6 +162,7 @@ export default function PlanDetailPage() {
 
 function PlanDetailContent() {
     const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
     const planId = Number(id);
     const [plan, setPlan] = useState<PlanDetailResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -193,19 +178,17 @@ function PlanDetailContent() {
     const [pickingTarget, setPickingTarget] = useState<{ dayId: number, scheduleId: number } | null>(null);
     const [tempSelectedSpot, setTempSelectedSpot] = useState<SpotCreateRequest | null>(null);
 
-    // ✅ Export 관련 Hook
+    // Export 관련 State
     const { isExportModalOpen, openExportModal, closeExportModal, exportOptions, setExportOptions, handleSaveImage } = useScheduleExport();
     const exportRef = useRef<HTMLDivElement>(null);
     const [generatedMapUrl, setGeneratedMapUrl] = useState<string | null>(null);
-    const [mapVersion, setMapVersion] = useState(0); // 리렌더링 트리거
+    const [mapVersion, setMapVersion] = useState(0);
     const [exportMode, setExportMode] = useState<'PLAN' | 'DAY'>('PLAN');
-    const [exportSections, setExportSections] = useState<ExportSection[]>([]); // PLAN 모드용 데이터
-    const [dayExportData, setDayExportData] = useState<{
-        title: string;
-        subTitle: string; // 👈 추가됨
-        memo: string;
-        schedules: DayScheduleResponse[]
-    } | null>(null); // DAY 모드용 데이터
+    const [exportSections, setExportSections] = useState<ExportSection[]>([]);
+    const [dayExportData, setDayExportData] = useState<{ title: string; subTitle: string; memo: string; schedules: DayScheduleResponse[] } | null>(null);
+
+    // 헤더 상태
+    const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
     const geocodingLibrary = useMapsLibrary("geocoding");
     const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
@@ -225,22 +208,13 @@ function PlanDetailContent() {
     }, [blocker]);
 
     useEffect(() => {
-        const handleBeforeUnload = (e: BeforeUnloadEvent) => { if (isAnyDirty) { e.preventDefault(); e.returnValue = ""; } };
-        window.addEventListener("beforeunload", handleBeforeUnload);
-        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-    }, [isAnyDirty]);
-
-    // ✅ [핵심 1] 페이지 변경 시 Blob URL 해제 및 초기화
-    useEffect(() => {
         setMapSchedulesMap({});
         setDayOrderMap({});
         setVisibleDays(new Set());
-        setGeneratedMapUrl(prev => {
-            if (prev) URL.revokeObjectURL(prev);
-            return null;
-        });
+        setGeneratedMapUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
         setDirtyMap({});
         setMobileViewMode('LIST');
+        setIsHeaderExpanded(false);
     }, [planId]);
 
     const handleSetDirty = useCallback((itemId: string | number, isDirty: boolean) => {
@@ -261,8 +235,6 @@ function PlanDetailContent() {
     };
     useEffect(() => { if (planId) fetchPlanDetail(); }, [planId]);
 
-
-    // ✅ [핵심 3] 지도 이미지 저장 핸들러
     const handlePlanExportClick = async () => {
         if (!plan || !plan.days) return;
         const btn = document.getElementById('save-btn');
@@ -270,7 +242,6 @@ function PlanDetailContent() {
         if(btn) btn.innerText = "⏳ 생성 중...";
 
         try {
-            // 1. 미로드 일정 확인 및 패치
             const missingDayIds = plan.days.filter((d: any) => !mapSchedulesMap[d.id]).map((d: any) => d.id);
             let newSchedulesMap = { ...mapSchedulesMap };
             if (missingDayIds.length > 0) {
@@ -279,7 +250,6 @@ function PlanDetailContent() {
                 setMapSchedulesMap(newSchedulesMap);
             }
 
-            // 2. 데이터 가공 (ExportSection[])
             const sortedDays = [...plan.days].sort((a, b) => a.dayOrder - b.dayOrder);
             const sections: ExportSection[] = sortedDays.map(day => ({
                 id: day.id,
@@ -294,26 +264,18 @@ function PlanDetailContent() {
                 return;
             }
 
-            // 3. 상태 설정 및 모달 오픈
-            setExportMode('PLAN'); // ✨ 전체 모드
+            setExportMode('PLAN');
             setExportSections(sections);
             openExportModal();
 
-        } catch (e) {
-            console.error(e);
-            alert("일정 로딩 실패");
-        } finally {
-            if(btn && originalText) btn.innerText = originalText;
-        }
+        } catch (e) { console.error(e); alert("일정 로딩 실패"); } finally { if(btn && originalText) btn.innerText = originalText; }
     };
 
-    // 🚀 [2] 개별 일정 저장 핸들러
     const handleDayExportClick = async (dayId: number) => {
         const dayItem = plan?.days.find(d => d.id === dayId);
         if (!dayItem) return;
 
         try {
-            // 해당 일정 데이터 확인 및 패치
             let schedules = mapSchedulesMap[dayId];
             if (!schedules) {
                 const raw = await getSchedulesByDay(dayId);
@@ -321,8 +283,7 @@ function PlanDetailContent() {
                 setMapSchedulesMap(prev => ({...prev, [dayId]: schedules}));
             }
 
-            // 상태 설정 및 모달 오픈
-            setExportMode('DAY'); // ✨ 개별 모드
+            setExportMode('DAY');
             setDayExportData({
                 title: dayItem.dayName || `Day ${dayItem.dayOrder}`,
                 subTitle: `${plan?.planName || '여행'} • ${dayItem.dayOrder}일차`,
@@ -331,19 +292,11 @@ function PlanDetailContent() {
             });
             openExportModal();
 
-        } catch (e) {
-            console.error(e);
-            alert("일정 로딩 실패");
-        }
+        } catch (e) { console.error(e); alert("일정 로딩 실패"); }
     };
 
-    // 🚀 [3] 최종 저장(지도 생성) 핸들러 (모달 Confirm)
     const onModalConfirm = async (mapState?: { center: { lat: number, lng: number }, zoom: number }) => {
-        // 모드에 따라 대상 스케줄 결정
-        const targetSchedules = exportMode === 'PLAN'
-            ? exportSections.flatMap(s => s.schedules)
-            : dayExportData?.schedules || [];
-
+        const targetSchedules = exportMode === 'PLAN' ? exportSections.flatMap(s => s.schedules) : dayExportData?.schedules || [];
         const query = getStaticMapQuery(targetSchedules, mapState);
 
         if (query) {
@@ -351,18 +304,10 @@ function PlanDetailContent() {
                 const blobUrl = await makeStaticGoogleMap(query);
                 setGeneratedMapUrl(prev => { if(prev) URL.revokeObjectURL(prev); return blobUrl; });
                 setMapVersion(v => v + 1);
-            } catch(e) {
-                console.error(e);
-                alert("지도 생성 실패");
-                return;
-            }
+            } catch(e) { console.error(e); alert("지도 생성 실패"); return; }
         }
 
-        // 캡처 파일명 설정
-        const filename = exportMode === 'PLAN'
-            ? plan?.planName || "여행_전체일정"
-            : dayExportData?.title || "여행_일정";
-
+        const filename = exportMode === 'PLAN' ? plan?.planName || "여행_전체일정" : dayExportData?.title || "여행_일정";
         requestAnimationFrame(() => handleSaveImage(filename, exportRef.current));
     };
 
@@ -404,11 +349,10 @@ function PlanDetailContent() {
     const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;
         if (!over || active.id === over.id) return;
-        const sourceDayId = Number(active.id);
         const targetItem = fullDays.find(d => d.id === over.id);
         if (!targetItem) return;
         try {
-            await swapPlanDay({ sourceDayId, targetPlanId: planId, targetDayOrder: targetItem.dayOrder, swapMode: 'SWAP' });
+            await swapPlanDay({ sourceDayId: Number(active.id), targetPlanId: planId, targetDayOrder: targetItem.dayOrder, swapMode: 'SWAP' });
             fetchPlanDetail();
         } catch { alert("순서 변경 실패"); }
     };
@@ -421,21 +365,34 @@ function PlanDetailContent() {
         if (e.detail.placeId) {
             // @ts-ignore
             const place = new google.maps.places.Place({ id: e.detail.placeId });
-            await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location', 'types', 'googleMapsURI', 'websiteURI'] });
-            processSpotData({
-                spotName: place.displayName || "선택된 장소", spotType: 'OTHER', address: place.formattedAddress || "",
-                lat: place.location?.lat() || 0, lng: place.location?.lng() || 0, placeId: e.detail.placeId, isVisit: false, metadata: { originalTypes: place.types || [] }, googleMapUrl: place.googleMapsURI || "", shortAddress: "", website: place.websiteURI || "", description: ""
+            await place.fetchFields({
+                // ✅ 동일하게 필드 추가
+                fields: ['displayName', 'formattedAddress', 'location', 'types', 'googleMapsURI', 'websiteURI', 'regularOpeningHours', 'photos']
             });
-        } else if (e.detail.latLng) {
-            const { lat, lng } = e.detail.latLng;
-            geocoder.geocode({ location: { lat, lng } }, (results: any, status: any) => {
-                if (status === google.maps.GeocoderStatus.OK && results && results[0]) {
-                    processSpotData({
-                        spotName: results[0].address_components[0]?.long_name || "지도 위치", spotType: 'OTHER', address: results[0].formatted_address,
-                        lat, lng, placeId: results[0].place_id, isVisit: false, metadata: {}, googleMapUrl: `http://googleusercontent.com/maps.google.com/?q=${lat},${lng}`, shortAddress: "", website: "", description: ""
-                    });
-                } else {
-                    processSpotData({ spotName: "지도 임의 위치", spotType: 'OTHER', address: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng, isVisit: false, metadata: {}, googleMapUrl: ``, shortAddress: "", website: "", description: "" });
+
+            const addrParts = place.formattedAddress?.split(' ') || [];
+            const shortAddr = addrParts.length > 2 ? addrParts.slice(1).join(' ') : (place.formattedAddress || "");
+            const openingHours = place.regularOpeningHours?.weekdayDescriptions || [];
+            const photoUrl = place.photos && place.photos.length > 0
+                ? place.photos[0].getURI({ maxWidth: 800 })
+                : null;
+
+            processSpotData({
+                spotName: place.displayName || "선택된 장소",
+                spotType: 'OTHER',
+                address: place.formattedAddress || "",
+                lat: place.location?.lat() || 0,
+                lng: place.location?.lng() || 0,
+                placeId: e.detail.placeId,
+                isVisit: false,
+                shortAddress: shortAddr,
+                website: place.websiteURI || "",
+                googleMapUrl: place.googleMapsURI || "",
+                description: "",
+                metadata: {
+                    originalTypes: place.types || [],
+                    openingHours: openingHours, // ✅ 추가
+                    photoUrl: photoUrl          // ✅ 추가
                 }
             });
         }
@@ -448,7 +405,7 @@ function PlanDetailContent() {
             const savedSpot = await createSpot(tempSelectedSpot);
             setMapSchedulesMap(prev => ({
                 ...prev,
-                [dayId]: recalculateSchedules((prev[dayId] || []).map(s => s.id === scheduleId ? { ...s, spotId: savedSpot.id, spotName: savedSpot.spotName, spotType: savedSpot.spotType, lat: savedSpot.lat, lng: savedSpot.lng, address: savedSpot.address, isVisit: savedSpot.isVisit, spot: savedSpot } : s))
+                [dayId]: recalculateSchedules((prev[dayId] || []).map(s => s.id === scheduleId ? { ...s, spotUserId: savedSpot.id, spotName: savedSpot.spotName, spotType: savedSpot.spotType, lat: savedSpot.lat, lng: savedSpot.lng, address: savedSpot.address, isVisit: savedSpot.isVisit } : s))
             }));
             handleSetDirty(`day-${dayId}`, true); setTempSelectedSpot(null); setPickingTarget(null);
         } catch { alert("장소 등록 실패"); }
@@ -460,8 +417,7 @@ function PlanDetailContent() {
         setMapSchedulesMap(prev => ({
             ...prev,
             [dayId]: recalculateSchedules((prev[dayId] || []).map(s => s.id === scheduleId ? {
-                ...s, spotId: 0, spotName: tempSelectedSpot.spotName, spotType: tempSelectedSpot.spotType, lat: tempSelectedSpot.lat, lng: tempSelectedSpot.lng, address: tempSelectedSpot.address,
-                memo: encodeTempSpot(s.memo, { name: tempSelectedSpot.spotName, type: tempSelectedSpot.spotType || 'OTHER', lat: tempSelectedSpot.lat, lng: tempSelectedSpot.lng })
+                ...s, spotUserId: 0, spotName: tempSelectedSpot.spotName, spotType: tempSelectedSpot.spotType, lat: tempSelectedSpot.lat, lng: tempSelectedSpot.lng, address: tempSelectedSpot.address, memo: s.memo // 기존 메모 유지 (태그 제거 X)
             } : s))
         }));
         handleSetDirty(`day-${dayId}`, true); setTempSelectedSpot(null); setPickingTarget(null);
@@ -486,11 +442,7 @@ function PlanDetailContent() {
             if (!prev) return null;
             return {
                 ...prev,
-                days: prev.days.map(day =>
-                    day.id === dayId
-                        ? { ...day, dayName: newName, memo: newMemo }
-                        : day
-                )
+                days: prev.days.map(day => day.id === dayId ? { ...day, dayName: newName, memo: newMemo } : day)
             };
         });
     };
@@ -510,7 +462,6 @@ function PlanDetailContent() {
         <>
             <style>{scrollbarHideStyle}</style>
 
-            {/* 📸 Export용 숨겨진 뷰 */}
             <div style={{ position: "fixed", top: 0, left: "-9999px" }}>
                 <div ref={exportRef}>
                     {exportMode === 'PLAN' ? (
@@ -538,7 +489,6 @@ function PlanDetailContent() {
                 </div>
             </div>
 
-            {/* ✅ ImageExportModal: 모달 내부 지도는 핀만 찍어주면 되므로 schedules 통합 전달 */}
             <ImageExportModal
                 isOpen={isExportModalOpen}
                 onClose={closeExportModal}
@@ -546,16 +496,11 @@ function PlanDetailContent() {
                 options={exportOptions}
                 setOptions={setExportOptions}
                 mapUrl={generatedMapUrl}
-                schedules={
-                    exportMode === 'PLAN'
-                        ? exportSections.flatMap(s => s.schedules)
-                        : dayExportData?.schedules || []
-                }
+                schedules={exportMode === 'PLAN' ? exportSections.flatMap(s => s.schedules) : dayExportData?.schedules || []}
             />
 
             <div className="flex flex-col h-full w-full relative overflow-hidden bg-white">
                 <div className="flex w-full h-full relative">
-                    {/* [1] 지도 영역 */}
                     <div className={`absolute inset-0 z-20 bg-gray-50 transition-transform duration-300 md:relative md:w-1/2 md:translate-x-0 md:z-auto ${mobileViewMode === 'MAP' ? 'translate-x-0' : '-translate-x-full'}`}>
                         <div className="absolute top-4 right-4 z-50 flex gap-2">
                             <button onClick={toggleMapViewMode} className={`px-4 py-2 rounded-full text-xs font-bold shadow-md transition border bg-white text-blue-600 border-blue-200 hover:bg-blue-50`}>{getMapViewModeLabel()}</button>
@@ -573,11 +518,8 @@ function PlanDetailContent() {
                                 const color = getDayColor(dayOrderMap[dayId] || 1);
                                 return (schedules || []).map((schedule, index) => {
                                     if (!schedule) return null;
-                                    const temp = decodeTempSpot(schedule.memo);
-                                    // @ts-ignore
-                                    const lat = Number(schedule.lat || schedule.spot?.lat || temp?.lat);
-                                    // @ts-ignore
-                                    const lng = Number(schedule.lng || schedule.spot?.lng || temp?.lng);
+                                    const lat = Number(schedule.lat);
+                                    const lng = Number(schedule.lng);
                                     if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return null;
                                     return <AdvancedMarker key={schedule.id} position={{ lat, lng }} onClick={() => setSelectedScheduleId(schedule.id)} zIndex={selectedScheduleId === schedule.id ? 100 : 10}><NumberedMarker number={index + 1} color={color} /></AdvancedMarker>;
                                 });
@@ -591,6 +533,7 @@ function PlanDetailContent() {
                                     </InfoWindow></>
                             )}
                         </Map>
+
                         <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-50 w-full px-6 pointer-events-none">
                             <button
                                 onClick={() => setMobileViewMode('LIST')}
@@ -601,16 +544,21 @@ function PlanDetailContent() {
                         </div>
                     </div>
 
-                    {/* [2] 일정 리스트 영역 */}
                     <div className={`flex flex-col w-full h-full bg-white md:w-1/2 relative z-10 transition-transform duration-300 ${mobileViewMode === 'MAP' ? 'translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
-                        <div className="px-5 py-4 border-b border-gray-100 bg-white z-30 flex-shrink-0">
-                            {/* ✅ onDirtyChange 연결 */}
-                            <PlanHeader
-                                plan={plan}
-                                onRefresh={fetchPlanDetail}
-                                onDirtyChange={handleHeaderDirty}
-                            />
+                        {/* 헤더 영역 (모바일 접기/펼치기 적용) */}
+                        <div className={`relative bg-white z-30 flex-shrink-0 border-b border-gray-100 transition-all duration-300 ease-in-out ${!isHeaderExpanded ? 'max-h-[190px] overflow-hidden' : ''} md:max-h-none md:overflow-visible`}>
+                            <div className="px-5 py-4 pb-8">
+                                <PlanHeader
+                                    plan={plan}
+                                    onRefresh={fetchPlanDetail}
+                                    onDirtyChange={handleHeaderDirty}
+                                />
+                            </div>
+                            <div className="md:hidden absolute bottom-0 left-0 w-full h-10 flex justify-center items-end pb-2 bg-gradient-to-t from-white via-white/90 to-transparent">
+                                <button onClick={() => setIsHeaderExpanded(!isHeaderExpanded)} className="text-[10px] font-bold text-gray-400 bg-white hover:bg-gray-50 px-3 py-1 rounded-full border border-gray-200 shadow-sm flex items-center gap-1 active:scale-95 transition-transform">{isHeaderExpanded ? '접기 ▲' : '상세 정보 ▼'}</button>
+                            </div>
                         </div>
+
                         <div className="flex-1 overflow-y-auto p-4 pb-24 bg-white scrollbar-hide">
                             <div className="flex items-center justify-between mb-4 px-1">
                                 <h2 className="text-xl font-bold text-gray-800">상세 일정</h2>
@@ -621,13 +569,12 @@ function PlanDetailContent() {
                                     >
                                         ⚽ {showInjury ? '인저리 ON' : 'OFF'}
                                     </button>
-                                    {/* ✅ 저장 버튼 추가 */}
                                     <button
                                         id="save-btn"
                                         onClick={handlePlanExportClick}
                                         className="px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm bg-gray-100 text-gray-600 hover:bg-gray-200"
                                     >
-                                        📸 저장
+                                        📸 전체 저장
                                     </button>
                                 </div>
                             </div>
@@ -649,7 +596,6 @@ function PlanDetailContent() {
                                                     setPickingTarget={setPickingTarget}
                                                     isVisibleOnMap={visibleDays.has(item.data.id)}
                                                     onToggleMapVisibility={handleToggleMapVisibility}
-                                                    // ✅ [신규] 개별 일정 저장 함수 전달 (PlanDayItem에 해당 prop을 추가해야 함)
                                                     onExportDay={() => handleDayExportClick(item.data!.id)}
                                                 />
                                             ) : (
@@ -661,10 +607,7 @@ function PlanDetailContent() {
                             </DndContext>
                         </div>
                         <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-40 w-full px-6 pointer-events-none">
-                            <button
-                                onClick={() => setMobileViewMode('MAP')}
-                                className="pointer-events-auto mx-auto bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform"
-                            >
+                            <button onClick={() => setMobileViewMode('MAP')} className="pointer-events-auto mx-auto bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform">
                                 🗺️ 지도 보기
                             </button>
                         </div>

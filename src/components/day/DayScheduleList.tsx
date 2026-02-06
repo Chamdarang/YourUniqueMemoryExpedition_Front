@@ -1,4 +1,5 @@
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+// ✅ [수정 완료] 올바른 상대 경로
 import ScheduleItem from "../schedule/ScheduleItem";
 import type { DayScheduleResponse, ScheduleItemRequest } from "../../types/schedule";
 import type { SpotType } from "../../types/enums";
@@ -8,18 +9,13 @@ interface Props {
     selectedScheduleId?: number | null;
     showInjury: boolean;
     onSelect?: (id: number) => void;
-    // ✅ 타입 정의를 ScheduleItem과 맞춤
     onUpdate: (id: number, data: Partial<ScheduleItemRequest> & { spotName?: string, spotType?: SpotType, lat?: number, lng?: number, isVisit?: boolean }) => void;
     onDelete: (id: number) => void;
     onInsert: (index: number) => void;
-
-    // ✅ [신규] 스타일 모드 (page: 전체화면용, card: 아코디언 내부용)
     variant?: 'page' | 'card';
-
-    // ✅ [신규] 지도 픽 관련 (PlanDayItem에서도 씀)
     pickingTarget?: { dayId: number, scheduleId: number } | null;
     setPickingTarget?: (target: { dayId: number, scheduleId: number } | null) => void;
-    dayId?: number; // card 모드에서 pickingTarget 비교를 위해 필요
+    dayId?: number;
 }
 
 export default function DayScheduleList({
@@ -30,23 +26,20 @@ export default function DayScheduleList({
                                             onUpdate,
                                             onDelete,
                                             onInsert,
-                                            variant = 'page', // 기본값은 페이지 모드
+                                            variant = 'page',
                                             pickingTarget,
                                             setPickingTarget,
                                             dayId
                                         }: Props) {
 
-    // 스타일 분기 처리
     const containerClass = variant === 'page'
-        ? "flex-1 overflow-y-auto p-4 pb-24 bg-white scrollbar-hide" // 페이지용 (스크롤 O)
-        : "space-y-4"; // 카드용 (스크롤 X, 그냥 나열)
+        ? "flex-1 overflow-y-auto p-4 pb-24 bg-white scrollbar-hide"
+        : "space-y-4";
 
     return (
         <div className={containerClass}>
             <SortableContext items={schedules.map(s => s.id)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-4">
-
-                    {/* 일정 없음 안내 */}
                     {schedules.length === 0 && (
                         <div
                             className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 hover:text-blue-500 hover:border-blue-300 transition"
@@ -57,7 +50,6 @@ export default function DayScheduleList({
                         </div>
                     )}
 
-                    {/* 일정 리스트 */}
                     {schedules.map((schedule, index) => (
                         <div
                             key={schedule.id}
@@ -76,7 +68,6 @@ export default function DayScheduleList({
                                 onUpdate={onUpdate}
                                 onDelete={() => onDelete(schedule.id)}
                                 onInsert={onInsert}
-                                // 지도 픽 로직 연결
                                 onRequestMapPick={() => {
                                     if (setPickingTarget && dayId) {
                                         if (pickingTarget?.scheduleId === schedule.id) setPickingTarget(null);
@@ -88,7 +79,6 @@ export default function DayScheduleList({
                         </div>
                     ))}
 
-                    {/* 하단 추가 버튼 */}
                     {schedules.length > 0 && (
                         <button
                             onClick={() => onInsert(schedules.length)}

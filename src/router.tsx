@@ -19,6 +19,7 @@ import SpotDetailPage from "./pages/SpotDetailPage";
 // Components
 import Layout from "./components/common/Layout";
 import {PrivateRoute, PublicRoute} from "./components/auth/RouteGuard.tsx";
+import SpotDataUpdater from "./pages/SpotDataUpdater.tsx";
 
 export const router = createBrowserRouter([
     {
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
 
             // 장소 보관함
             { path: "/spots", element: <SpotListPage /> },
+            { path: "/spots/test/renew", element: <SpotDataUpdater /> },
             { path: "/spots/:id", element: <SpotDetailPage /> },
         ],
     },

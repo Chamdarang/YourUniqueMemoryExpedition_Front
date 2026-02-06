@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import type { PlanDayResponse } from '../../types/planday';
+import type { PlanDayResponse } from '../../types/planDay.ts';
 
 interface Props {
     days: PlanDayResponse[];

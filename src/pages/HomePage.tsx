@@ -19,26 +19,10 @@ import type { Transportation } from "../types/enums";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
-const TEMP_SPOT_PREFIX = " #tmp:";
-
-const decodeTempSpot = (memo: string) => {
-  if (!memo) return null;
-  const idx = memo.indexOf(TEMP_SPOT_PREFIX);
-  if (idx === -1) return null;
-  try {
-    const jsonStr = memo.substring(idx + TEMP_SPOT_PREFIX.length);
-    const data = JSON.parse(jsonStr);
-    return { name: data.n, type: data.t, lat: data.la, lng: data.lo };
-  } catch {
-    return null;
-  }
-};
-
+// 🛠️ [수정] 메모 파싱 로직 간소화 (장소 정보 제거됨, 인저리 태그만 제거)
 const cleanMemoTags = (memo: string) => {
   if (!memo) return '';
-  const text = memo.replace(/#si:\s*\d+/g, '').replace(/#mi:\s*\d+/g, '').replace(/#visited/g, '');
-  const split = text.split(TEMP_SPOT_PREFIX);
-  return split[0].trim();
+  return memo.replace(/#si:\s*\d+/g, '').replace(/#mi:\s*\d+/g, '').replace(/#visited/g, '').trim();
 };
 
 const parseInjuryFromMemo = (memo: string, tag: string) => {
@@ -80,7 +64,9 @@ const getCurrentMinutes = () => {
 
 const recalculateSchedules = (items: DayScheduleResponse[]): DayScheduleResponse[] => {
   if (items.length === 0) return [];
+  // ✅ [중요] ...item 복사하여 원본 필드(spotName 등) 유지
   const newItems = items.map(item => ({ ...item }));
+
   if (!newItems[0].startTime) newItems[0].startTime = "10:00";
   newItems[0].startTime = newItems[0].startTime.substring(0, 5);
   newItems[0].endTime = addTime(newItems[0].startTime, newItems[0].duration);
@@ -100,40 +86,32 @@ const recalculateSchedules = (items: DayScheduleResponse[]): DayScheduleResponse
   return newItems;
 };
 
-// ✅ [신규] 맵 컨트롤러: 활성화된 일정 중심으로 이동
+// ✅ [수정] 맵 업데이트 (DTO 필드 직접 사용)
 function MapUpdater({ schedules, activeId, activeMoveIndex }: { schedules: DayScheduleResponse[], activeId: number | undefined, activeMoveIndex: number }) {
   const map = useMap();
 
   useEffect(() => {
     if (!map || schedules.length === 0) return;
 
-    // 1. 현재 활성화된(체류 중) 장소가 있는 경우
+    // 1. 현재 활성화된(체류 중) 장소
     if (activeId) {
       const activeItem = schedules.find(s => s.id === activeId);
       if (activeItem) {
-        const temp = decodeTempSpot(activeItem.memo);
-        // @ts-ignore
-        const lat = Number(activeItem.lat || activeItem.spot?.lat || temp?.lat);
-        // @ts-ignore
-        const lng = Number(activeItem.lng || activeItem.spot?.lng || temp?.lng);
-
+        const lat = Number(activeItem.lat);
+        const lng = Number(activeItem.lng);
         if (!isNaN(lat) && !isNaN(lng) && lat !== 0) {
           map.panTo({ lat, lng });
-          map.setZoom(16); // 좀 더 확대해서 보여줌
+          map.setZoom(16);
           return;
         }
       }
     }
 
-    // 2. 이동 중인 경우 (목적지를 중심으로)
+    // 2. 이동 중인 경우
     if (activeMoveIndex > 0) {
       const targetItem = schedules[activeMoveIndex];
-      const temp = decodeTempSpot(targetItem.memo);
-      // @ts-ignore
-      const lat = Number(targetItem.lat || targetItem.spot?.lat || temp?.lat);
-      // @ts-ignore
-      const lng = Number(targetItem.lng || targetItem.spot?.lng || temp?.lng);
-
+      const lat = Number(targetItem.lat);
+      const lng = Number(targetItem.lng);
       if (!isNaN(lat) && !isNaN(lng) && lat !== 0) {
         map.panTo({ lat, lng });
         map.setZoom(15);
@@ -141,15 +119,12 @@ function MapUpdater({ schedules, activeId, activeMoveIndex }: { schedules: DaySc
       }
     }
 
-    // 3. 활성화된 일정이 없으면 전체 경로가 보이게 핏
+    // 3. 전체 경로 핏
     const bounds = new google.maps.LatLngBounds();
     let hasPoint = false;
     schedules.forEach(s => {
-      const temp = decodeTempSpot(s.memo);
-      // @ts-ignore
-      const lat = Number(s.lat || s.spot?.lat || temp?.lat);
-      // @ts-ignore
-      const lng = Number(s.lng || s.spot?.lng || temp?.lng);
+      const lat = Number(s.lat);
+      const lng = Number(s.lng);
       if (!isNaN(lat) && !isNaN(lng) && lat !== 0) {
         bounds.extend({ lat, lng });
         hasPoint = true;
@@ -163,6 +138,7 @@ function MapUpdater({ schedules, activeId, activeMoveIndex }: { schedules: DaySc
   return null;
 }
 
+// ✅ [수정] 경로 그리기 (DTO 필드 직접 사용)
 function MapDirections({ schedules }: { schedules: DayScheduleResponse[] }) {
   const map = useMap();
   const mapsLibrary = useMapsLibrary("maps");
@@ -176,14 +152,7 @@ function MapDirections({ schedules }: { schedules: DayScheduleResponse[] }) {
     }
 
     const path = schedules
-        .map(s => {
-          const temp = decodeTempSpot(s.memo);
-          // @ts-ignore
-          const lat = Number(s.lat || s.spot?.lat || temp?.lat);
-          // @ts-ignore
-          const lng = Number(s.lng || s.spot?.lng || temp?.lng);
-          return { lat, lng };
-        })
+        .map(s => ({ lat: Number(s.lat), lng: Number(s.lng) }))
         .filter(pos => !isNaN(pos.lat) && !isNaN(pos.lng) && pos.lat !== 0 && pos.lng !== 0);
 
     if (path.length > 0) {
@@ -220,7 +189,6 @@ export default function HomePage() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [nowMinutes, setNowMinutes] = useState(getCurrentMinutes());
 
-  // ✅ 리스트 스크롤용 Ref
   const activeItemRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -228,11 +196,15 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, []);
 
+  // ✅ [수정] 날짜 계산 로직: UTC가 아닌 로컬 타임존 기준으로 비교
   const calculateDaysDiff = (dateStr: string) => {
     const today = new Date();
-    const target = new Date(dateStr);
-    today.setHours(0, 0, 0, 0);
-    target.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0); // 로컬 자정
+
+    // dateStr (YYYY-MM-DD)을 로컬 날짜 객체로 변환
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const target = new Date(year, month - 1, day); // 로컬 타임존 기준 생성
+
     const diffTime = target.getTime() - today.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
@@ -245,6 +217,8 @@ export default function HomePage() {
         if (plan) {
           const dDay = calculateDaysDiff(plan.planStartDate);
           const endDiff = calculateDaysDiff(plan.planEndDate);
+
+          // 여행 중이거나 오늘 시작하는 경우
           if (dDay <= 0 && endDiff >= 0) {
             setScheduleLoading(true);
             const days = await getPlanDays(plan.id);
@@ -263,7 +237,6 @@ export default function HomePage() {
     loadHomeData();
   }, []);
 
-  // ✅ [자동 스크롤] 데이터가 로드되고 렌더링 된 후 실행
   useEffect(() => {
     if (activeItemRef.current) {
       setTimeout(() => {
@@ -272,12 +245,14 @@ export default function HomePage() {
     }
   }, [todaySchedules, scheduleLoading]);
 
+  // ✅ [수정] 플랜 상태 판별 함수
   const getPlanStatus = (plan: PlanResponse) => {
     const dDay = calculateDaysDiff(plan.planStartDate);
     const endDiff = calculateDaysDiff(plan.planEndDate);
+
     if (dDay > 0) return 'UPCOMING';
-    if (dDay <= 0 && endDiff >= 0) return 'ONGOING';
-    return 'PAST';
+    if (endDiff < 0) return 'PAST'; // 종료일이 지났으면 PAST
+    return 'ONGOING'; // 시작일 지났고 종료일 안 지났으면 ONGOING
   };
 
   if (loading) return <div className="p-10 text-center text-gray-500">로딩 중... ⏳</div>;
@@ -325,6 +300,16 @@ export default function HomePage() {
                 <div className="mt-4 text-right"><Link to={`/plans/${upcomingPlan.id}`} className="text-sm font-bold hover:text-blue-100 transition">상세 일정 보기 &rarr;</Link></div>
               </div>
             </div>
+        ) : status === 'PAST' ? (
+            // ✅ [추가] 지난 여행일 경우 표시
+            <div className="bg-gray-100 rounded-2xl p-6 text-gray-600 shadow-inner relative overflow-hidden">
+              <div className="relative z-10">
+                <span className="bg-gray-200 px-3 py-1 rounded-full text-xs font-bold border border-gray-300 mb-4 inline-block">DONE</span>
+                <h3 className="text-xl font-bold opacity-95">{upcomingPlan.planName}</h3>
+                <p className="text-sm mt-1">여행이 종료되었습니다. ({upcomingPlan.planEndDate} 까지)</p>
+                <div className="mt-4 text-right"><Link to={`/plans/${upcomingPlan.id}`} className="text-sm font-bold hover:text-gray-800 transition">기록 보기 &rarr;</Link></div>
+              </div>
+            </div>
         ) : (
             <div className="bg-white rounded-2xl shadow-sm border border-blue-100 overflow-hidden flex flex-col h-[75vh]">
               {/* 상단 헤더 */}
@@ -339,7 +324,7 @@ export default function HomePage() {
                 <Link to={`/plans/${upcomingPlan.id}`} className="text-sm text-blue-600 font-bold hover:underline ml-2">전체 일정</Link>
               </div>
 
-              {/* 🗺️ 지도 영역 (높이 고정) */}
+              {/* 🗺️ 지도 영역 */}
               {todaySchedules.length > 0 && (
                   <div className="h-64 md:h-72 w-full relative border-b border-gray-100 shrink-0">
                     <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['maps', 'marker']}>
@@ -347,11 +332,9 @@ export default function HomePage() {
                         <MapDirections schedules={todaySchedules} />
                         <MapUpdater schedules={todaySchedules} activeId={activeScheduleId} activeMoveIndex={activeMovingIndex} />
                         {todaySchedules.map((schedule, index) => {
-                          const temp = decodeTempSpot(schedule.memo);
-                          // @ts-ignore
-                          const lat = Number(schedule.lat || schedule.spot?.lat || temp?.lat);
-                          // @ts-ignore
-                          const lng = Number(schedule.lng || schedule.spot?.lng || temp?.lng);
+                          // ✅ [수정] lat, lng, spotName 필드 직접 사용
+                          const lat = Number(schedule.lat);
+                          const lng = Number(schedule.lng);
                           if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return null;
 
                           let markerColor = "#3B82F6";
@@ -367,7 +350,7 @@ export default function HomePage() {
                   </div>
               )}
 
-              {/* 📜 리스트 영역 (스크롤 가능) */}
+              {/* 📜 리스트 영역 */}
               <div className="flex-1 overflow-y-auto bg-gray-50 scrollbar-hide">
                 <div className="p-5">
                   <h3 className="text-sm font-bold text-gray-500 mb-4 flex items-center justify-between sticky top-0 bg-gray-50 pb-2 z-10">
@@ -378,11 +361,11 @@ export default function HomePage() {
                   {scheduleLoading ? <div className="py-10 text-center text-gray-400">일정을 불러오는 중...</div> : todaySchedules.length > 0 ? (
                       <div className="space-y-0 pb-10">
                         {todaySchedules.map((item, index) => {
-                          const tempSpot = decodeTempSpot(item.memo);
-                          const displayName = item.spotName || tempSpot?.name || "장소 선택";
+                          // ✅ [수정] 메모 파싱 제거, DTO 필드 사용
+                          const displayName = item.spotName || "장소 선택";
                           const displayMemo = cleanMemoTags(item.memo);
-                          // @ts-ignore
-                          const typeInfo = getSpotTypeInfo(item.spotType || tempSpot?.type || 'OTHER');
+                          const typeInfo = getSpotTypeInfo(item.spotType || 'OTHER');
+
                           const prevItem = index > 0 ? todaySchedules[index - 1] : null;
                           const moveInjury = parseInjuryFromMemo(item.movingMemo, '#mi:');
                           const pureMovingDuration = Math.max(0, item.movingDuration - moveInjury);
@@ -417,7 +400,7 @@ export default function HomePage() {
                                     <div className={`rounded-xl p-3 border shadow-sm transition relative overflow-hidden ${isActive ? 'bg-white border-orange-300 ring-2 ring-orange-100' : 'bg-white border-gray-200 hover:border-orange-200'}`}>
                                       {isActive && <div className="absolute top-0 right-0 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg">NOW</div>}
                                       <div className="flex justify-between items-start gap-2">
-                                        <h4 className={`text-sm font-bold truncate min-w-0 flex-1 ${item.spotName || tempSpot?.name ? 'text-gray-900' : 'text-gray-400 italic'}`}>{displayName}</h4>
+                                        <h4 className={`text-sm font-bold truncate min-w-0 flex-1 ${item.spotName ? 'text-gray-900' : 'text-gray-400 italic'}`}>{displayName}</h4>
                                         <span className="text-[10px] text-gray-500 bg-gray-50 px-2 py-1 rounded-md border border-gray-100 shrink-0 whitespace-nowrap">체류 {item.duration}분</span>
                                       </div>
                                       {displayMemo && <p className="text-xs text-gray-500 mt-2 line-clamp-2 bg-gray-50 p-2 rounded-lg border border-gray-100">{displayMemo}</p>}

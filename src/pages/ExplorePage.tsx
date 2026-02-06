@@ -15,7 +15,6 @@ const STORAGE_KEY = "explore_map_state";
 
 type SearchMode = 'GOOGLE' | 'MINE';
 
-// SpotType 한글 라벨 매핑
 const SPOT_TYPE_LABELS: Record<SpotType, string> = {
     LANDMARK: '🗼 명소',
     HISTORICAL_SITE: '🏯 유적지',
@@ -41,6 +40,7 @@ interface GooglePlaceResult {
     user_ratings_total?: number;
     isOpen?: boolean;
     types?: string[];
+    websiteURI?: string; // 추가
 }
 
 function MarkerIcon({ color, borderColor, scale = 1.0, glyphColor = "white" }: { color: string, borderColor: string, scale?: number, glyphColor?: string }) {
@@ -77,7 +77,7 @@ function ExploreMapContent() {
 
     const [mode, setMode] = useState<SearchMode>(initialState.mode);
     const [googleResults, setGoogleResults] = useState<GooglePlaceResult[]>(initialState.googleResults);
-    const [savedMapState, setSavedMapState] = useState<{ center: { lat: number, lng: number }, zoom: number }>({ center: initialState.center, zoom: initialState.zoom });
+    const [savedMapState, setSavedMapState] = useState({ center: initialState.center, zoom: initialState.zoom });
     const [cameraTarget, setCameraTarget] = useState<{ center: { lat: number, lng: number }, zoom?: number } | null>(null);
 
     const [mySpots, setMySpots] = useState<SpotResponse[]>([]);
@@ -92,13 +92,11 @@ function ExploreMapContent() {
     const geocodingLibrary = useMapsLibrary("geocoding");
     const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
 
-    // 상태 저장
     useEffect(() => {
         const stateToSave = { center: savedMapState.center, zoom: savedMapState.zoom, mode, googleResults };
         sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
     }, [savedMapState, mode, googleResults]);
 
-    // 초기 위치
     useEffect(() => {
         if (!sessionStorage.getItem(STORAGE_KEY) && navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -110,7 +108,6 @@ function ExploreMapContent() {
 
     useEffect(() => { if (geocodingLibrary) setGeocoder(new geocodingLibrary.Geocoder()); }, [geocodingLibrary]);
 
-    // 데이터 로드
     const fetchAllMySpots = async () => {
         try {
             const response = await getMySpots({ page: 0, size: 2000 });
@@ -126,12 +123,10 @@ function ExploreMapContent() {
 
     useEffect(() => {
         if (selectedResult) {
-            const initialType = mapGoogleTypeToSpotType(selectedResult.types);
-            setDraftType(initialType);
+            setDraftType(mapGoogleTypeToSpotType(selectedResult.types));
         }
     }, [selectedResult]);
 
-    // 맵 이벤트 핸들러
     const handleMapIdle = (map: google.maps.Map) => {
         const center = map.getCenter();
         const zoom = map.getZoom();
@@ -162,37 +157,59 @@ function ExploreMapContent() {
         setShowList(true);
     };
 
-    const fetchPlaceDetails = async (placeId: string, defaultName: string = "", defaultAddress: string = ""): Promise<GooglePlaceResult | null> => {
-        if (!placesLibrary) return null;
+    // ✅ [수정] 필드 추가 및 반환 타입 일관성 유지
+    const fetchPlaceDetails = async (placeId: string) => {
+        if (!placesLibrary || !map) return null;
         try {
-            // @ts-ignore
             const place = new placesLibrary.Place({ id: placeId });
-            await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location', 'rating', 'userRatingCount', 'regularOpeningHours', 'types'] });
-            const isOpen = await place.isOpen();
-            return {
-                place_id: place.id, name: place.displayName || defaultName, address: place.formattedAddress || defaultAddress,
-                location: { lat: place.location?.lat() || 0, lng: place.location?.lng() || 0 },
-                rating: place.rating || undefined, user_ratings_total: place.userRatingCount || undefined, isOpen: isOpen ?? undefined, types: place.types || []
-            };
-        } catch { return { place_id: placeId, name: defaultName, address: defaultAddress, location: { lat: 0, lng: 0 }, isOpen: undefined, types: [] }; }
+            await place.fetchFields({
+                fields: ['displayName', 'formattedAddress', 'location', 'rating', 'userRatingCount', 'regularOpeningHours', 'types', 'id', 'websiteURI','photos','regularOpeningHours']
+            });
+            return place;
+        } catch (err) {
+            console.error("Error fetching place details:", err);
+            return null;
+        }
     };
 
     const handleSelectSearchResult = async (place: GooglePlaceResult) => {
-        const detailPlace = await fetchPlaceDetails(place.place_id, place.name, place.address);
-        handleSelectGooglePlace(detailPlace || place);
+        const detailPlace = await fetchPlaceDetails(place.place_id);
+        if (detailPlace) {
+            const isOpen = await detailPlace.isOpen();
+            const result: GooglePlaceResult = {
+                place_id: detailPlace.id,
+                name: detailPlace.displayName || place.name,
+                address: detailPlace.formattedAddress || place.address,
+                location: { lat: detailPlace.location?.lat() || 0, lng: detailPlace.location?.lng() || 0 },
+                rating: detailPlace.rating || undefined,
+                user_ratings_total: detailPlace.userRatingCount || undefined,
+                isOpen: isOpen ?? undefined,
+                types: detailPlace.types || [],
+                websiteURI: detailPlace.websiteURI || undefined
+            };
+            handleSelectGooglePlace(result);
+        } else {
+            handleSelectGooglePlace(place);
+        }
     };
 
     const handlePoiClick = async (placeId: string) => {
         if (allMyPlaceIds.has(placeId)) {
             const mySpot = mySpots.find(s => s.placeId === placeId);
-            if (mySpot) {
-                handleSelectSpot(mySpot);
-                return;
-            }
+            if (mySpot) { handleSelectSpot(mySpot); return; }
         }
-        const detailPlace = await fetchPlaceDetails(placeId, "선택한 장소");
+        const detailPlace = await fetchPlaceDetails(placeId);
         if (detailPlace) {
-            handleSelectGooglePlace(detailPlace);
+            const isOpen = await detailPlace.isOpen();
+            handleSelectGooglePlace({
+                place_id: detailPlace.id,
+                name: detailPlace.displayName || "",
+                address: detailPlace.formattedAddress || "",
+                location: { lat: detailPlace.location?.lat() || 0, lng: detailPlace.location?.lng() || 0 },
+                isOpen: isOpen ?? undefined,
+                types: detailPlace.types || [],
+                websiteURI: detailPlace.websiteURI || undefined
+            });
         }
     };
 
@@ -203,41 +220,63 @@ function ExploreMapContent() {
                 const place = results[0];
                 if (allMyPlaceIds.has(place.place_id)) {
                     const mySpot = mySpots.find(s => s.placeId === place.place_id);
-                    if (mySpot) {
-                        handleSelectSpot(mySpot);
-                        return;
-                    }
+                    if (mySpot) { handleSelectSpot(mySpot); return; }
                 }
-                const detailPlace = await fetchPlaceDetails(place.place_id, place.address_components[0]?.long_name || "알 수 없는 장소", place.formatted_address);
+                const detailPlace = await fetchPlaceDetails(place.place_id);
                 if (detailPlace) {
-                    if (detailPlace.location.lat === 0 && detailPlace.location.lng === 0) {
-                        detailPlace.location = { lat, lng };
-                    }
-                    handleSelectGooglePlace(detailPlace);
+                    const isOpen = await detailPlace.isOpen();
+                    handleSelectGooglePlace({
+                        place_id: detailPlace.id,
+                        name: detailPlace.displayName || "",
+                        address: detailPlace.formattedAddress || "",
+                        location: { lat: detailPlace.location?.lat() || lat, lng: detailPlace.location?.lng() || lng },
+                        isOpen: isOpen ?? undefined,
+                        types: detailPlace.types || [],
+                        websiteURI: detailPlace.websiteURI || undefined
+                    });
                 }
             }
         });
     };
 
+    // ✅ [수정] shortAddress 생성 로직 및 URL 형식 통일
     const handleRegisterSpot = async (placeId: string) => {
         const placeDetails = await fetchPlaceDetails(placeId);
         if (placeDetails) {
-            if (!confirm(`'${placeDetails.name}'을(를) [${SPOT_TYPE_LABELS[draftType]}]로 등록하시겠습니까?`)) return;
+            if (!confirm(`'${placeDetails.displayName}'을(를) [${SPOT_TYPE_LABELS[draftType]}]로 등록하시겠습니까?`)) return;
             try {
+                // 1. shortAddress 생성 (국가명 제외)
+                const addrParts = placeDetails.formattedAddress?.split(' ') || [];
+                const shortAddr = addrParts.length > 2 ? addrParts.slice(1).join(' ') : (placeDetails.formattedAddress || "");
+
+                // 2. 영업 시간 가공 (요일별 텍스트 리스트로 변환)
+                const openingHours = placeDetails.regularOpeningHours?.weekdayDescriptions || [];
+
+                // 3. 첫 번째 사진 URL 추출 (maxWidth 설정)
+                const photoUrl = placeDetails.photos && placeDetails.photos.length > 0
+                    ? placeDetails.photos[0].getURI({ maxWidth: 800 })
+                    : null;
+
                 const req: SpotCreateRequest = {
-                    spotName: placeDetails.name,
-                    address: placeDetails.address,
-                    lat: placeDetails.location.lat,
-                    lng: placeDetails.location.lng,
+                    spotName: placeDetails.displayName || '',
+                    address: placeDetails.formattedAddress || '',
+                    lat: placeDetails.location?.lat() || 0,
+                    lng: placeDetails.location?.lng() || 0,
                     spotType: draftType,
                     isVisit: false,
-                    placeId: placeDetails.place_id,
-                    shortAddress: "",
-                    website: "",
-                    googleMapUrl: `http://googleusercontent.com/maps.google.com/?q=${encodeURIComponent(placeDetails.name)}&query_place_id=${placeDetails.place_id}`,
+                    placeId: placeDetails.id,
+                    shortAddress: shortAddr,
+                    website: placeDetails.websiteURI || '',
+                    // 표준 검색 API URL 형식 적용
+                    googleMapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeDetails.displayName || '')}&query_place_id=${placeDetails.id}`,
                     description: "",
-                    metadata: { originalTypes: placeDetails.types }
+                    metadata: {
+                        originalTypes: placeDetails.types, // ✅ 구글 원본 타입
+                        openingHours: openingHours,        // ✅ 요일별 영업시간
+                        photoUrl: photoUrl                 // ✅ 첫 번째 사진 URL
+                    }
                 };
+
                 const newSpot = await createSpot(req);
                 setMySpots(prev => [...prev, newSpot]);
                 handleSelectSpot(newSpot);
@@ -256,10 +295,7 @@ function ExploreMapContent() {
             setMySpots(prev => prev.filter(s => s.id !== id));
             handleBackToList();
             alert("삭제되었습니다.");
-        } catch (err) {
-            console.error(err);
-            alert("삭제 실패");
-        }
+        } catch (err) { console.error(err); alert("삭제 실패"); }
     };
 
     const handleToggleVisit = async (spot: SpotResponse) => {
@@ -267,9 +303,7 @@ function ExploreMapContent() {
             const updated = await updateSpot(spot.id, { isVisit: !spot.isVisit } as any);
             setMySpots(prev => prev.map(s => s.id === spot.id ? updated : s));
             setSelectedMySpot(updated);
-        } catch {
-            alert("상태 변경 실패");
-        }
+        } catch { alert("상태 변경 실패"); }
     };
 
     const getSpotTypeInfo = (type: SpotType) => {
@@ -323,7 +357,7 @@ function ExploreMapContent() {
                                         )}
                                         <div className="flex gap-2 pt-2">
                                             {allMyPlaceIds.has(selectedResult.place_id) ? (<div className="flex-1 py-3 bg-gray-50 text-gray-500 font-bold text-sm text-center rounded-xl border border-gray-200">이미 저장됨 🍀</div>) : (<button onClick={() => handleRegisterSpot(selectedResult.place_id)} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-2"><span>+ 저장</span></button>)}
-                                            <a href={`http://googleusercontent.com/maps.google.com/?q=${encodeURIComponent(selectedResult.name)}&query_place_id=${selectedResult.place_id}`} target="_blank" rel="noreferrer" className="px-4 py-3 bg-white border border-gray-200 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 transition flex items-center justify-center shadow-sm">🗺️ 지도</a>
+                                            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedResult.name)}&query_place_id=${selectedResult.place_id}`} target="_blank" rel="noreferrer" className="px-4 py-3 bg-white border border-gray-200 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 transition flex items-center justify-center shadow-sm">🗺️ 지도</a>
                                         </div>
                                     </div>
                                 )}
@@ -357,17 +391,14 @@ function ExploreMapContent() {
                     </div>
                 </div>
             </div>
-            <button onClick={() => setShowList(!showList)} className={`hidden md:flex absolute top-1/2 z-30 bg-white border border-gray-300 shadow-md rounded-r-lg py-4 px-1 items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-gray-50 transition-all duration-300 ease-in-out ${showList ? 'left-96' : 'left-0'}`} style={{ transform: 'translateY(-50%)' }} title={showList ? "목록 닫기" : "목록 열기"}>{showList ? '◀' : '▶'}</button>
+            <button onClick={() => setShowList(!showList)} className={`hidden md:flex absolute top-1/2 z-30 bg-white border border-gray-300 shadow-md rounded-r-lg py-4 px-1 items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-gray-50 transition-all duration-300 ease-in-out ${showList ? 'left-96' : 'left-0'}`} style={{ transform: 'translateY(-50%)' }}>{showList ? '◀' : '▶'}</button>
             <div className="absolute inset-0 w-full h-full z-0">
                 <MapCameraHandler target={cameraTarget} />
-                <Map defaultCenter={initialState.center} defaultZoom={initialState.zoom} mapId="DEMO_MAP_ID" disableDefaultUI={true} className="w-full h-full" onIdle={(ev) => handleMapIdle(ev.map)} onClick={(e) => { if (e.detail.placeId) { e.stop(); handlePoiClick(e.detail.placeId); } else if (e.detail.latLng) { const lat = typeof e.detail.latLng.lat === 'function' ? e.detail.latLng.lat() : e.detail.latLng.lat; const lng = typeof e.detail.latLng.lng === 'function' ? e.detail.latLng.lng() : e.detail.latLng.lng; handleReverseGeocode(lat as number, lng as number); } }}>
-
+                <Map defaultCenter={initialState.center} defaultZoom={initialState.zoom} mapId="EXPLORE_MAP_ID" disableDefaultUI={true} className="w-full h-full" onIdle={(ev) => handleMapIdle(ev.map)} onClick={(e) => { if (e.detail.placeId) { e.stop(); handlePoiClick(e.detail.placeId); } else if (e.detail.latLng) { const lat = typeof e.detail.latLng.lat === 'function' ? e.detail.latLng.lat() : e.detail.latLng.lat; const lng = typeof e.detail.latLng.lng === 'function' ? e.detail.latLng.lng() : e.detail.latLng.lng; handleReverseGeocode(lat as number, lng as number); } }}>
                     <MapController mode={mode} onModeChange={handleModeChange} onSearchStart={handleBackToList} onSpotsFound={(spots) => { setMySpots(spots); if(spots.length > 0) setShowList(true); }} onGoogleFound={(results) => { setGoogleResults(results); if(results.length > 0) setShowList(true); }} showList={showList} />
-
                     {mode === 'MINE' && mySpots.map(spot => (<AdvancedMarker key={spot.id} position={{ lat: spot.lat, lng: spot.lng }} onClick={(e) => { e.domEvent.stopPropagation(); handleSelectSpot(spot); }} zIndex={10}><MarkerIcon color="#10B981" borderColor="#059669" /></AdvancedMarker>))}
                     {mode === 'GOOGLE' && googleResults.map(place => { const isSaved = allMyPlaceIds.has(place.place_id); const isSelected = selectedResult?.place_id === place.place_id; return (<AdvancedMarker key={place.place_id} position={place.location} onClick={(e) => { e.domEvent.stopPropagation(); if (isSaved) { const spot = mySpots.find(s => s.placeId === place.place_id); if (spot) handleSelectSpot(spot); } else { handleSelectSearchResult(place); } }} zIndex={isSelected ? 100 : (isSaved ? 50 : 20)}><MarkerIcon color={isSaved ? "#10B981" : (isSelected ? "#3B82F6" : "#EF4444")} borderColor={isSaved ? "#059669" : (isSelected ? "#1D4ED8" : "#B91C1C")} scale={isSelected || isSaved ? 1.2 : 1.0} /></AdvancedMarker>); })}
                 </Map>
-                {!showList && (googleResults.length > 0 || (mode === 'MINE' && mySpots.length > 0)) && (<button onClick={() => setShowList(true)} className="md:hidden absolute bottom-24 left-1/2 -translate-x-1/2 bg-white text-gray-700 px-5 py-2.5 rounded-full shadow-lg font-bold text-sm z-10 flex items-center gap-2 hover:bg-gray-50 transition border border-gray-100">목록 보기 ▲</button>)}
             </div>
         </>
     );
@@ -387,76 +418,46 @@ function MapController({ mode, onModeChange, onSearchStart, onSpotsFound, onGoog
     );
 }
 
-// ------------------------------------------------------------------
-// ✅ [수정] SearchBox 내부 함수 가독성 개선 (줄바꿈 및 정렬)
-// ------------------------------------------------------------------
-interface SearchBoxProps {
-    mode: SearchMode;
-    onModeChange: (mode: SearchMode) => void;
-    onSearchStart: () => void;
-    map: google.maps.Map | null;
-    onGoogleSearch: (results: GooglePlaceResult[]) => void;
-    onMySpotSearch: (spots: SpotResponse[]) => void;
-    showList: boolean;
-}
-
+interface SearchBoxProps { mode: SearchMode; onModeChange: (mode: SearchMode) => void; onSearchStart: () => void; map: google.maps.Map | null; onGoogleSearch: (results: GooglePlaceResult[]) => void; onMySpotSearch: (spots: SpotResponse[]) => void; showList: boolean; }
 function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onMySpotSearch, showList }: SearchBoxProps) {
     const [keyword, setKeyword] = useState("");
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const placesLibrary = useMapsLibrary("places");
     const wrapperRef = useRef<HTMLDivElement>(null);
 
-    // 외부 클릭 시 제안 목록 닫기
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
-            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-                setSuggestions([]);
-            }
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) { setSuggestions([]); }
         }
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    // 검색어 입력 시 자동완성 (구글 모드일 때)
     useEffect(() => {
         if (mode === 'GOOGLE' && keyword && placesLibrary) {
             const timer = setTimeout(async () => {
                 if(keyword.length > 0) {
                     try {
                         const { suggestions } = await placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions({
-                            input: keyword,
-                            locationBias: map?.getCenter(),
+                            input: keyword, locationBias: map?.getCenter(),
                         });
                         setSuggestions(suggestions.filter(s => s.placePrediction));
-                    } catch (e) {
-                        console.error("Autocomplete Error", e);
-                        setSuggestions([]);
-                    }
+                    } catch (e) { console.error("Autocomplete Error", e); setSuggestions([]); }
                 }
             }, 300);
             return () => clearTimeout(timer);
-        } else {
-            setSuggestions([]);
-        }
+        } else { setSuggestions([]); }
     }, [keyword, mode, placesLibrary, map]);
 
-    // ✅ 구글 텍스트 검색 핸들러
     const handleGoogleTextSearch = async () => {
         if (!placesLibrary || !keyword.trim()) return;
-
-        onSearchStart();
-        setSuggestions([]);
-
+        onSearchStart(); setSuggestions([]);
         try {
             const { places } = await placesLibrary.Place.searchByText({
                 textQuery: keyword,
-                fields: [
-                    'id', 'displayName', 'formattedAddress', 'location',
-                    'rating', 'userRatingCount', 'businessStatus', 'types'
-                ],
+                fields: ['id', 'displayName', 'formattedAddress', 'location', 'rating', 'userRatingCount', 'types'],
                 locationBias: map?.getCenter(),
             });
-
             if (places && places.length > 0) {
                 const mappedResults: GooglePlaceResult[] = await Promise.all(places.map(async (place) => {
                     const isOpen = await place.isOpen();
@@ -472,29 +473,18 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
                     };
                 }));
                 onGoogleSearch(mappedResults);
-            } else {
-                onGoogleSearch([]);
-            }
-        } catch (error) {
-            console.error("Text Search Error:", error);
-            alert("검색 중 오류가 발생했습니다.");
-        }
+            } else { onGoogleSearch([]); }
+        } catch (error) { console.error("Text Search Error:", error); alert("검색 중 오류가 발생했습니다."); }
     };
 
-    // ✅ 구글 자동완성 선택 핸들러
     const handleGoogleSelectSuggestion = async (suggestion: any) => {
         if (!placesLibrary || !suggestion.placePrediction) return;
-
         onSearchStart();
         const placeId = suggestion.placePrediction.placeId;
-
         try {
             const place = new placesLibrary.Place({ id: placeId });
-            await place.fetchFields({
-                fields: ['displayName', 'formattedAddress', 'location', 'rating', 'userRatingCount', 'regularOpeningHours', 'types']
-            });
+            await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location', 'rating', 'userRatingCount', 'types', 'websiteURI'] });
             const isOpen = await place.isOpen();
-
             const result: GooglePlaceResult = {
                 place_id: place.id,
                 name: place.displayName || "",
@@ -503,52 +493,33 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
                 rating: place.rating || undefined,
                 user_ratings_total: place.userRatingCount || undefined,
                 isOpen: isOpen ?? undefined,
-                types: place.types || []
+                types: place.types || [],
+                websiteURI: place.websiteURI || undefined
             };
-            onGoogleSearch([result]);
-            setSuggestions([]);
-            setKeyword(result.name);
-        } catch (error) {
-            console.error("Place Detail Error:", error);
-        }
+            onGoogleSearch([result]); setSuggestions([]); setKeyword(result.name);
+        } catch (error) { console.error("Place Detail Error:", error); }
     };
 
-    // ✅ 내 장소 검색 핸들러
     const handleMySpotSearch = async () => {
-        setSuggestions([]);
-        if (!keyword.trim()) return;
-
+        setSuggestions([]); if (!keyword.trim()) return;
         onSearchStart();
         try {
-            // 통합 검색 API 사용
             const res = await getMySpots({ keyword: keyword, page: 0, size: 50 });
             onMySpotSearch(res.content);
-        } catch {
-            alert("검색 실패");
-        }
+        } catch { alert("검색 실패"); }
     };
 
     return (
         <div ref={wrapperRef} className={`absolute top-4 right-4 z-10 flex flex-col gap-2 md:w-96 transition-all duration-300 ease-in-out left-4 ${showList ? 'md:left-[25rem]' : 'md:left-4'}`}>
             <div className="bg-white rounded-xl shadow-lg p-2 flex items-center gap-2">
-                <button
-                    onClick={() => { onModeChange(mode === 'GOOGLE' ? 'MINE' : 'GOOGLE'); setKeyword(""); setSuggestions([]); }}
-                    className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition shrink-0 border ${mode === 'GOOGLE' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-green-50 text-green-600 border-green-100'}`}
-                >
+                <button onClick={() => { onModeChange(mode === 'GOOGLE' ? 'MINE' : 'GOOGLE'); setKeyword(""); setSuggestions([]); }} className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition shrink-0 border ${mode === 'GOOGLE' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
                     {mode === 'GOOGLE' ? (
                         <><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg><span>구글</span></>
                     ) : (
                         <><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><span>내 장소</span></>
                     )}
                 </button>
-                <input
-                    type="text"
-                    className="flex-1 outline-none text-sm font-medium text-gray-700 min-w-0"
-                    placeholder={mode === 'GOOGLE' ? "장소, 주소 검색 (엔터)" : "이름 검색 (엔터)"}
-                    value={keyword}
-                    onChange={e => setKeyword(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') mode === 'GOOGLE' ? handleGoogleTextSearch() : handleMySpotSearch(); }}
-                />
+                <input type="text" className="flex-1 outline-none text-sm font-medium text-gray-700 min-w-0" placeholder={mode === 'GOOGLE' ? "장소, 주소 검색 (엔터)" : "이름 검색 (엔터)"} value={keyword} onChange={e => setKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') mode === 'GOOGLE' ? handleGoogleTextSearch() : handleMySpotSearch(); }} />
                 <button onClick={mode === 'GOOGLE' ? handleGoogleTextSearch : handleMySpotSearch} className="text-gray-400 hover:text-blue-600 p-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
                 </button>

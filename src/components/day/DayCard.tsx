@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 // Types
-import type { PlanDayResponse } from "../../types/planday";
+import type { PlanDayResponse } from "../../types/planDay.ts";
 
 interface DayCardProps {
   day: PlanDayResponse;

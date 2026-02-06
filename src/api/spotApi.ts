@@ -98,3 +98,21 @@ export const deleteSpot = async (id: number): Promise<void> => {
     throw new Error(json.message);
   }
 };
+
+
+
+export const spotDataUpdate = async (placeId: string, req: SpotUpdateRequest): Promise<void> => {
+  const res = await fetchWithAuth(`/api/spots/test/renew/${placeId}`, {
+    method: 'POST',
+    body: JSON.stringify(req),
+  });
+  if (res.ok) return;
+
+  try {
+    const json = await res.json();
+    throw new Error(json.message || "작업 중 오류가 발생했습니다.");
+  } catch (e) {
+    // JSON 파싱 실패
+    throw new Error("서버 응답을 처리할 수 없습니다.");
+  }
+};
