@@ -218,7 +218,7 @@ export default function SpotDetailPage() {
         <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['maps', 'marker']} language="ko" region="KR">
             <div className="max-w-6xl mx-auto p-4 md:p-8 pb-32 space-y-8 bg-gray-50/30 min-h-screen">
 
-                {/* 🏠 1. 상단 매거진 헤더 (Management 통합형) */}
+                {/* 🏠 1. 상단 매거진 헤더 */}
                 <div className="bg-white rounded-[2rem] shadow-xl shadow-blue-900/5 overflow-hidden border border-white">
                     <div className="flex flex-col lg:flex-row h-full">
                         <div className="lg:w-2/3 p-8 md:p-12 space-y-6 relative">
@@ -226,27 +226,25 @@ export default function SpotDetailPage() {
                                 <div className="space-y-3">
                                     <div className="flex items-center gap-3">
                                         <button onClick={() => navigate('/spots')} className="text-blue-500 hover:text-blue-700 font-black text-sm flex items-center gap-1 transition">
-                                            <span className="text-lg">←</span> BACK
+                                            <span className="text-lg">←</span> 목록으로
                                         </button>
-                                        {/* 방문 상태 토글 버튼 */}
                                         <button
                                             onClick={handleToggleVisit}
                                             className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase border transition-all shadow-sm ${
                                                 spot.isVisit ? 'bg-green-500 text-white border-green-500 hover:bg-green-600' : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-500 hover:text-white'
                                             }`}
                                         >
-                                            {spot.isVisit ? '✓ Visited' : '+ Mark Visit'}
+                                            {spot.isVisit ? '✓ 방문함' : '+ 방문 체크'}
                                         </button>
                                     </div>
                                     <h1 className="text-5xl md:text-6xl font-black text-gray-900 leading-none break-keep">
                                         {spot.spotName}
                                     </h1>
                                 </div>
-                                {/* 우측 상단 편집 아이콘 */}
                                 <button
                                     onClick={() => setIsEditing(true)}
                                     className="p-3 bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-2xl transition-all shadow-sm group"
-                                    title="Edit Information"
+                                    title="정보 수정"
                                 >
                                     <span className="text-xl group-hover:scale-110 transition-transform block">✏️</span>
                                 </button>
@@ -257,20 +255,18 @@ export default function SpotDetailPage() {
                                     <span className="text-xl">{SPOT_TYPES.find(t => t.value === spot.spotType)?.label.split(' ')[0]}</span>
                                     <span className="text-sm font-bold text-gray-700">{SPOT_TYPES.find(t => t.value === spot.spotType)?.label.split(' ')[1]}</span>
                                 </div>
-                                {/* ✅ 보정된 구글맵 링크 사용 */}
                                 <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-2xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-200">
-                                    🗺️ OPEN GOOGLE MAPS
+                                    🗺️ 구글 지도 열기
                                 </a>
                             </div>
 
                             <div className="pt-8 border-t border-gray-100">
                                 <p className="text-gray-500 text-lg font-medium leading-relaxed italic">
-                                    {spot.description }
+                                    {spot.description || "이 장소에 대한 설명이 아직 없습니다."}
                                 </p>
                             </div>
                         </div>
 
-                        {/* 헤더 오른쪽: 미니맵 */}
                         <div className="lg:w-1/3 min-h-[300px] lg:min-h-full border-l border-gray-100 relative group">
                             <Map
                                 defaultCenter={{ lat: spot.lat, lng: spot.lng }}
@@ -281,7 +277,7 @@ export default function SpotDetailPage() {
                             >
                                 <AdvancedMarker position={{ lat: spot.lat, lng: spot.lng }}>
                                     <div className="relative">
-                                        <div className="absolute -top-12 -left-6 bg-white px-3 py-1 rounded-full shadow-xl border border-blue-500 font-black text-xs text-blue-600 whitespace-nowrap uppercase tracking-tighter">Current Location</div>
+                                        <div className="absolute -top-12 -left-6 bg-white px-3 py-1 rounded-full shadow-xl border border-blue-500 font-black text-xs text-blue-600 whitespace-nowrap uppercase tracking-tighter">현재 위치</div>
                                         <Pin background={'#3b82f6'} glyphColor={'#fff'} borderColor={'#1d4ed8'} scale={1.2} />
                                     </div>
                                 </AdvancedMarker>
@@ -290,7 +286,7 @@ export default function SpotDetailPage() {
                                 <div className="bg-white/80 backdrop-blur-md px-5 py-2 rounded-2xl font-black text-[11px] shadow-lg border border-white/50 flex items-center gap-2">
                                     <div className={`w-2 h-2 rounded-full ${spot.isVisit ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
                                     <span className="text-gray-600 uppercase tracking-tighter">
-                                        {spot.isVisit ? 'Destination Explored' : 'Planning to Visit'}
+                                        {spot.isVisit ? '다녀온 장소' : '가보고 싶은 장소'}
                                     </span>
                                 </div>
                             </div>
@@ -299,18 +295,17 @@ export default function SpotDetailPage() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* Main Column */}
                     <div className="lg:col-span-8 space-y-8">
                         {/* VISIT LOG */}
                         <div className="bg-white rounded-[2rem] p-8 md:p-10 border border-gray-100 shadow-sm">
                             <h3 className="text-2xl font-black text-gray-900 mb-8 flex items-center gap-3">
-                                🕒 <span className="underline decoration-blue-500 decoration-4 underline-offset-8">VISIT LOG</span>
+                                🕒 <span className="underline decoration-blue-500 decoration-4 underline-offset-8">방문 기록</span>
                             </h3>
 
                             {!spot.isVisit ? (
                                 <div className="text-center py-16">
                                     <span className="text-6xl mb-4 block">🎒</span>
-                                    <p className="text-gray-400 font-bold">You haven't visited this place yet. Ready to go?</p>
+                                    <p className="text-gray-400 font-bold">아직 이 장소에 방문하지 않았습니다. 여행을 시작해볼까요?</p>
                                 </div>
                             ) : spot.spotVisitHistory && spot.spotVisitHistory.length > 0 ? (
                                 <div className="relative pl-8 space-y-12 before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-1 before:bg-gradient-to-b before:from-blue-500 before:to-gray-100 before:rounded-full">
@@ -333,11 +328,12 @@ export default function SpotDetailPage() {
                                     ))}
                                 </div>
                             ) : (
+                                // ✅ 문의하신 '방문 체크만 되었을 때' 메시지 수정
                                 <div className="p-8 bg-orange-50 rounded-[1.5rem] border border-orange-100 flex items-center gap-4">
                                     <span className="text-4xl">📸</span>
                                     <div>
-                                        <p className="text-orange-900 font-black">Memory confirmed, but date missing</p>
-                                        <p className="text-orange-700/70 text-sm font-medium leading-relaxed">It's certain you've been here, but the specific timeline isn't recorded!</p>
+                                        <p className="text-orange-900 font-black">추억은 기록되었지만, 정확한 날짜가 없어요</p>
+                                        <p className="text-orange-700/70 text-sm font-medium leading-relaxed">방문한 것은 확실하지만, 구체적인 여행 일정에는 포함되지 않은 상태입니다.</p>
                                     </div>
                                 </div>
                             )}
@@ -346,13 +342,13 @@ export default function SpotDetailPage() {
                         {/* COLLECTIONS */}
                         <div className="bg-white rounded-[2rem] p-8 md:p-10 border border-gray-100 shadow-sm">
                             <div className="flex justify-between items-center mb-8">
-                                <h3 className="text-2xl font-black text-gray-900">🛍️ <span className="underline decoration-green-500 decoration-4 underline-offset-8">COLLECTIONS</span></h3>
-                                <button onClick={openAddPurchaseModal} className="bg-gray-900 text-white px-5 py-2.5 rounded-2xl font-black text-xs hover:bg-gray-700 transition shadow-lg shadow-gray-200">+ ADD NEW</button>
+                                <h3 className="text-2xl font-black text-gray-900">🛍️ <span className="underline decoration-green-500 decoration-4 underline-offset-8">구매 리스트</span></h3>
+                                <button onClick={openAddPurchaseModal} className="bg-gray-900 text-white px-5 py-2.5 rounded-2xl font-black text-xs hover:bg-gray-700 transition shadow-lg shadow-gray-200">+ 새로 추가</button>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {spot.purchases.length === 0 ? (
-                                    <div className="col-span-full text-center py-10 text-gray-300 font-bold italic">No items collected in this spot.</div>
+                                    <div className="col-span-full text-center py-10 text-gray-300 font-bold italic">수집한 아이템이 아직 없습니다.</div>
                                 ) : (
                                     spot.purchases.map(p => (
                                         <div key={p.id} onClick={() => openEditPurchaseModal(p)} className="group p-5 bg-white border border-gray-100 rounded-3xl hover:shadow-xl hover:shadow-blue-900/5 transition cursor-pointer relative overflow-hidden">
@@ -361,10 +357,10 @@ export default function SpotDetailPage() {
                                                 <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${getStatusInfo(p.status).color}`}>
                                                     {getStatusInfo(p.status).label.split(' ')[1]}
                                                 </span>
-                                                <button onClick={(e) => { e.stopPropagation(); handleDeletePurchase(p.id); }} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition font-bold text-xs uppercase tracking-tighter">Remove</button>
+                                                <button onClick={(e) => { e.stopPropagation(); handleDeletePurchase(p.id); }} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition font-bold text-xs uppercase tracking-tighter">삭제</button>
                                             </div>
                                             <h5 className="text-lg font-black text-gray-800 mb-1">{p.itemName}</h5>
-                                            <p className="text-sm font-mono font-bold text-gray-400">{p.price > 0 ? `${p.price.toLocaleString()} ${p.currency}` : 'Free'} • {p.quantity} qty</p>
+                                            <p className="text-sm font-mono font-bold text-gray-400">{p.price > 0 ? `${p.price.toLocaleString()} ${p.currency}` : '무료'} • {p.quantity}개</p>
                                         </div>
                                     ))
                                 )}
@@ -377,8 +373,8 @@ export default function SpotDetailPage() {
                         {/* GROUPS */}
                         <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm">
                             <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-sm font-black text-gray-400 tracking-widest uppercase">Groups</h3>
-                                <button onClick={() => setIsGroupModalOpen(true)} className="text-blue-500 font-black text-[10px] uppercase hover:underline">Edit Groups</button>
+                                <h3 className="text-sm font-black text-gray-400 tracking-widest uppercase">그룹 태그</h3>
+                                <button onClick={() => setIsGroupModalOpen(true)} className="text-blue-500 font-black text-[10px] uppercase hover:underline">편집</button>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {spot.groupName.map((g, i) => (
@@ -387,22 +383,22 @@ export default function SpotDetailPage() {
                                         #{g.toUpperCase()}
                                     </span>
                                 ))}
-                                {spot.groupName.length === 0 && <span className="text-gray-300 text-xs font-bold italic">No groups assigned yet.</span>}
+                                {spot.groupName.length === 0 && <span className="text-gray-300 text-xs font-bold italic">지정된 그룹이 없습니다.</span>}
                             </div>
                         </div>
 
                         {/* INFORMATION */}
                         <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm space-y-8">
-                            <h3 className="text-sm font-black text-gray-400 tracking-widest uppercase">Place Details</h3>
+                            <h3 className="text-sm font-black text-gray-400 tracking-widest uppercase">상세 정보</h3>
                             <div className="space-y-6">
                                 <div>
-                                    <p className="text-[10px] font-black text-blue-500 uppercase mb-2">Location Address</p>
+                                    <p className="text-[10px] font-black text-blue-500 uppercase mb-2">위치 주소</p>
                                     <p className="text-gray-900 font-bold leading-relaxed break-keep text-sm">{spot.shortAddress || spot.address}</p>
                                     {spot.shortAddress && <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">{spot.address}</p>}
                                 </div>
                                 {spot.website && (
                                     <div>
-                                        <p className="text-[10px] font-black text-blue-500 uppercase mb-2">Official Website</p>
+                                        <p className="text-[10px] font-black text-blue-500 uppercase mb-2">공식 홈페이지</p>
                                         <a href={spot.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold underline decoration-blue-200 hover:text-blue-800 transition break-all text-xs">
                                             {spot.website}
                                         </a>
@@ -413,7 +409,7 @@ export default function SpotDetailPage() {
                     </div>
                 </div>
 
-                {/* Modals remain the same */}
+                {/* 모달은 그대로 유지 */}
                 <SpotPurchaseModal isOpen={isPurchaseModalOpen} onClose={() => setIsPurchaseModalOpen(false)} onSave={handleSavePurchase} initialData={selectedPurchase} />
                 <SpotGroupModal isOpen={isGroupModalOpen} onClose={() => setIsGroupModalOpen(false)} currentGroups={spot.groupName} onSave={handleSaveGroups} />
             </div>
