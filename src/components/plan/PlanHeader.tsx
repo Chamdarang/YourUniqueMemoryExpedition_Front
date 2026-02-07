@@ -111,7 +111,6 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
 
   return (
       <div className="mb-8">
-        <button onClick={() => navigate('/plans')} className="text-gray-400 text-sm hover:text-gray-600 mb-3 flex items-center gap-1 transition">← 목록으로</button>
 
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden relative group transition-all hover:shadow-md">
           <div className="h-3 bg-blue-500 w-full" />

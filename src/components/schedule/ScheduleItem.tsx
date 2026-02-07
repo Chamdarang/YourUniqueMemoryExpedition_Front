@@ -188,8 +188,28 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
                     setSearchResults(res.content);
                     setIsDropdownOpen(true);
                 } else {
-                    if (!placesLibrary) return;
-                    const request = { input: safeSearchTerm, sessionToken: sessionToken };
+                    if (!placesLibrary || !sessionToken) return;
+
+                    const request = {
+                        input: safeSearchTerm,
+                        sessionToken: sessionToken,
+                        language: 'ko',
+                        // ✅ [추가] 지도 중심 기준(locationBias)을 설정합니다.
+                        // 사용자가 지도를 이동시킨 곳 주변의 결과가 먼저 나옵니다.
+                        locationBias: {},
+                    };
+
+                    const center = map?.getCenter();
+
+                    if (center) {
+                        request.locationBias= {
+                            center: {lat: center.lat(), lng: center.lng()},
+                            radius: 5000 // 👈 circle 감싸기 없이 바로 center와 radius를 넣는 버전
+                        }
+                    }
+
+
+                    console.log(request);
                     try {
                         // @ts-ignore
                         const { suggestions } = await placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
@@ -486,6 +506,11 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
                                     </div>
                                     <div className="flex bg-gray-100 p-1 rounded-lg mb-2"><button onClick={() => setSearchMode('MINE')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${searchMode === 'MINE' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>내 장소</button><button onClick={() => setSearchMode('GOOGLE')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${searchMode === 'GOOGLE' ? 'bg-white text-orange-500 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>구글 검색</button></div>
                                     <input type="text" className={`w-full p-3 border rounded-xl font-bold outline-none transition ${searchMode === 'MINE' ? 'bg-blue-50/50 border-blue-100 focus:bg-white focus:ring-2 focus:ring-blue-300 text-blue-900 placeholder-blue-300' : 'bg-orange-50/50 border-orange-100 focus:bg-white focus:ring-2 focus:ring-orange-300 text-orange-900 placeholder-orange-300'}`} placeholder="장소 검색..." value={searchTerm} onFocus={() => { if(searchTerm.trim()) setIsDropdownOpen(true); }} onChange={(e) => { setSearchTerm(e.target.value); setIsDropdownOpen(e.target.value.trim() !== ""); }} />
+                                    {searchMode === 'GOOGLE' && (
+                                        <p className="mt-2 ml-1 text-[11px] text-orange-400 font-bold animate-pulse">
+                                            💡 주변에 무엇이 있는지 모를 땐 '탐색'에서 찾아보는 것을 권장합니다!
+                                        </p>
+                                    )}
                                     {isDropdownOpen && searchTerm.trim() !== "" && (
                                         <div className="absolute z-50 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-48 overflow-y-auto">
                                             {searchResults.length === 0 ? (
@@ -494,7 +519,6 @@ export default function ScheduleItem({ schedule, index, showInjury, onUpdate, on
                                                 searchResults.map((spot, i) => {
                                                     // ✅ [2] 구글 검색 결과인지 내 장소인지 구분
                                                     const isGoogle = !!spot.placeId && (!spot.id || spot.id === 0);
-                                                    console.log(spot)
                                                     return (
                                                         <div
                                                             key={i}

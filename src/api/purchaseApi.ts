@@ -5,9 +5,9 @@ import type { SpotPurchaseResponse, SpotPurchaseSaveRequest } from "../types/pur
 // 1. 구매 내역 생성 (POST /api/purchases)
 // 백엔드 PurchaseCreateRequest에는 spotId가 필요하므로 합쳐서 보냄
 export const createPurchase = async (spotId: number, req: SpotPurchaseSaveRequest): Promise<SpotPurchaseResponse> => {
-  const res = await fetchWithAuth(`/api/purchases`, {
+  const res = await fetchWithAuth(`/api/purchases/spot/${spotId}`, {
     method: 'POST',
-    body: JSON.stringify({ ...req, spotId }), 
+    body: JSON.stringify({ ...req }),
   });
 
   // ✅ ApiResponse 타입 명시

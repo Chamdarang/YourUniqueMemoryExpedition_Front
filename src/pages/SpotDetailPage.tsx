@@ -11,30 +11,11 @@ import type { SpotDetailResponse, SpotUpdateRequest } from '../types/spot';
 import type { SpotPurchaseSaveRequest, SpotPurchaseResponse } from '../types/purchase';
 import type { SpotType, PurchaseStatus } from '../types/enums';
 
-// Modals (Updated Path)
-import SpotPurchaseModal from '../components/spot/SpotPurchaseModal';
+// Utils & Components
+import { getSpotTypeInfo, SPOT_TYPE_INFO } from '../utils/spotUtils';
+import SpotPurchaseCard from '../components/purchase/SpotPurchaseCard';
 import SpotGroupModal from '../components/spot/SpotGroupModal';
 import {AdvancedMarker, APIProvider, Map, Pin} from "@vis.gl/react-google-maps";
-
-// ----------------------------------------------------------------
-// 📝 상수 및 헬퍼
-// ----------------------------------------------------------------
-
-const SPOT_TYPES: { value: SpotType; label: string }[] = [
-    { value: 'LANDMARK', label: '🗼 명소' },
-    { value: 'HISTORICAL_SITE', label: '🏯 유적지' },
-    { value: 'RELIGIOUS_SITE', label: '🙏 종교시설' },
-    { value: 'MUSEUM', label: '🖼 박물관' },
-    { value: 'PARK', label: '🌳 공원' },
-    { value: 'NATURE', label: '🌲 자연' },
-    { value: 'SHOPPING', label: '🛍️ 쇼핑' },
-    { value: 'ACTIVITY', label: '🎢 액티비티' },
-    { value: 'FOOD', label: '🍚 음식점' },
-    { value: 'CAFE', label: '☕ 카페' },
-    { value: 'STATION', label: '🚉 교통' },
-    { value: 'ACCOMMODATION', label: '🏨 숙소' },
-    { value: 'OTHER', label: '📍 기타' },
-];
 
 const getStatusInfo = (status: PurchaseStatus) => {
     switch (status) {
@@ -47,361 +28,283 @@ const getStatusInfo = (status: PurchaseStatus) => {
     }
 };
 
-// ----------------------------------------------------------------
-// 🚀 컴포넌트 시작
-// ----------------------------------------------------------------
-
 export default function SpotDetailPage() {
-    const {id} = useParams<{ id: string }>();
+    const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-
-    // 데이터 상태
     const [spot, setSpot] = useState<SpotDetailResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
 
-    // 폼 상태 (수정용)
-    const [form, setForm] = useState<SpotUpdateRequest>({
-        spotName: '',
-        spotType: 'OTHER',
-        address: '',
-        shortAddress: '',
-        website: '',
-        googleMapUrl: '',
-        description: '',
-        lat: 0,
-        lng: 0,
-        isVisit: false,
-        metadata: {}
+    // 쇼핑 아이템 관련 상태
+    const [isAddingPurchase, setIsAddingPurchase] = useState(false);
+    const [editingPurchaseId, setEditingPurchaseId] = useState<number | null>(null);
+
+    const initialPurchaseState: SpotPurchaseSaveRequest = {
+        kind: 'SOUVENIR',
+        category: '',
+        itemName: '',
+        price: 0,
+        currency: 'JPY',
+        status: 'WANT',
+        quantity: 1,
+        acquiredDate: new Date().toISOString().split('T')[0],
+        note: ''
+    };
+
+    const [newPurchase, setNewPurchase] = useState<SpotPurchaseSaveRequest>(initialPurchaseState);
+    const [editPurchaseForm, setEditPurchaseForm] = useState<SpotPurchaseSaveRequest>(initialPurchaseState);
+
+    // 장소 수정 폼 상태
+    const [editForm, setEditForm] = useState<SpotUpdateRequest>({
+        spotName: '', spotType: 'OTHER', address: '', shortAddress: '',
+        website: '', googleMapUrl: '', lat: 0, lng: 0,
+        isVisit: false, description: '', metadata: {}
     });
 
-    // 모달 상태
-    const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
-    const [selectedPurchase, setSelectedPurchase] = useState<SpotPurchaseResponse | null>(null);
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
 
-    // 1. 상세 정보 불러오기
     const fetchDetail = async () => {
         if (!id) return;
         try {
             setLoading(true);
             const data = await getSpotDetail(Number(id));
             setSpot(data);
-
-            // 수정 폼 초기화 (새 필드 포함)
-            setForm({
-                spotName: data.spotName,
-                spotType: data.spotType,
-                address: data.address,
-                shortAddress: data.shortAddress || '',
-                website: data.website || '',
-                googleMapUrl: data.googleMapUrl || '',
-                description: data.description || '',
-                lat: data.lat,
-                lng: data.lng,
-                isVisit: data.isVisit,
-                metadata: data.metadata || {}
+            setEditForm({
+                spotName: data.spotName, spotType: data.spotType, address: data.address,
+                shortAddress: data.shortAddress || '', website: data.website || '',
+                googleMapUrl: data.googleMapUrl || '', lat: data.lat, lng: data.lng,
+                isVisit: data.isVisit, description: data.description || '', metadata: data.metadata || {}
             });
-        } catch (err) {
-            console.error(err);
-            navigate('/spots');
-        } finally {
-            setLoading(false);
-        }
+        } catch (err) { navigate('/spots'); } finally { setLoading(false); }
     };
 
-    useEffect(() => {
-        fetchDetail();
-    }, [id]);
+    useEffect(() => { fetchDetail(); }, [id]);
 
-    // 2. 방문 여부 토글 (즉시 저장)
-    const handleToggleVisit = async () => {
-        if (!spot || !id) return;
-        const newIsVisit = !spot.isVisit;
-
-        try {
-            const updateReq: SpotUpdateRequest = {...form, isVisit: newIsVisit};
-            await updateSpot(Number(id), updateReq);
-
-            // UI 즉시 업데이트
-            setSpot({...spot, isVisit: newIsVisit});
-            setForm({...form, isVisit: newIsVisit});
-        } catch {
-            alert("상태 변경에 실패했습니다.");
-        }
-    };
-
-    // 3. 장소 정보 수정 저장
     const handleUpdateSpot = async () => {
         if (!id) return;
         try {
-            await updateSpot(Number(id), form);
-            alert("수정되었습니다.");
+            await updateSpot(Number(id), editForm);
             setIsEditing(false);
             fetchDetail();
-        } catch {
-            alert("수정 실패");
-        }
+        } catch { alert("수정 실패"); }
     };
 
-    // 4. 구매 내역 저장/삭제
-    const handleSavePurchase = async (req: SpotPurchaseSaveRequest) => {
-        if (!id) return;
+    const handleToggleVisit = async () => {
+        if (!spot || !id) return;
         try {
-            if (selectedPurchase) {
-                await updatePurchase(selectedPurchase.id, req);
-            } else {
-                await createPurchase(Number(id), req);
-            }
+            await updateSpot(Number(id), { ...editForm, isVisit: !spot.isVisit });
             fetchDetail();
-        } catch {
-            alert("저장 실패");
-        }
+        } catch { alert("방문 상태 변경 실패"); }
     };
 
-    const handleDeletePurchase = async (pId: number) => {
-        if (window.confirm("삭제하시겠습니까?")) {
-            try {
-                await deletePurchase(pId);
-                fetchDetail();
-            } catch {
-                alert("삭제 실패");
-            }
-        }
+    const handleAddPurchase = async () => {
+        if (!id || !newPurchase.itemName.trim()) { alert("아이템 이름을 입력하세요."); return; }
+        try {
+            await createPurchase(Number(id), newPurchase);
+            setIsAddingPurchase(false);
+            setNewPurchase(initialPurchaseState);
+            fetchDetail();
+        } catch { alert("아이템 추가 실패"); }
     };
 
-    // 5. 그룹 태그 저장
+    const handleUpdatePurchase = async (purchaseId: number) => {
+        try {
+            await updatePurchase(purchaseId, editPurchaseForm);
+            setEditingPurchaseId(null);
+            fetchDetail();
+        } catch { alert("아이템 수정 실패"); }
+    };
+
+    const handleDeletePurchase = async (purchaseId: number) => {
+        if (!window.confirm("정말 삭제하시겠습니까?")) return;
+        try {
+            await deletePurchase(purchaseId);
+            fetchDetail();
+        } catch { alert("삭제 실패"); }
+    };
+
     const handleSaveGroups = async (newTags: string[]) => {
         if (!id || !spot) return;
-        const spotId = Number(id);
         try {
             const allGroups = await getAllGroups();
             const oldTags = spot.groupName;
-
-            // 삭제할 태그
             const toRemove = oldTags.filter(t => !newTags.includes(t));
             for (const name of toRemove) {
                 const group = allGroups.find(g => g.groupName === name);
-                if (group) await removeSpotFromGroup(group.id, spotId);
+                if (group) await removeSpotFromGroup(group.id, Number(id));
             }
-
-            // 추가할 태그
             const toAdd = newTags.filter(t => !oldTags.includes(t));
             for (const name of toAdd) {
                 let group = allGroups.find(g => g.groupName === name);
-                if (!group) group = await createGroup({groupName: name});
-                await addSpotToGroup(group.id, spotId);
+                if (!group) group = await createGroup({ groupName: name });
+                await addSpotToGroup(group.id, Number(id));
             }
             fetchDetail();
             setIsGroupModalOpen(false);
-        } catch {
-            alert("태그 저장 실패");
-        }
+        } catch { alert("태그 저장 실패"); }
     };
 
-    const openAddPurchaseModal = () => {
-        setSelectedPurchase(null);
-        setIsPurchaseModalOpen(true);
-    };
-    const openEditPurchaseModal = (p: SpotPurchaseResponse) => {
-        setSelectedPurchase(p);
-        setIsPurchaseModalOpen(true);
-    };
     const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
-    if (loading || !spot) return <div className="text-center p-20 text-gray-500">로딩 중... ⏳</div>;
+    if (loading || !spot) return <div className="text-center p-20 text-gray-500 font-bold">로딩 중...</div>;
 
-    const googleMapsUrl = spot.googleMapUrl && spot.googleMapUrl.startsWith('http')
-        ? spot.googleMapUrl
-        : `https://www.google.com/maps/search/?api=1&query=${spot.lat},${spot.lng}`;
+    const currentTypeInfo = getSpotTypeInfo(spot.spotType);
+    const googleMapsUrl = spot.googleMapUrl || `https://www.google.com/maps/search/?api=1&query=${spot.lat},${spot.lng}`;
 
     return (
-        <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['maps', 'marker']} language="ko" region="KR">
-            <div className="max-w-6xl mx-auto p-4 md:p-8 pb-32 space-y-8 bg-gray-50/30 min-h-screen">
+        <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['maps', 'marker']} language="ko">
+            <div className="max-w-6xl mx-auto p-4 md:p-8 pb-32 space-y-6 bg-gray-50/30 min-h-screen">
 
-                {/* 🏠 1. 상단 매거진 헤더 */}
-                <div className="bg-white rounded-[2rem] shadow-xl shadow-blue-900/5 overflow-hidden border border-white">
-                    <div className="flex flex-col lg:flex-row h-full">
-                        <div className="lg:w-2/3 p-8 md:p-12 space-y-6 relative">
-                            <div className="flex justify-between items-start">
-                                <div className="space-y-3">
-                                    <div className="flex items-center gap-3">
-                                        <button onClick={() => navigate('/spots')} className="text-blue-500 hover:text-blue-700 font-black text-sm flex items-center gap-1 transition">
-                                            <span className="text-lg">←</span> 목록으로
-                                        </button>
-                                        <button
-                                            onClick={handleToggleVisit}
-                                            className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase border transition-all shadow-sm ${
-                                                spot.isVisit ? 'bg-green-500 text-white border-green-500 hover:bg-green-600' : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-500 hover:text-white'
-                                            }`}
-                                        >
-                                            {spot.isVisit ? '✓ 방문함' : '+ 방문 체크'}
-                                        </button>
-                                    </div>
-                                    <h1 className="text-5xl md:text-6xl font-black text-gray-900 leading-none break-keep">
-                                        {spot.spotName}
-                                    </h1>
-                                </div>
-                                <button
-                                    onClick={() => setIsEditing(true)}
-                                    className="p-3 bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-2xl transition-all shadow-sm group"
-                                    title="정보 수정"
-                                >
-                                    <span className="text-xl group-hover:scale-110 transition-transform block">✏️</span>
+                {/* 🏠 메인 정보 카드 */}
+                <div className="bg-white rounded-[2rem] shadow-xl border border-white overflow-hidden flex flex-col lg:flex-row min-h-[450px]">
+                    <div className="lg:w-2/3 p-6 md:p-10 space-y-6">
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-4">
+                                <button onClick={() => navigate('/spots')} className="text-blue-500 font-bold text-sm hover:underline transition-all">← 목록</button>
+                                <button onClick={handleToggleVisit} className={`px-4 py-1.5 rounded-full text-[10px] font-black border transition-all ${spot.isVisit ? 'bg-green-500 text-white border-green-500 shadow-md' : 'bg-white text-orange-500 border-orange-200'}`}>
+                                    {spot.isVisit ? '✓ 방문 완료' : '+ 방문 체크'}
                                 </button>
                             </div>
 
-                            <div className="flex flex-wrap gap-4 pt-4">
-                                <div className="flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-2xl">
-                                    <span className="text-xl">{SPOT_TYPES.find(t => t.value === spot.spotType)?.label.split(' ')[0]}</span>
-                                    <span className="text-sm font-bold text-gray-700">{SPOT_TYPES.find(t => t.value === spot.spotType)?.label.split(' ')[1]}</span>
-                                </div>
-                                <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-2xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-200">
-                                    🗺️ 구글 지도 열기
-                                </a>
-                            </div>
-
-                            <div className="pt-8 border-t border-gray-100">
-                                <p className="text-gray-500 text-lg font-medium leading-relaxed italic">
-                                    {spot.description || "이 장소에 대한 설명이 아직 없습니다."}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="lg:w-1/3 min-h-[300px] lg:min-h-full border-l border-gray-100 relative group">
-                            <Map
-                                defaultCenter={{ lat: spot.lat, lng: spot.lng }}
-                                defaultZoom={16}
-                                disableDefaultUI={true}
-                                mapId="SPOT_HERO_MAP"
-                                className="w-full h-full"
-                            >
-                                <AdvancedMarker position={{ lat: spot.lat, lng: spot.lng }}>
-                                    <div className="relative">
-                                        <div className="absolute -top-12 -left-6 bg-white px-3 py-1 rounded-full shadow-xl border border-blue-500 font-black text-xs text-blue-600 whitespace-nowrap uppercase tracking-tighter">현재 위치</div>
-                                        <Pin background={'#3b82f6'} glyphColor={'#fff'} borderColor={'#1d4ed8'} scale={1.2} />
+                            {isEditing ? (
+                                <div className="space-y-4 animate-in fade-in">
+                                    <input className="w-full text-3xl md:text-5xl font-black p-2 border-b-4 border-blue-100 focus:border-blue-500 outline-none bg-transparent" value={editForm.spotName} onChange={e => setEditForm({...editForm, spotName: e.target.value})} autoFocus />
+                                    <select className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none" value={editForm.spotType} onChange={e => setEditForm({...editForm, spotType: e.target.value as SpotType})}>
+                                        {Object.entries(SPOT_TYPE_INFO).map(([key, info]) => (
+                                            <option key={key} value={key}>{info.icon} {info.label}</option>
+                                        ))}
+                                    </select>
+                                    <textarea className="w-full p-4 bg-gray-50 rounded-xl text-sm outline-none min-h-[100px] resize-none" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} placeholder="설명을 입력하세요." />
+                                    <div className="flex gap-2">
+                                        <button onClick={handleUpdateSpot} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-blue-200">저장</button>
+                                        <button onClick={() => setIsEditing(false)} className="bg-gray-100 text-gray-500 px-6 py-2.5 rounded-xl font-bold text-sm">취소</button>
                                     </div>
+                                </div>
+                            ) : (
+                                <div>
+                                    <h1 className="text-3xl md:text-5xl font-black text-gray-900 leading-tight break-keep tracking-tight">{spot.spotName}</h1>
+                                    <div className="flex flex-wrap items-center gap-3 mt-4">
+                                        <span className={`px-4 py-2 rounded-xl text-sm font-black shadow-sm flex items-center gap-2 ${currentTypeInfo.color}`}>
+                                            {currentTypeInfo.icon} {currentTypeInfo.label}
+                                        </span>
+                                        <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="bg-white text-blue-600 border border-blue-50 px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors flex items-center gap-2 shadow-sm">🗺️ 구글 지도</a>
+                                        <button onClick={() => setIsEditing(true)} className="text-gray-400 font-bold text-xs hover:text-blue-500 px-2 transition-colors flex items-center gap-1">✏️ 정보 수정</button>
+                                    </div>
+                                    <p className="text-gray-500 text-base md:text-lg font-medium border-t border-gray-100 mt-6 pt-6 leading-relaxed italic">
+                                        {spot.description || "등록된 설명이 없습니다."}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="w-full lg:w-1/3 h-[350px] md:h-auto border-b lg:border-b-0 lg:border-l border-gray-100 relative bg-gray-200 order-1 lg:order-2">
+                        {GOOGLE_MAPS_API_KEY && spot && (
+                            <Map defaultCenter={{ lat: spot.lat, lng: spot.lng }} defaultZoom={15} mapId="SPOT_HERO" disableDefaultUI={true} className="w-full h-full">
+                                <AdvancedMarker position={{ lat: spot.lat, lng: spot.lng }}>
+                                    <Pin background={currentTypeInfo.hex} glyphColor={'#fff'} borderColor={currentTypeInfo.hex} scale={1.2} />
                                 </AdvancedMarker>
                             </Map>
-                            <div className="absolute bottom-6 right-6 pointer-events-none">
-                                <div className="bg-white/80 backdrop-blur-md px-5 py-2 rounded-2xl font-black text-[11px] shadow-lg border border-white/50 flex items-center gap-2">
-                                    <div className={`w-2 h-2 rounded-full ${spot.isVisit ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
-                                    <span className="text-gray-600 uppercase tracking-tighter">
-                                        {spot.isVisit ? '다녀온 장소' : '가보고 싶은 장소'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    <div className="lg:col-span-8 space-y-8">
-                        {/* VISIT LOG */}
-                        <div className="bg-white rounded-[2rem] p-8 md:p-10 border border-gray-100 shadow-sm">
-                            <h3 className="text-2xl font-black text-gray-900 mb-8 flex items-center gap-3">
-                                🕒 <span className="underline decoration-blue-500 decoration-4 underline-offset-8">방문 기록</span>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div className="lg:col-span-8 space-y-6">
+                        {/* 🕒 방문 히스토리 */}
+                        <div className="bg-white rounded-[2rem] p-6 md:p-8 border border-gray-100 shadow-sm">
+                            <h3 className="text-xl md:text-2xl font-black text-gray-900 mb-8 flex items-center gap-3">
+                                <span className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-lg">🗓</span> 방문 히스토리
                             </h3>
-
-                            {!spot.isVisit ? (
-                                <div className="text-center py-16">
-                                    <span className="text-6xl mb-4 block">🎒</span>
-                                    <p className="text-gray-400 font-bold">아직 이 장소에 방문하지 않았습니다. 여행을 시작해볼까요?</p>
-                                </div>
-                            ) : spot.spotVisitHistory && spot.spotVisitHistory.length > 0 ? (
-                                <div className="relative pl-8 space-y-12 before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-1 before:bg-gradient-to-b before:from-blue-500 before:to-gray-100 before:rounded-full">
-                                    {spot.spotVisitHistory.map((history) => (
-                                        <div key={history.id} className="relative group">
-                                            <div className="absolute -left-[35px] top-1.5 w-6 h-6 rounded-full bg-white border-4 border-blue-500 z-10 group-hover:scale-125 transition-transform shadow-sm" />
-                                            <div
-                                                className="bg-gray-50 p-6 rounded-3xl border border-gray-100 hover:border-blue-200 hover:bg-white hover:shadow-xl hover:shadow-blue-900/5 transition-all cursor-pointer"
-                                                onClick={() => navigate(`/plans/${history.planId}`)}
-                                            >
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <h4 className="text-xl font-black text-gray-800 group-hover:text-blue-600 transition-colors">{history.planName}</h4>
-                                                    <span className="text-sm font-mono font-bold text-blue-500">{history.visitedAt}</span>
-                                                </div>
-                                                <div className="inline-block bg-blue-100 text-blue-600 text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-tighter">
-                                                    {history.dayName}
-                                                </div>
+                            {spot.isVisit && spot.spotVisitHistory?.length > 0 ? (
+                                <div className="relative border-l-2 border-blue-100 ml-4 pl-8 space-y-8">
+                                    {spot.spotVisitHistory.map((h) => (
+                                        <div key={h.id} className="relative group cursor-pointer" onClick={() => navigate(!h.planId ? `/days/${h.dayId}` : `/plans/${h.planId}`)}>
+                                            <div className="absolute -left-[33px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white shadow-sm" />
+                                            <div className="bg-gray-50 p-4 md:p-5 rounded-2xl border border-gray-100 group-hover:bg-white group-hover:shadow-lg transition-all">
+                                                <span className="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full mb-2 inline-block uppercase tracking-widest">{h.visitedAt}</span>
+                                                <h4 className="font-black text-gray-800 text-lg">{!h.planId ? `[개별 일정] ${h.dayName}` : h.planName}</h4>
+                                                {h.planId && <p className="text-xs text-gray-400 font-bold mt-1 uppercase tracking-tighter">{h.dayName} 스케줄</p>}
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             ) : (
-                                // ✅ 문의하신 '방문 체크만 되었을 때' 메시지 수정
-                                <div className="p-8 bg-orange-50 rounded-[1.5rem] border border-orange-100 flex items-center gap-4">
-                                    <span className="text-4xl">📸</span>
-                                    <div>
-                                        <p className="text-orange-900 font-black">추억은 기록되었지만, 정확한 날짜가 없어요</p>
-                                        <p className="text-orange-700/70 text-sm font-medium leading-relaxed">방문한 것은 확실하지만, 구체적인 여행 일정에는 포함되지 않은 상태입니다.</p>
-                                    </div>
-                                </div>
+                                <div className="py-16 text-center bg-gray-50 rounded-3xl border border-dashed border-gray-200 text-gray-400 font-bold italic">기록이 없습니다.</div>
                             )}
                         </div>
 
-                        {/* COLLECTIONS */}
-                        <div className="bg-white rounded-[2rem] p-8 md:p-10 border border-gray-100 shadow-sm">
-                            <div className="flex justify-between items-center mb-8">
-                                <h3 className="text-2xl font-black text-gray-900">🛍️ <span className="underline decoration-green-500 decoration-4 underline-offset-8">구매 리스트</span></h3>
-                                <button onClick={openAddPurchaseModal} className="bg-gray-900 text-white px-5 py-2.5 rounded-2xl font-black text-xs hover:bg-gray-700 transition shadow-lg shadow-gray-200">+ 새로 추가</button>
+                        {/* 🛍️ 쇼핑 리스트 섹션 */}
+                        <div className="bg-white rounded-[2rem] p-6 md:p-8 border border-gray-100 shadow-sm min-h-[400px]">
+                            <div className="flex justify-between items-center mb-8 px-2">
+                                <h3 className="text-xl md:text-2xl font-black text-gray-900 flex items-center gap-3">
+                                    <span className="w-10 h-10 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center text-lg">🛍</span> 쇼핑 리스트
+                                </h3>
+                                <button onClick={() => setIsAddingPurchase(!isAddingPurchase)} className={`px-5 py-2 rounded-xl font-bold text-xs transition-all shadow-md active:scale-95 ${isAddingPurchase ? 'bg-gray-100 text-gray-500' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                                    {isAddingPurchase ? '닫기' : '+ 새 아이템'}
+                                </button>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {spot.purchases.length === 0 ? (
-                                    <div className="col-span-full text-center py-10 text-gray-300 font-bold italic">수집한 아이템이 아직 없습니다.</div>
-                                ) : (
-                                    spot.purchases.map(p => (
-                                        <div key={p.id} onClick={() => openEditPurchaseModal(p)} className="group p-5 bg-white border border-gray-100 rounded-3xl hover:shadow-xl hover:shadow-blue-900/5 transition cursor-pointer relative overflow-hidden">
-                                            <div className={`absolute top-0 left-0 w-1.5 h-full ${getStatusInfo(p.status).color.split(' ')[0]}`} />
-                                            <div className="flex justify-between items-start mb-3">
-                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${getStatusInfo(p.status).color}`}>
-                                                    {getStatusInfo(p.status).label.split(' ')[1]}
-                                                </span>
-                                                <button onClick={(e) => { e.stopPropagation(); handleDeletePurchase(p.id); }} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition font-bold text-xs uppercase tracking-tighter">삭제</button>
-                                            </div>
-                                            <h5 className="text-lg font-black text-gray-800 mb-1">{p.itemName}</h5>
-                                            <p className="text-sm font-mono font-bold text-gray-400">{p.price > 0 ? `${p.price.toLocaleString()} ${p.currency}` : '무료'} • {p.quantity}개</p>
-                                        </div>
-                                    ))
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-2">
+                                {/* ✅ 분리된 카드 컴포넌트 적용: 새 아이템 추가 */}
+                                {isAddingPurchase && (
+                                    <SpotPurchaseCard
+                                        mode="add"
+                                        form={newPurchase}
+                                        onChange={(updates) => setNewPurchase(prev => ({ ...prev, ...updates }))}
+                                        onSave={handleAddPurchase}
+                                        onCancel={() => setIsAddingPurchase(false)}
+                                        getStatusInfo={getStatusInfo}
+                                    />
                                 )}
+
+                                {/* ✅ 분리된 카드 컴포넌트 적용: 리스트 조회 및 수정 */}
+                                {spot.purchases.map((p: SpotPurchaseResponse) => (
+                                    <SpotPurchaseCard
+                                        key={p.id}
+                                        mode={editingPurchaseId === p.id ? 'edit' : 'view'}
+                                        data={p}
+                                        form={editPurchaseForm}
+                                        onChange={(updates) => setEditPurchaseForm(prev => ({ ...prev, ...updates }))}
+                                        onSave={() => handleUpdatePurchase(p.id)}
+                                        onCancel={() => setEditingPurchaseId(null)}
+                                        onDelete={handleDeletePurchase}
+                                        onEditMode={(item) => {
+                                            setEditingPurchaseId(item.id);
+                                            setEditPurchaseForm(item);
+                                        }}
+                                        getStatusInfo={getStatusInfo}
+                                    />
+                                ))}
                             </div>
                         </div>
                     </div>
 
-                    {/* Sidebar Column */}
-                    <div className="lg:col-span-4 space-y-8">
-                        {/* GROUPS */}
-                        <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-sm font-black text-gray-400 tracking-widest uppercase">그룹 태그</h3>
-                                <button onClick={() => setIsGroupModalOpen(true)} className="text-blue-500 font-black text-[10px] uppercase hover:underline">편집</button>
+                    <div className="lg:col-span-4 space-y-6">
+                        {/* 📋 사이드바: 그룹 태그 */}
+                        <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm">
+                            <div className="flex justify-between items-center mb-6 px-1">
+                                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">그룹 태그</h3>
+                                <button onClick={() => setIsGroupModalOpen(true)} className="text-blue-500 font-black text-xs hover:underline transition-all">편집</button>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                                {spot.groupName.map((g, i) => (
-                                    <span key={i} onClick={() => navigate(`/spots?group=${encodeURIComponent(g)}`)}
-                                          className="bg-blue-50 text-blue-600 px-4 py-2 rounded-2xl text-[11px] font-black hover:bg-blue-600 hover:text-white transition cursor-pointer shadow-sm shadow-blue-900/5">
-                                        #{g.toUpperCase()}
-                                    </span>
-                                ))}
-                                {spot.groupName.length === 0 && <span className="text-gray-300 text-xs font-bold italic">지정된 그룹이 없습니다.</span>}
+                            <div className="flex flex-wrap gap-2.5">
+                                {spot.groupName.length > 0 ? spot.groupName.map((name, idx) => (
+                                    <span key={idx} className="bg-blue-50/50 text-blue-600 px-4 py-2 rounded-2xl text-xs font-black border border-blue-100/50 shadow-sm">#{name.toUpperCase()}</span>
+                                )) : <span className="text-gray-300 text-xs italic font-bold">지정된 그룹 없음</span>}
                             </div>
                         </div>
 
-                        {/* INFORMATION */}
-                        <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm space-y-8">
-                            <h3 className="text-sm font-black text-gray-400 tracking-widest uppercase">상세 정보</h3>
-                            <div className="space-y-6">
-                                <div>
-                                    <p className="text-[10px] font-black text-blue-500 uppercase mb-2">위치 주소</p>
-                                    <p className="text-gray-900 font-bold leading-relaxed break-keep text-sm">{spot.shortAddress || spot.address}</p>
-                                    {spot.shortAddress && <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">{spot.address}</p>}
+                        {/* 📋 사이드바: 장소 상세 정보 */}
+                        <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm space-y-10">
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">장소 상세 정보</h3>
+                            <div className="space-y-8 px-1">
+                                <div className="space-y-2">
+                                    <p className="text-[10px] font-black text-blue-500 uppercase mb-1 tracking-widest">기본 주소</p>
+                                    <p className="text-gray-900 font-bold text-sm leading-relaxed break-keep">{spot.shortAddress || spot.address}</p>
+                                    {spot.shortAddress && <p className="text-[11px] text-gray-400 font-medium leading-relaxed">{spot.address}</p>}
                                 </div>
                                 {spot.website && (
-                                    <div>
-                                        <p className="text-[10px] font-black text-blue-500 uppercase mb-2">공식 홈페이지</p>
-                                        <a href={spot.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold underline decoration-blue-200 hover:text-blue-800 transition break-all text-xs">
-                                            {spot.website}
-                                        </a>
+                                    <div className="space-y-2">
+                                        <p className="text-[10px] font-black text-blue-500 uppercase mb-1 tracking-widest">홈페이지</p>
+                                        <a href={spot.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold underline transition break-all text-xs">{spot.website}</a>
                                     </div>
                                 )}
                             </div>
@@ -409,8 +312,6 @@ export default function SpotDetailPage() {
                     </div>
                 </div>
 
-                {/* 모달은 그대로 유지 */}
-                <SpotPurchaseModal isOpen={isPurchaseModalOpen} onClose={() => setIsPurchaseModalOpen(false)} onSave={handleSavePurchase} initialData={selectedPurchase} />
                 <SpotGroupModal isOpen={isGroupModalOpen} onClose={() => setIsGroupModalOpen(false)} currentGroups={spot.groupName} onSave={handleSaveGroups} />
             </div>
         </APIProvider>

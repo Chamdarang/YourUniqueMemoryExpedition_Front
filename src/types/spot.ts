@@ -44,16 +44,10 @@ export interface SpotDetailResponse extends SpotResponse {
 
 // 3. [신규] 장소 수정 요청 (SpotUpdateRequest)
 export interface SpotUpdateRequest {
-  spotName: string;
+  customName: string;
   spotType: SpotType;
-  address: string;
-  shortAddress?: string;  // ✅ 신규 필드
-  website?: string;       // ✅ 신규 필드
-  googleMapUrl?: string;  // ✅ 신규 필드
-  lat: number;
-  lng: number;
   isVisit: boolean;
-  description?: string;   // ✅ 신규 필드
+  description?: string;
   metadata: Record<string, any>;
 }
 
