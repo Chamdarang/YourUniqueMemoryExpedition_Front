@@ -255,7 +255,8 @@ export default function HomePage() {
                 </div>
 
                 <div className="h-64 md:h-72 w-full relative border-b border-gray-100 shrink-0">
-                  <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['maps', 'marker']}>
+                  <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'geocoding', 'marker']} language="ko" region="KR" version="beta">
+
                     <Map defaultCenter={{ lat: 34.9858, lng: 135.7588 }} defaultZoom={13} mapId="HOME_MAP_ID" disableDefaultUI={true} className="w-full h-full">
                       <MapDirections schedules={todaySchedules} />
                       <MapUpdater schedules={todaySchedules} activeId={activeScheduleId} activeMoveIndex={activeMovingIndex} />
