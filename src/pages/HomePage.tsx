@@ -149,8 +149,7 @@ export default function HomePage() {
   const [todaySchedules, setTodaySchedules] = useState<DayScheduleResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [scheduleLoading, setScheduleLoading] = useState(false);
-  // const [nowMinutes, setNowMinutes] = useState(getCurrentMinutes());
-  const [nowMinutes, setNowMinutes] = useState(timeToMinutes("11:50"));
+  const [nowMinutes, setNowMinutes] = useState(getCurrentMinutes());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const activeItemRef = useRef<HTMLDivElement>(null);
   const [hasUserScrolled, setHasUserScrolled] = useState(false);
