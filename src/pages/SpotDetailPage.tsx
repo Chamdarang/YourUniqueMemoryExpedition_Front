@@ -13,7 +13,7 @@ import type { SpotType, PurchaseStatus } from '../types/enums';
 
 // Utils & Components
 import { getSpotTypeInfo, SPOT_TYPE_INFO } from '../utils/spotUtils';
-import SpotPurchaseCard from '../components/purchase/SpotPurchaseCard';
+import PurchaseCard from '../components/purchase/PurchaseCard.tsx';
 import SpotGroupModal from '../components/spot/SpotGroupModal';
 import {AdvancedMarker, APIProvider, Map, Pin} from "@vis.gl/react-google-maps";
 
@@ -246,7 +246,7 @@ export default function SpotDetailPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-2">
                                 {/* ✅ 분리된 카드 컴포넌트 적용: 새 아이템 추가 */}
                                 {isAddingPurchase && (
-                                    <SpotPurchaseCard
+                                    <PurchaseCard
                                         mode="add"
                                         form={newPurchase}
                                         onChange={(updates) => setNewPurchase(prev => ({ ...prev, ...updates }))}
@@ -258,7 +258,7 @@ export default function SpotDetailPage() {
 
                                 {/* ✅ 분리된 카드 컴포넌트 적용: 리스트 조회 및 수정 */}
                                 {spot.purchases.map((p: SpotPurchaseResponse) => (
-                                    <SpotPurchaseCard
+                                    <PurchaseCard
                                         key={p.id}
                                         mode={editingPurchaseId === p.id ? 'edit' : 'view'}
                                         data={p}
@@ -317,3 +317,4 @@ export default function SpotDetailPage() {
         </APIProvider>
     );
 }
+//todo: user metadata, spotUser metadata 구분

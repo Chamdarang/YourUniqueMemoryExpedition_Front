@@ -38,8 +38,9 @@ export type PurchaseKind =
   | 'GOSHUINCHO' 
   | 'SOUVENIR' 
   | 'STAMP' 
-  | 'TICKET' 
-  | 'FOOD_ITEM' 
+  | 'TICKET'
+  | 'FOOD_ITEM'
+  | 'GACHA'
   | 'OTHER';
 
 // 5. 구매 상태 (PurchaseStatus.java)

@@ -1,4 +1,3 @@
-import React from 'react';
 import type { SpotPurchaseSaveRequest, SpotPurchaseResponse } from '../../types/purchase';
 import type { PurchaseStatus, PurchaseKind } from '../../types/enums';
 
@@ -14,7 +13,7 @@ interface SpotPurchaseCardProps {
     getStatusInfo: (status: PurchaseStatus) => { label: string; color: string };
 }
 
-export default function SpotPurchaseCard({
+export default function PurchaseCard({
                                              mode, data, form, onChange, onSave, onCancel, onDelete, onEditMode, getStatusInfo
                                          }: SpotPurchaseCardProps) {
 

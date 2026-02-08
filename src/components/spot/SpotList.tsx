@@ -118,11 +118,11 @@ export default function SpotList({ spots, onDelete, onToggleVisit }: Props) {
 
               {/* ✅ 컬럼 비율 설정 (합계 100%) */}
               <colgroup>
-                <col className="w-[10%]" /> {/* 유형 */}
-                <col className="w-[40%]" /> {/* 장소명 (가장 넓게) */}
-                <col className="w-[30%]" /> {/* 주소 */}
-                <col className="w-[10%]" /> {/* 방문여부 */}
-                <col className="w-[10%]" /> {/* 관리 */}
+                <col className="w-[10%]" />
+                <col className="w-[40%]" />
+                <col className="w-[30%]" />
+                <col className="w-[10%]" />
+                <col className="w-[10%]" />
               </colgroup>
 
               <thead className="bg-gray-50">
