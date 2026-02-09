@@ -5,34 +5,36 @@ import type {SpotVisitHistoryResponse} from "./spotVisitHistory.ts";
 
 export interface SpotResponse {
   id: number;
-  placeId?: string;       // ✅ 신규 필드
+  placeId: string;
   spotName: string;
   spotType: SpotType;
   address: string;
-  shortAddress?: string;  // ✅ 신규 필드
-  website?: string;       // ✅ 신규 필드
-  googleMapUrl?: string;  // ✅ 신규 필드
+  shortAddress?: string;  
+  website?: string;       
+  googleMapUrl?: string;  
   lat: number;
   lng: number;
   isVisit: boolean;
-  description?: string;   // ✅ 신규 필드
+  description?: string;   
   metadata: Record<string, unknown>;
+  userMetadata: Record<string, unknown>;
 }
 
 // 2. 장소 생성 요청 (SpotCreateRequest)
 export interface SpotCreateRequest {
-  placeId?: string;       // ✅ 신규 필드
+  placeId?: string;       
   spotName: string;
   spotType: SpotType;
   address: string;
-  shortAddress?: string;  // ✅ 신규 필드
-  website?: string;       // ✅ 신규 필드
-  googleMapUrl?: string;  // ✅ 신규 필드
+  shortAddress?: string;  
+  website?: string;       
+  googleMapUrl?: string;  
   lat: number;
   lng: number;
   isVisit: boolean;
-  description?: string;   // ✅ 신규 필드
+  description?: string;   
   metadata: Record<string, unknown>;
+  //userMetadata: Record<string, unknown>;
 }
 
 // 2. [신규] 상세 조회용 (그룹, 구매 목록 포함)
@@ -44,11 +46,13 @@ export interface SpotDetailResponse extends SpotResponse {
 
 // 3. [신규] 장소 수정 요청 (SpotUpdateRequest)
 export interface SpotUpdateRequest {
-  customName: string;
+  spotName: string;
   spotType: SpotType;
   isVisit: boolean;
   description?: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
+  userMetadata?: Record<string, unknown>;
+  
 }
 
 

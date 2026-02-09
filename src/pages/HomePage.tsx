@@ -254,101 +254,117 @@ export default function HomePage() {
                   <Link to={`/plans/${upcomingPlan.id}`} className="text-sm text-blue-600 font-bold hover:underline">전체 일정</Link>
                 </div>
 
-                <div className="h-64 md:h-72 w-full relative border-b border-gray-100 shrink-0">
-                  <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'geocoding', 'marker']} language="ko" region="KR" version="beta">
+                {todaySchedules.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 p-10 text-center">
+                    <div className="text-4xl mb-4">🗓️</div>
+                    <h3 className="text-gray-800 font-bold text-lg">오늘은 등록된 일정이 없습니다.</h3>
+                    <p className="text-gray-500 text-sm mt-2">
+                      오늘 하루는 자유롭게 탐색하거나<br/>
+                      전체 일정에서 새로운 계획을 추가해 보세요!
+                    </p>
+                    <Link to={`/plans/${upcomingPlan.id}`} className="mt-6 px-6 py-2.5 bg-white border border-blue-200 text-blue-600 rounded-xl font-bold text-sm shadow-sm hover:bg-blue-50 transition">
+                      일정 편집하러 가기
+                    </Link>
+                  </div>
+                ):(
+                    <>
+                      <div className="h-64 md:h-72 w-full relative border-b border-gray-100 shrink-0">
+                        <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'geocoding', 'marker']} language="ko" region="KR" version="beta">
 
-                    <Map defaultCenter={{ lat: 34.9858, lng: 135.7588 }} defaultZoom={13} mapId="HOME_MAP_ID" disableDefaultUI={true} className="w-full h-full">
-                      <MapDirections schedules={todaySchedules} />
-                      <MapUpdater schedules={todaySchedules} activeId={activeScheduleId} activeMoveIndex={activeMovingIndex} />
-                      {todaySchedules.map((schedule, index) => {
-                        const isActive = (schedule.id === activeScheduleId || index === activeMovingIndex);
-                        return <AdvancedMarker key={schedule.id} position={{ lat: Number(schedule.lat), lng: Number(schedule.lng) }} zIndex={isActive ? 100 : 1}>
-                          <NumberedMarker number={index + 1} color={isActive ? "#EF4444" : "#3B82F6"} active={isActive} />
-                        </AdvancedMarker>;
-                      })}
-                    </Map>
-                  </APIProvider>
-                </div>
-
-                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-gray-50 scrollbar-hide relative" onWheel={handleManualScroll} onTouchStart={handleManualScroll}>
-                  <div className="p-4">
-                    {/* ✅ 헤더 영역: 공간을 침범하지 않으면서 최대한 많이 노출하도록 보정 */}
-                    <div className="sticky top-0 bg-gray-50 z-30 border-b border-gray-100/50 flex flex-col py-1">
-                      <div className="flex items-center justify-between gap-3">
-                        {/* 타이틀: shrink-0으로 절대 밀려나지 않게 고정 */}
-                        <span className="text-sm font-black text-gray-800 shrink-0">오늘의 스케줄</span>
-
-                        {/* 💡 핵심 수정 부분: flex-1과 min-w-0으로 '남는 공간'을 계산하고 배지 배치 */}
-                        <div className="flex-1 min-w-0 flex justify-center items-center overflow-hidden">
-                          {currentStatusText && (
-                              <div className="inline-flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100 shadow-sm animate-in fade-in slide-in-from-right-1 w-auto max-w-full">
-                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse shrink-0"></span>
-                                {/* 텍스트는 가용한 공간 안에서만 최대한 노출 후 말줄임표 */}
-                                <span className="text-[10px] font-bold text-blue-700 truncate whitespace-nowrap">
-                                {currentStatusText}
-                              </span>
-                              </div>
-                          )}
-                        </div>
-
-                        {/* 시간 표시: 우측 고정 */}
-                        <span className="text-[10px] text-gray-400 font-mono shrink-0">
-                          {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        </span>
+                          <Map defaultCenter={{ lat: 34.9858, lng: 135.7588 }} defaultZoom={13} mapId="HOME_MAP_ID" disableDefaultUI={true} className="w-full h-full">
+                            <MapDirections schedules={todaySchedules} />
+                            <MapUpdater schedules={todaySchedules} activeId={activeScheduleId} activeMoveIndex={activeMovingIndex} />
+                            {todaySchedules.map((schedule, index) => {
+                              const isActive = (schedule.id === activeScheduleId || index === activeMovingIndex);
+                              return <AdvancedMarker key={schedule.id} position={{ lat: Number(schedule.lat), lng: Number(schedule.lng) }} zIndex={isActive ? 100 : 1}>
+                                <NumberedMarker number={index + 1} color={isActive ? "#EF4444" : "#3B82F6"} active={isActive} />
+                              </AdvancedMarker>;
+                            })}
+                          </Map>
+                        </APIProvider>
                       </div>
-                      <p className="text-[8px] text-orange-400 font-medium leading-none mt-0.5">※ 주황색 시간은 인저리 타임 포함</p>
-                    </div>
 
-                    <div className="space-y-0 mt-2 pb-10 relative z-10">
-                      {todaySchedules.map((item, index) => {
-                        const isActive = (item.id === activeScheduleId);
-                        const isMovingActive = (index === activeMovingIndex);
-                        const typeInfo = getSpotTypeInfo(item.spotType || 'OTHER');
+                      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-gray-50 scrollbar-hide relative" onWheel={handleManualScroll} onTouchStart={handleManualScroll}>
+                        <div className="p-4">
+                          {/* ✅ 헤더 영역: 공간을 침범하지 않으면서 최대한 많이 노출하도록 보정 */}
+                          <div className="sticky top-0 bg-gray-50 z-30 border-b border-gray-100/50 flex flex-col py-1">
+                            <div className="flex items-center justify-between gap-3">
+                              {/* 타이틀: shrink-0으로 절대 밀려나지 않게 고정 */}
+                              <span className="text-sm font-black text-gray-800 shrink-0">오늘의 스케줄</span>
 
-                        const si = parseInjuryFromMemo(item.memo, "#si:");
-                        const mi = parseInjuryFromMemo(item.movingMemo, "#mi:");
+                              {/* 💡 핵심 수정 부분: flex-1과 min-w-0으로 '남는 공간'을 계산하고 배지 배치 */}
+                              <div className="flex-1 min-w-0 flex justify-center items-center overflow-hidden">
+                                {currentStatusText && (
+                                    <div className="inline-flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100 shadow-sm animate-in fade-in slide-in-from-right-1 w-auto max-w-full">
+                                      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse shrink-0"></span>
+                                      {/* 텍스트는 가용한 공간 안에서만 최대한 노출 후 말줄임표 */}
+                                      <span className="text-[10px] font-bold text-blue-700 truncate whitespace-nowrap">
+                                      {currentStatusText}
+                                    </span>
+                                    </div>
+                                )}
+                              </div>
 
-                        return (
-                            <div key={item.id} ref={isActive || isMovingActive ? activeItemRef : null}>
-                              {index > 0 && (item.movingDuration) > 0 && (
-                                  <div className="flex h-12">
-                                    <div className="w-14 shrink-0 text-right pt-3 pr-1"><span className="text-xs text-gray-400 font-mono">{todaySchedules[index - 1].endTime}</span></div>
-                                    <div className="w-10 shrink-0 flex flex-col items-center relative"><div className="w-0.5 bg-gray-200 h-full absolute"></div><div className={`relative z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs border shadow-sm mt-3 ${isMovingActive ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white text-blue-500 border-blue-200'}`}>{getTransIcon(item.transportation)}</div></div>
-                                    <div className="flex-1 min-w-0 py-1 pl-2">
-                                      <div className={`flex items-center gap-2 rounded-lg px-3 py-1.5 border transition-all ${isMovingActive ? 'bg-blue-100 border-blue-300 ring-1 ring-blue-300' : 'bg-white border-blue-50/50'}`}>
-                                        <span className={`text-xs font-bold truncate ${isMovingActive ? 'text-blue-800' : 'text-blue-600'}`}>{cleanMemoTags(item.movingMemo) || `${getTransLabel(item.transportation)} 이동`}</span>
-                                        <span className="text-[10px] font-bold text-gray-500 whitespace-nowrap">
-                                            {item.movingDuration - mi}{mi > 0 && <span className="text-orange-500 ml-0.5">+{mi}</span>}분
+                              {/* 시간 표시: 우측 고정 */}
+                              <span className="text-[10px] text-gray-400 font-mono shrink-0">
+                                {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              </span>
+                            </div>
+                            <p className="text-[8px] text-orange-400 font-medium leading-none mt-0.5">※ 주황색 시간은 인저리 타임 포함</p>
+                          </div>
+
+                          <div className="space-y-0 mt-2 pb-10 relative z-10">
+                            {todaySchedules.map((item, index) => {
+                              const isActive = (item.id === activeScheduleId);
+                              const isMovingActive = (index === activeMovingIndex);
+                              const typeInfo = getSpotTypeInfo(item.spotType || 'OTHER');
+
+                              const si = parseInjuryFromMemo(item.memo, "#si:");
+                              const mi = parseInjuryFromMemo(item.movingMemo, "#mi:");
+
+                              return (
+                                  <div key={item.id} ref={isActive || isMovingActive ? activeItemRef : null}>
+                                    {index > 0 && (item.movingDuration) > 0 && (
+                                        <div className="flex h-12">
+                                          <div className="w-14 shrink-0 text-right pt-3 pr-1"><span className="text-xs text-gray-400 font-mono">{todaySchedules[index - 1].endTime}</span></div>
+                                          <div className="w-10 shrink-0 flex flex-col items-center relative"><div className="w-0.5 bg-gray-200 h-full absolute"></div><div className={`relative z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs border shadow-sm mt-3 ${isMovingActive ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white text-blue-500 border-blue-200'}`}>{getTransIcon(item.transportation)}</div></div>
+                                          <div className="flex-1 min-w-0 py-1 pl-2">
+                                            <div className={`flex items-center gap-2 rounded-lg px-3 py-1.5 border transition-all ${isMovingActive ? 'bg-blue-100 border-blue-300 ring-1 ring-blue-300' : 'bg-white border-blue-50/50'}`}>
+                                              <span className={`text-xs font-bold truncate ${isMovingActive ? 'text-blue-800' : 'text-blue-600'}`}>{cleanMemoTags(item.movingMemo) || `${getTransLabel(item.transportation)} 이동`}</span>
+                                              <span className="text-[10px] font-bold text-gray-500 whitespace-nowrap">
+                                                  {item.movingDuration - mi}{mi > 0 && <span className="text-orange-500 ml-0.5">+{mi}</span>}분
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                    )}
+                                    <div className="flex min-h-[4rem]">
+                                      <div className="w-14 shrink-0 text-right pt-2 pr-1">
+                                        <span className={`text-sm font-bold font-mono ${isActive ? 'text-orange-600 underline decoration-2 underline-offset-4' : 'text-gray-900'}`}>
+                                          {item.startTime?.substring(0, 5)}
                                         </span>
+                                      </div>
+                                      <div className="w-10 shrink-0 flex flex-col items-center relative"><div className="w-0.5 bg-gray-200 h-full absolute"></div><div className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center text-lg border shadow-sm ${isActive ? 'bg-orange-500 border-orange-600 text-white scale-110' : 'bg-white border-gray-200'}`}>{typeInfo.icon}</div></div>
+                                      <div className="flex-1 min-w-0 pb-6 pl-2">
+                                        <div className={`rounded-xl p-3 border shadow-sm transition relative overflow-hidden ${isActive ? 'bg-white border-orange-300 ring-2 ring-orange-100' : 'bg-white border-gray-200'}`}>
+                                          <div className="flex justify-between items-start gap-2">
+                                            <h4 className={`text-sm font-bold truncate flex-1 ${isActive ? 'text-gray-900' : 'text-gray-600'}`}>{item.spotName || "장소 미정"}</h4>
+                                            <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                                                {item.duration - si}{si > 0 && <span className="text-orange-500 ml-0.5">+{si}</span>}분
+                                            </span>
+                                          </div>
+                                          {cleanMemoTags(item.memo) && <p className="text-xs text-gray-500 mt-1 line-clamp-1 italic opacity-80">{cleanMemoTags(item.memo)}</p>}
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
-                              )}
-                              <div className="flex min-h-[4rem]">
-                                <div className="w-14 shrink-0 text-right pt-2 pr-1">
-                                  <span className={`text-sm font-bold font-mono ${isActive ? 'text-orange-600 underline decoration-2 underline-offset-4' : 'text-gray-900'}`}>
-                                    {item.startTime?.substring(0, 5)}
-                                  </span>
-                                </div>
-                                <div className="w-10 shrink-0 flex flex-col items-center relative"><div className="w-0.5 bg-gray-200 h-full absolute"></div><div className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center text-lg border shadow-sm ${isActive ? 'bg-orange-500 border-orange-600 text-white scale-110' : 'bg-white border-gray-200'}`}>{typeInfo.icon}</div></div>
-                                <div className="flex-1 min-w-0 pb-6 pl-2">
-                                  <div className={`rounded-xl p-3 border shadow-sm transition relative overflow-hidden ${isActive ? 'bg-white border-orange-300 ring-2 ring-orange-100' : 'bg-white border-gray-200'}`}>
-                                    <div className="flex justify-between items-start gap-2">
-                                      <h4 className={`text-sm font-bold truncate flex-1 ${isActive ? 'text-gray-900' : 'text-gray-600'}`}>{item.spotName || "장소 미정"}</h4>
-                                      <span className="text-[10px] text-gray-400 whitespace-nowrap">
-                                          {item.duration - si}{si > 0 && <span className="text-orange-500 ml-0.5">+{si}</span>}분
-                                      </span>
-                                    </div>
-                                    {cleanMemoTags(item.memo) && <p className="text-xs text-gray-500 mt-1 line-clamp-1 italic opacity-80">{cleanMemoTags(item.memo)}</p>}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                )}
               </div>
           ) : (
               <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg shrink-0">

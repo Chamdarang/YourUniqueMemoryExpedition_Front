@@ -9,24 +9,15 @@ import { getAllGroups, createGroup, addSpotToGroup, removeSpotFromGroup } from '
 // Types
 import type { SpotDetailResponse, SpotUpdateRequest } from '../types/spot';
 import type { SpotPurchaseSaveRequest, SpotPurchaseResponse } from '../types/purchase';
-import type { SpotType, PurchaseStatus } from '../types/enums';
+import type { SpotType } from '../types/enums';
 
 // Utils & Components
 import { getSpotTypeInfo, SPOT_TYPE_INFO } from '../utils/spotUtils';
-import PurchaseCard from '../components/purchase/PurchaseCard.tsx';
+import PurchaseEditCard from '../components/purchase/PurchaseEditCard.tsx';
 import SpotGroupModal from '../components/spot/SpotGroupModal';
 import {AdvancedMarker, APIProvider, Map, Pin} from "@vis.gl/react-google-maps";
 
-const getStatusInfo = (status: PurchaseStatus) => {
-    switch (status) {
-        case 'WANT': return { label: '🥺 사고 싶음', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' };
-        case 'AVAILABLE': return { label: '🏷️ 판매 중', color: 'bg-blue-100 text-blue-800 border-blue-200' };
-        case 'ACQUIRED': return { label: '🎁 구매 완료', color: 'bg-green-100 text-green-800 border-green-200' };
-        case 'SKIPPED': return { label: '❌ 패스함', color: 'bg-gray-100 text-gray-500 border-gray-200' };
-        case 'UNAVAILABLE': return { label: '🚫 품절/없음', color: 'bg-red-100 text-red-800 border-red-200' };
-        default: return { label: '❓ 상태 미상', color: 'bg-gray-50 text-gray-400 border-gray-100' };
-    }
-};
+// ❌ 기존에 중복 정의되어 있던 getStatusInfo 함수를 삭제했습니다.
 
 export default function SpotDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -56,8 +47,7 @@ export default function SpotDetailPage() {
 
     // 장소 수정 폼 상태
     const [editForm, setEditForm] = useState<SpotUpdateRequest>({
-        spotName: '', spotType: 'OTHER', address: '', shortAddress: '',
-        website: '', googleMapUrl: '', lat: 0, lng: 0,
+        spotName: '', spotType: 'OTHER',
         isVisit: false, description: '', metadata: {}
     });
 
@@ -152,7 +142,7 @@ export default function SpotDetailPage() {
 
     return (
         <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['maps', 'marker']} language="ko">
-            <div className="max-w-6xl mx-auto p-4 md:p-8 pb-32 space-y-6 bg-gray-50/30 min-h-screen">
+            <div className="max-w-6xl mx-auto p-4 md:p-8 pb-32 space-y-6 bg-gray-50/30 min-h-screen font-sans">
 
                 {/* 🏠 메인 정보 카드 */}
                 <div className="bg-white rounded-[2rem] shadow-xl border border-white overflow-hidden flex flex-col lg:flex-row min-h-[450px]">
@@ -244,7 +234,7 @@ export default function SpotDetailPage() {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-2">
-                                {/* ✅ 분리된 카드 컴포넌트 적용: 새 아이템 추가 */}
+                                {/* ✅ getStatusInfo 프롭 제거 (PurchaseCard 내부에서 유틸 사용) */}
                                 {isAddingPurchase && (
                                     <PurchaseCard
                                         mode="add"
@@ -252,13 +242,11 @@ export default function SpotDetailPage() {
                                         onChange={(updates) => setNewPurchase(prev => ({ ...prev, ...updates }))}
                                         onSave={handleAddPurchase}
                                         onCancel={() => setIsAddingPurchase(false)}
-                                        getStatusInfo={getStatusInfo}
                                     />
                                 )}
 
-                                {/* ✅ 분리된 카드 컴포넌트 적용: 리스트 조회 및 수정 */}
                                 {spot.purchases.map((p: SpotPurchaseResponse) => (
-                                    <PurchaseCard
+                                    <PurchaseEditCard
                                         key={p.id}
                                         mode={editingPurchaseId === p.id ? 'edit' : 'view'}
                                         data={p}
@@ -271,7 +259,6 @@ export default function SpotDetailPage() {
                                             setEditingPurchaseId(item.id);
                                             setEditPurchaseForm(item);
                                         }}
-                                        getStatusInfo={getStatusInfo}
                                     />
                                 ))}
                             </div>
@@ -317,4 +304,3 @@ export default function SpotDetailPage() {
         </APIProvider>
     );
 }
-//todo: user metadata, spotUser metadata 구분

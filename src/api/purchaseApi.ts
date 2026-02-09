@@ -1,5 +1,5 @@
 import { fetchWithAuth } from "./utils";
-import type { ApiResponse, Page } from "../types/common";
+import type {ApiResponse, PageResponse} from "../types/common";
 import type { SpotPurchaseResponse, SpotPurchaseSaveRequest, PurchaseSearchParams } from "../types/purchase";
 
 /**
@@ -48,7 +48,7 @@ export const deletePurchase = async (purchaseId: number): Promise<void> => {
  */
 export const getAllPurchases = async (
     params: { page: number; size: number } & PurchaseSearchParams
-): Promise<Page<SpotPurchaseResponse>> => {
+): Promise<PageResponse<SpotPurchaseResponse>> => {
 
   const queryObj: Record<string, string> = {
     page: params.page.toString(),
@@ -61,11 +61,11 @@ export const getAllPurchases = async (
   if (params.category) queryObj.category = params.category;
 
   const query = new URLSearchParams(queryObj).toString();
-  const res = await fetchWithAuth(`/api/purchases/search?${query}`, {
+  const res = await fetchWithAuth(`/api/purchases?${query}`, {
     method: 'GET'
   });
 
-  const json: ApiResponse<Page<SpotPurchaseResponse>> = await res.json();
+  const json: ApiResponse<PageResponse<SpotPurchaseResponse>> = await res.json();
 
   if (!json.success) throw new Error(json.message);
   return json.data;

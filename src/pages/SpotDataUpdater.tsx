@@ -79,13 +79,7 @@ function SpotDataUpdaterContent() {
                     const updateReq: SpotUpdateRequest = {
                         spotName: place.displayName || spot.spotName,
                         spotType: mapGoogleTypeToSpotType(place.types),
-                        address: place.formattedAddress || spot.address,
-                        shortAddress: shortAddr,
-                        website: place.websiteURI || spot.website || '',
-                        googleMapUrl: place.googleMapsURI || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.displayName || '')}&query_place_id=${spot.placeId}`,
                         description: spot.description || '',
-                        lat: place.location?.lat() || spot.lat,
-                        lng: place.location?.lng() || spot.lng,
                         isVisit: spot.isVisit,
                         metadata: {
                             ...spot.metadata,
