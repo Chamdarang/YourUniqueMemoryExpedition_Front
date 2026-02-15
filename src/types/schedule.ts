@@ -1,7 +1,6 @@
 // src/types/schedule.ts
 import type { SpotType, Transportation } from './enums'; 
 
-// ScheduleItemRequest.java (Sync용)
 export interface ScheduleItemRequest {
   id: number | null;
   scheduleOrder: number;
@@ -15,6 +14,8 @@ export interface ScheduleItemRequest {
   duration: number;
   endTime: string | null;
   movingDuration: number;
+  extraDuration: number;
+  extraMovingDuration: number;
   transportation: Transportation;
   memo: string | null;
   movingMemo: string | null;
@@ -23,6 +24,31 @@ export interface ScheduleItemRequest {
 // Sync 요청 DTO
 export interface ScheduleSyncRequest {
   schedules: ScheduleItemRequest[];
+}
+
+export interface ScheduleCreateRequest {
+  scheduleOrder: number; // 추가될 순서
+}
+
+export interface ScheduleUpdateRequest {
+  spotUserId?: number | null;
+  spotName?: string;
+  lat?: number;
+  lng?: number;
+  spotType?: SpotType;
+  startTime?: string;      // "HH:mm" 형식
+  duration?: number;
+  endTime?: string;
+  movingDuration?: number;
+  extraDuration?: number;
+  extraMovingDuration?: number;
+  transportation?: Transportation;
+  memo?: string;
+  movingMemo?: string;
+}
+
+export interface ScheduleReorderRequest {
+  scheduleOrder: number;
 }
 
 export interface DayScheduleResponse {
@@ -39,6 +65,8 @@ export interface DayScheduleResponse {
   duration: number;  // 분 단위 예상
   endTime: string;   // LocalTime -> "HH:mm:ss"
   movingDuration: number; // 이동 시간 (분)
+  extraDuration: number;
+  extraMovingDuration: number;
   transportation: Transportation;
   memo: string;
   movingMemo: string;

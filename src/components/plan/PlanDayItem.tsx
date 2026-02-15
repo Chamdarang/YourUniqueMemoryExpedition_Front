@@ -1,22 +1,22 @@
 import { useState, useEffect } from "react";
-import { useSortable, arrayMove } from "@dnd-kit/sortable";
+import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useSensor, useSensors, PointerSensor, DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 
-import type { DayScheduleResponse } from "../../types/schedule";
+// Types & API
+import type { DayScheduleResponse, ScheduleUpdateRequest } from "../../types/schedule";
 import type { PlanDayResponse } from "../../types/planDay.ts";
-import { recalculateSchedules } from "../../utils/scheduleUtils";
-import { timeToMinutes, minutesToTime } from "../../utils/timeUtils";
-import { syncSchedules } from "../../api/scheduleApi";
 import { updatePlanDay } from "../../api/dayApi";
 
+// ✅ 훅 기반 개별 작업 전환
+import { useSchedule } from "../../hooks/useSchedule";
 import DayScheduleList from "../day/DayScheduleList";
 
 interface Props {
     id: number | string;
     dayOrder: number;
     data?: PlanDayResponse;
-    schedules: DayScheduleResponse[];
+    // schedules Props 제거: 이제 훅이 직접 서버에서 가져오고 관리합니다.
     showInjury: boolean;
     onRefresh: () => void;
     onUpdateDayInfo: (dayId: number, newName: string, newMemo: string) => void;
@@ -33,25 +33,47 @@ interface Props {
 const DAY_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
 const getDayColor = (dayOrder: number) => DAY_COLORS[(dayOrder - 1) % DAY_COLORS.length];
 
-// ❌ decodeTempSpot 제거됨
-
 export default function PlanDayItem({
-                                        id, dayOrder, data, schedules, showInjury, onRefresh, onUpdateDayInfo,
-                                        onSchedulesChange, setDirty, onToggle, pickingTarget, setPickingTarget,
+                                        id, dayOrder, data, showInjury, onUpdateDayInfo,
+                                        onSchedulesChange, onToggle, pickingTarget, setPickingTarget,
                                         isVisibleOnMap, onToggleMapVisibility, onExportDay
                                     }: Props) {
+
+    // ✅ [변경] 개별 스케줄 작업용 훅 연결
+    const {
+        schedules,
+        fetchSchedules,
+        addSchedule,
+        updateSchedule,
+        removeSchedule,
+        toggleVisit,
+        reorderSchedule
+    } = useSchedule();
 
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
     const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 999 : 'auto', opacity: isDragging ? 0.5 : 1 };
 
     const [isExpanded, setIsExpanded] = useState(false);
-    const [isDayDirty, setIsDayDirty] = useState(false);
 
     const [isEditingInfo, setIsEditingInfo] = useState(false);
     const [editTitle, setEditTitle] = useState("");
     const [editMemo, setEditMemo] = useState("");
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+    // ✅ 펼쳐질 때 해당 일차의 스케줄 로드
+    useEffect(() => {
+        if (isExpanded && data?.id) {
+            fetchSchedules(data.id);
+        }
+    }, [isExpanded, data?.id, fetchSchedules]);
+
+    // ✅ 훅의 데이터가 변경될 때마다 부모(지도 핀 등) 동기화
+    useEffect(() => {
+        if (data?.id) {
+            onSchedulesChange(data.id, schedules);
+        }
+    }, [schedules, data?.id]);
 
     useEffect(() => {
         if (data) {
@@ -88,102 +110,40 @@ export default function PlanDayItem({
         }
     };
 
-    const updateLocalSchedules = (newSchedules: DayScheduleResponse[]) => {
-        if (!data) return;
-        const recalculated = recalculateSchedules(newSchedules);
-        onSchedulesChange(data.id, recalculated);
-        setIsDayDirty(true);
-        setDirty(`day-${data.id}`, true);
+    // ✅ [변경] 훅을 통한 개별 업데이트 처리
+    const handleItemUpdate = async (scheduleId: number, req: ScheduleUpdateRequest) => {
+        await updateSchedule(scheduleId, req);
     };
 
-    const handleItemUpdate = (itemId: number, updatedData: any) => {
-        if (!data) return;
-        const index = schedules.findIndex(s => s && s.id === itemId);
-        if (index === -1) return;
+    const handleItemDelete = async (scheduleId: number) => {
+        await removeSchedule(scheduleId);
+    };
 
-        if (updatedData.startTime && index > 0) {
-            const prevItem = schedules[index - 1];
-            if (prevItem) {
-                const prevEndTimeMinutes = timeToMinutes(prevItem.endTime);
-                const movingTime = schedules[index].movingDuration || 0;
-                const newStartTimeMinutes = timeToMinutes(updatedData.startTime);
-                const minPossibleTime = prevEndTimeMinutes + movingTime;
-                if (newStartTimeMinutes < minPossibleTime) {
-                    alert(`시간 설정 오류: ${minutesToTime(minPossibleTime)} 이후로만 가능합니다.`);
-                    return;
-                }
-            }
+    const handleItemInsert = async (orderIndex: number) => {
+        if (data?.id) {
+            await addSchedule(data.id, { scheduleOrder: orderIndex });
         }
-
-        const currentList = schedules.map((item, i) => {
-            if (i === index) return { ...item, ...updatedData };
-            if (i > index) return { ...item, startTime: null };
-            return item;
-        });
-
-        updateLocalSchedules(currentList);
     };
 
-    const handleItemDelete = (itemId: number) => {
-        if (!confirm("삭제하시겠습니까?")) return;
-        updateLocalSchedules(schedules.filter(s => s && s.id !== itemId));
-    };
-
-    const handleItemInsert = (index: number) => {
-        if (!data) return;
-        let startTime = "10:00";
-        if (index > 0 && schedules[index - 1]) startTime = schedules[index - 1].endTime;
-
-        const newItem: DayScheduleResponse = {
-            endTime: "", isVisit: false, lat: 0, lng: 0,
-            id: -Date.now(), dayId: data.id, scheduleOrder: index + 1,
-            spotUserId: 0, // ✅ spotUserId 사용
-            spotName: "", spotType: "OTHER",
-            startTime, duration: 60, movingDuration: 0, transportation: 'WALK', memo: '', movingMemo: ''
-        };
-        const newList = [...schedules];
-        newList.splice(index, 0, newItem);
-        updateLocalSchedules(newList);
-    };
-
-    const handleDragEnd = (event: DragEndEvent) => {
+    const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;
         if (over && active.id !== over.id) {
-            const oldIndex = schedules.findIndex(s => s && s.id === active.id);
-            const newIndex = schedules.findIndex(s => s && s.id === over.id);
-            if (oldIndex !== -1 && newIndex !== -1) {
-                updateLocalSchedules(arrayMove(schedules, oldIndex, newIndex));
+            if (!data?.id) return;
+
+            const scheduleId = Number(active.id);
+            const newIndex = schedules.findIndex(s => s.id === over.id);
+
+            if (newIndex !== -1) {
+                // 사용자님의 API 규격: (dayId, scheduleId, { scheduleOrder })
+                await reorderSchedule(data.id, scheduleId, {
+                    scheduleOrder: newIndex
+                });
             }
         }
-    };
-
-    const handleSaveDay = async (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!data) return;
-
-        // ✅ [수정] decodeTempSpot 제거됨. spotUserId 또는 spotName 확인
-        if (schedules.some(s => (!s.spotUserId || s.spotUserId === 0) && !s.spotName)) {
-            return alert("장소를 선택해주세요.");
-        }
-
-        try {
-            const syncReq = schedules.map((s, idx) => ({
-                ...s,
-                id: s.id < 0 ? null : s.id,
-                scheduleOrder: idx + 1,
-                spotUserId: s.spotUserId === 0 ? null : s.spotUserId // ✅ spotUserId 전송
-            }));
-            await syncSchedules(data.id, { schedules: syncReq });
-            setIsDayDirty(false);
-            setDirty(`day-${data.id}`, false);
-            alert("저장되었습니다.");
-            onRefresh();
-        } catch { alert("저장 실패"); }
     };
 
     if (!data) return null;
     const dayColor = getDayColor(dayOrder);
-    const safeSchedules = (schedules || []).filter(s => s !== undefined && s !== null);
 
     return (
         <div ref={setNodeRef} style={style} className="mb-4">
@@ -237,7 +197,6 @@ export default function PlanDayItem({
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.676 12.553a11.249 11.249 0 01-2.631 4.31l-3.099-3.099a5.25 5.25 0 00-6.71-6.71L7.759 4.577a11.217 11.217 0 014.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113z" /><path d="M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0115.75 12zM12.53 15.713l-4.243-4.244a3.75 3.75 0 004.243 4.243z" /><path d="M6.75 12c0-.619.107-1.213.304-1.764l-3.1-3.1a11.25 11.25 0 00-2.63 4.31c-.12.362-.12.752 0 1.114 1.489 4.467 5.704 7.69 10.675 7.69 1.5 0 2.933-.294 4.242-.827l-2.477-2.477A5.25 5.25 0 016.75 12z" /></svg>
                                     )}
                                 </button>
-                                {isDayDirty && <button onClick={handleSaveDay} className="bg-orange-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-orange-600 shadow-sm transition">저장</button>}
                                 <span className="text-gray-400 text-xs ml-1">{isExpanded ? '▲' : '▼'}</span>
                             </div>
                         )}
@@ -249,14 +208,15 @@ export default function PlanDayItem({
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                             <DayScheduleList
                                 variant="card"
-                                schedules={safeSchedules}
+                                schedules={schedules}
                                 showInjury={showInjury}
                                 onUpdate={handleItemUpdate}
+                                onToggleVisit={toggleVisit}
                                 onDelete={handleItemDelete}
                                 onInsert={handleItemInsert}
                                 pickingTarget={pickingTarget}
                                 setPickingTarget={setPickingTarget}
-                                dayId={data.id}
+                                dayId={data?.id}
                             />
                         </DndContext>
                     </div>

@@ -1,15 +1,14 @@
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-// ✅ [수정 완료] 올바른 상대 경로
 import ScheduleItem from "../schedule/ScheduleItem";
-import type { DayScheduleResponse, ScheduleItemRequest } from "../../types/schedule";
-import type { SpotType } from "../../types/enums";
+import type { DayScheduleResponse, ScheduleUpdateRequest } from "../../types/schedule";
 
 interface Props {
     schedules: DayScheduleResponse[];
     selectedScheduleId?: number | null;
     showInjury: boolean;
     onSelect?: (id: number) => void;
-    onUpdate: (id: number, data: Partial<ScheduleItemRequest> & { spotName?: string, spotType?: SpotType, lat?: number, lng?: number, isVisit?: boolean }) => void;
+    onUpdate: (id: number, req: ScheduleUpdateRequest) => void;
+    onToggleVisit: (id: number) => void;
     onDelete: (id: number) => void;
     onInsert: (index: number) => void;
     variant?: 'page' | 'card';
@@ -19,11 +18,12 @@ interface Props {
 }
 
 export default function DayScheduleList({
-                                            schedules,
+                                            schedules = [], // ✅ 기본값 빈 배열 설정으로 null 방지
                                             selectedScheduleId,
                                             showInjury,
                                             onSelect,
                                             onUpdate,
+                                            onToggleVisit,
                                             onDelete,
                                             onInsert,
                                             variant = 'page',
@@ -36,11 +36,17 @@ export default function DayScheduleList({
         ? "flex-1 overflow-y-auto p-4 pb-24 bg-white scrollbar-hide"
         : "space-y-4";
 
+    // ✅ schedules 내부에 null이나 undefined가 섞이지 않도록 필터링하여 items 생성
+    const validScheduleIds = (schedules || [])
+        .filter(s => s && s.id !== undefined && s.id !== null)
+        .map(s => s.id);
+
     return (
         <div className={containerClass}>
-            <SortableContext items={schedules.map(s => s.id)} strategy={verticalListSortingStrategy}>
+            {/* ✅ 필터링된 ID 배열을 사용하여 'in' operator 에러 방지 */}
+            <SortableContext items={validScheduleIds} strategy={verticalListSortingStrategy}>
                 <div className="space-y-4">
-                    {schedules.length === 0 && (
+                    {(!schedules || schedules.length === 0) && (
                         <div
                             className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 hover:text-blue-500 hover:border-blue-300 transition"
                             onClick={() => onInsert(0)}
@@ -50,36 +56,42 @@ export default function DayScheduleList({
                         </div>
                     )}
 
-                    {schedules.map((schedule, index) => (
-                        <div
-                            key={schedule.id}
-                            className={`transition-all duration-200 ${
-                                selectedScheduleId === schedule.id
-                                    ? 'ring-2 ring-blue-500 ring-offset-2 rounded-xl bg-blue-50/50'
-                                    : ''
-                            }`}
-                            onClick={() => onSelect && onSelect(schedule.id)}
-                        >
-                            <ScheduleItem
-                                schedule={schedule}
-                                index={index}
-                                isLast={index === schedules.length - 1}
-                                showInjury={showInjury}
-                                onUpdate={onUpdate}
-                                onDelete={() => onDelete(schedule.id)}
-                                onInsert={onInsert}
-                                onRequestMapPick={() => {
-                                    if (setPickingTarget && dayId) {
-                                        if (pickingTarget?.scheduleId === schedule.id) setPickingTarget(null);
-                                        else setPickingTarget({ dayId, scheduleId: schedule.id });
-                                    }
-                                }}
-                                isPickingMap={pickingTarget?.scheduleId === schedule.id}
-                            />
-                        </div>
-                    ))}
+                    {(schedules || []).map((schedule, index) => {
+                        // ✅ 각 항목 렌더링 시에도 유효성 검사 추가
+                        if (!schedule || !schedule.id) return null;
 
-                    {schedules.length > 0 && (
+                        return (
+                            <div
+                                key={schedule.id}
+                                className={`transition-all duration-200 ${
+                                    selectedScheduleId === schedule.id
+                                        ? 'ring-2 ring-blue-500 ring-offset-2 rounded-xl bg-blue-50/50'
+                                        : ''
+                                }`}
+                                onClick={() => onSelect && onSelect(schedule.id)}
+                            >
+                                <ScheduleItem
+                                    schedule={schedule}
+                                    index={index}
+                                    isLast={index === (schedules?.length || 0) - 1}
+                                    showInjury={showInjury}
+                                    onUpdate={onUpdate}
+                                    onDelete={onDelete}
+                                    onInsert={onInsert}
+                                    onToggleVisit={onToggleVisit}
+                                    onRequestMapPick={() => {
+                                        if (setPickingTarget && dayId) {
+                                            if (pickingTarget?.scheduleId === schedule.id) setPickingTarget(null);
+                                            else setPickingTarget({ dayId, scheduleId: schedule.id });
+                                        }
+                                    }}
+                                    isPickingMap={pickingTarget?.scheduleId === schedule.id}
+                                />
+                            </div>
+                        );
+                    })}
+
+                    {schedules && schedules.length > 0 && (
                         <button
                             onClick={() => onInsert(schedules.length)}
                             className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 font-bold hover:border-orange-400 hover:text-orange-500 hover:bg-orange-50 transition text-sm"

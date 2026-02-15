@@ -1,8 +1,12 @@
 import { fetchWithAuth } from "./utils";
 import type { ApiResponse } from "../types/common";
-import type { DayScheduleResponse, ScheduleSyncRequest } from "../types/schedule";
+import type {
+  DayScheduleResponse,
+  ScheduleCreateRequest, ScheduleReorderRequest,
+  ScheduleUpdateRequest
+} from "../types/schedule";
 
-// ✅ 수정됨: QueryString(?dayId=) 대신 PathVariable(/day/{id}) 사용
+/** ✅ 1. 특정 날짜의 스케줄 목록 조회 */
 export const getSchedulesByDay = async (dayId: number): Promise<DayScheduleResponse[]> => {
   const res = await fetchWithAuth(`/api/schedules/day/${dayId}`, {
     method: 'GET'
@@ -10,37 +14,63 @@ export const getSchedulesByDay = async (dayId: number): Promise<DayScheduleRespo
 
   const json: ApiResponse<DayScheduleResponse[]> = await res.json();
   if (!json.success) throw new Error(json.message);
-  
-  // scheduleOrder 순서로 정렬해서 반환
+
   return json.data.sort((a, b) => a.scheduleOrder - b.scheduleOrder);
 };
 
-export const syncSchedules = async (dayId: number, req: ScheduleSyncRequest): Promise<DayScheduleResponse[]> => {
-  const res = await fetchWithAuth(`/api/schedules/day/${dayId}/sync`, {
-    method: 'PUT',
+/** ✅ 2. 스케줄 추가 (개별 작업) */
+export const createSchedule = async (dayId: number, req: ScheduleCreateRequest): Promise<DayScheduleResponse[]> => {
+  const res = await fetchWithAuth(`/api/schedules/day/${dayId}`, {
+    method: 'POST',
     body: JSON.stringify(req),
   });
+
   const json: ApiResponse<DayScheduleResponse[]> = await res.json();
   if (!json.success) throw new Error(json.message);
-  // 저장 후 최신 ID가 담긴 리스트를 반환받음
   return json.data.sort((a, b) => a.scheduleOrder - b.scheduleOrder);
 };
 
-export const deleteSchedule = async (scheduleId: number): Promise<void> => {
+/** ✅ 3. 스케줄 수정 (개별 작업) */
+export const updateSchedule = async (scheduleId: number, req: ScheduleUpdateRequest): Promise<DayScheduleResponse[]> => {
+  const res = await fetchWithAuth(`/api/schedules/${scheduleId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(req),
+  });
+
+  const json: ApiResponse<DayScheduleResponse[]> = await res.json();
+  if (!json.success) throw new Error(json.message);
+  return json.data.sort((a, b) => a.scheduleOrder - b.scheduleOrder);
+};
+
+/** ✅ 4. 스케줄 삭제 (개별 작업) */
+export const deleteSchedule = async (scheduleId: number): Promise<DayScheduleResponse[]> => {
   const res = await fetchWithAuth(`/api/schedules/${scheduleId}`, {
     method: 'DELETE'
   });
 
-  const json: ApiResponse<void> = await res.json();
+  const json: ApiResponse<DayScheduleResponse[]> = await res.json();
   if (!json.success) throw new Error(json.message);
+  return json.data.sort((a, b) => a.scheduleOrder - b.scheduleOrder);
 };
 
+/** ✅ 5. 방문 여부 토글 */
 export const toggleScheduleVisit = async (scheduleId: number): Promise<void> => {
   const res = await fetchWithAuth(`/api/schedules/${scheduleId}/visit`, {
     method: 'PATCH'
   });
-  if (res.status === 204) return;
 
   const json = await res.json();
   if (!json.success) throw new Error(json.message);
-}
+};
+
+/** ✅ 6. 스케줄 순서 변경 (개별 작업) */
+export const reorderSchedule = async (dayId: number, scheduleId: number, req: ScheduleReorderRequest): Promise<DayScheduleResponse[]> => {
+  const res = await fetchWithAuth(`/api/schedules/day/${dayId}/${scheduleId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(req),
+  });
+
+  const json: ApiResponse<DayScheduleResponse[]> = await res.json();
+  if (!json.success) throw new Error(json.message);
+  return json.data.sort((a, b) => a.scheduleOrder - b.scheduleOrder);
+};
