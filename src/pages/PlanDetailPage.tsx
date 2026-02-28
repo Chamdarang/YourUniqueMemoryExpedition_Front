@@ -343,18 +343,50 @@ function PlanDetailContent() {
         setMapSchedulesMap(prev => ({ ...prev, [dayId]: newSchedules }));
     }, []);
 
-    const handleCreateNew = async (dayOrder: number) => { await createDayInPlan(planId, dayOrder, `${dayOrder}일차`); fetchPlanDetail(); };
-    const handleImportSelect = async (target: number, source: number) => { await swapPlanDay({ sourceDayId: source, targetPlanId: planId, targetDayOrder: target, swapMode: 'REPLACE' }); fetchPlanDetail(); };
+    const handleCreateNew = async (dayOrder: number) => {
+        try {
+            const newDay = await createDayInPlan(planId, dayOrder, `${dayOrder}일차`);
+
+            setPlan(prev => {
+                if (!prev) return null;
+                // days 배열에 새 일차를 추가하고 정렬
+                const updatedDays = [...prev.days, newDay].sort((a, b) => a.dayOrder - b.dayOrder);
+                return { ...prev, days: updatedDays };
+            });
+        } catch {
+            alert("일차 생성 실패");
+        }
+    };
+    const handleImportSelect = async (target: number, source: number) => {
+        try {
+            await swapPlanDay({ sourceDayId: source, targetPlanId: planId, targetDayOrder: target, swapMode: 'REPLACE' });
+
+            // 데이터 정합성을 위해 이 부분은 전체 로드가 필요할 수 있으나,
+            // 깜빡임을 줄이려면 fetchPlanDetail을 호출하되 loading 상태를 true로 만들지 않고 배경에서 실행하는 것이 좋습니다.
+            const updatedPlan = await getPlanDetail(planId);
+            setPlan(updatedPlan);
+            // ❌ fetchPlanDetail(); 제거 (setLoading(true)가 포함된 함수이므로)
+        } catch {
+            alert("가져오기 실패");
+        }
+    };
 
     const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;
         if (!over || active.id === over.id) return;
         const targetItem = fullDays.find(d => d.id === over.id);
         if (!targetItem) return;
+
         try {
+            // 서버에 순서 변경 요청
             await swapPlanDay({ sourceDayId: Number(active.id), targetPlanId: planId, targetDayOrder: targetItem.dayOrder, swapMode: 'SWAP' });
-            fetchPlanDetail();
-        } catch { alert("순서 변경 실패"); }
+
+            // 💡 중요: fetchPlanDetail() 대신 UI에서 먼저 순서를 바꾸는 '낙관적 업데이트' 적용 가능
+            const updatedPlan = await getPlanDetail(planId);
+            setPlan(updatedPlan);
+        } catch {
+            alert("순서 변경 실패");
+        }
     };
 
     const handleMapClick = useCallback(async (e: any) => {

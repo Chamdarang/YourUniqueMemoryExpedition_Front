@@ -531,8 +531,8 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
                         if (!placePrediction) return null;
                         return (
                             <div key={placePrediction.placeId} onClick={() => handleGoogleSelectSuggestion(suggestion)} className="p-3 border-b hover:bg-blue-50 cursor-pointer flex flex-col gap-0.5">
-                                <span className="text-sm font-bold text-gray-800">{placePrediction.mainText.toString()}</span>
-                                <span className="text-[10px] text-gray-400">{placePrediction.secondaryText.toString()}</span>
+                                <span className="text-sm font-bold text-gray-800">{placePrediction.mainText?.text || placePrediction.text.text || "이름 없음" }</span>
+                                <span className="text-[10px] text-gray-400">{placePrediction.secondaryText?.text || ""}</span>
                             </div>
                         );
                     })}
