@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { SpotResponse } from "../../types/spot";
 
 // Utils
-import { getSpotTypeInfo } from "../../utils/spotUtils"; // ✅ 공통 유틸리티 임포트
+import { getSpotDisplayName, getSpotTypeInfo } from "../../utils/spotUtils"; // ✅ 공통 유틸리티 임포트
 
 interface Props {
     spot: SpotResponse;
@@ -42,7 +42,7 @@ export default function SpotListItem({ spot, onDelete, onToggleVisit }: Props) {
                         to={`/spots/${spot.id}`}
                         className="font-black text-gray-900 hover:text-blue-600 transition-colors truncate block text-sm"
                     >
-                        {spot.spotName}
+                        {getSpotDisplayName(spot)}
                     </Link>
                     <a
                         href={safeGoogleMapUrl}

@@ -11,6 +11,7 @@ export interface ScheduleItemRequest {
   spotType: SpotType | null;
   isChecked: boolean;
   startTime: string | null;
+  fixedStartTime: boolean;
   duration: number;
   endTime: string | null;
   movingDuration: number;
@@ -37,6 +38,7 @@ export interface ScheduleUpdateRequest {
   lng?: number;
   spotType?: SpotType;
   startTime?: string;      // "HH:mm" 형식
+  fixedStartTime?: boolean;
   duration?: number;
   endTime?: string;
   movingDuration?: number;
@@ -62,6 +64,7 @@ export interface DayScheduleResponse {
   lat: number;
   lng: number;
   startTime: string; // LocalTime -> "HH:mm:ss"
+  fixedStartTime: boolean;
   duration: number;  // 분 단위 예상
   endTime: string;   // LocalTime -> "HH:mm:ss"
   movingDuration: number; // 이동 시간 (분)

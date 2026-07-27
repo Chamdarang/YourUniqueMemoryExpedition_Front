@@ -7,7 +7,7 @@ interface Props {
     selectedScheduleId?: number | null;
     showInjury: boolean;
     onSelect?: (id: number) => void;
-    onUpdate: (id: number, req: ScheduleUpdateRequest) => void;
+    onUpdate: (id: number, req: ScheduleUpdateRequest) => Promise<void>;
     onToggleVisit: (id: number) => void;
     onDelete: (id: number) => void;
     onInsert: (index: number) => void;
@@ -15,6 +15,7 @@ interface Props {
     pickingTarget?: { dayId: number, scheduleId: number } | null;
     setPickingTarget?: (target: { dayId: number, scheduleId: number } | null) => void;
     dayId?: number;
+    routeDate?: string;
 }
 
 export default function DayScheduleList({
@@ -29,7 +30,8 @@ export default function DayScheduleList({
                                             variant = 'page',
                                             pickingTarget,
                                             setPickingTarget,
-                                            dayId
+                                            dayId,
+                                            routeDate
                                         }: Props) {
 
     const containerClass = variant === 'page'
@@ -72,8 +74,9 @@ export default function DayScheduleList({
                             >
                                 <ScheduleItem
                                     schedule={schedule}
+                                    previousSchedule={index > 0 ? schedules[index - 1] : null}
+                                    routeDate={routeDate}
                                     index={index}
-                                    isLast={index === (schedules?.length || 0) - 1}
                                     showInjury={showInjury}
                                     onUpdate={onUpdate}
                                     onDelete={onDelete}

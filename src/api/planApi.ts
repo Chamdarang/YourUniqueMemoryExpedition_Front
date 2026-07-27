@@ -1,5 +1,5 @@
 import type {ApiResponse, PageResponse} from "../types/common";
-import type { PlanCreateRequest, PlanDetailResponse, PlanResponse, PlanUpdateRequest } from "../types/plan";
+import type { PlanCreateRequest, PlanDetailResponse, PlanResponse, PlanTransferData, PlanUpdateRequest } from "../types/plan";
 import { fetchWithAuth } from "./utils";
 
 export interface GetPlansParams {
@@ -90,4 +90,40 @@ export const deletePlan = async (id: number): Promise<void> => {
 
     const json = await res.json();
     if (!json.success) throw new Error(json.message);
+};
+
+export const exportPlanData = async (id: number): Promise<PlanTransferData> => {
+  const res = await fetchWithAuth(`/api/plans/${id}/export`, {
+    method: 'GET',
+  });
+  const json: ApiResponse<PlanTransferData> = await res.json();
+  if (!json.success) throw new Error(json.message);
+  return json.data;
+};
+
+export const importPlanData = async (data: PlanTransferData): Promise<PlanResponse> => {
+  const res = await fetchWithAuth('/api/plans/import', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const json: ApiResponse<PlanResponse> = await res.json();
+  if (!json.success) throw new Error(json.message);
+  return json.data;
+};
+
+export const previewPlanSpreadsheet = async (
+  file: File,
+  planName: string,
+  startDate: string,
+): Promise<PlanTransferData> => {
+  const body = new FormData();
+  body.append('file', file);
+  const query = new URLSearchParams({ planName, startDate });
+  const res = await fetchWithAuth(`/api/plans/import/spreadsheet/preview?${query}`, {
+    method: 'POST',
+    body,
+  });
+  const json: ApiResponse<PlanTransferData> = await res.json();
+  if (!json.success) throw new Error(json.message);
+  return json.data;
 };

@@ -1,6 +1,6 @@
 import { fetchWithAuth } from "./utils";
 import type {ApiResponse, PageResponse} from "../types/common";
-import type { SpotPurchaseResponse, SpotPurchaseSaveRequest, PurchaseSearchParams } from "../types/purchase";
+import type { SpotPurchaseResponse, SpotPurchaseSaveRequest, SpotPurchaseUpdateRequest, PurchaseSearchParams } from "../types/purchase";
 
 /**
  * 1. 구매 내역 생성 (POST /api/purchases/spot/{spotId})
@@ -19,7 +19,7 @@ export const createPurchase = async (spotId: number, req: SpotPurchaseSaveReques
 /**
  * 2. 구매 내역 수정 (PATCH /api/purchases/{purchaseId})
  */
-export const updatePurchase = async (purchaseId: number, req: SpotPurchaseSaveRequest): Promise<SpotPurchaseResponse> => {
+export const updatePurchase = async (purchaseId: number, req: SpotPurchaseUpdateRequest): Promise<SpotPurchaseResponse> => {
   const res = await fetchWithAuth(`/api/purchases/${purchaseId}`, {
     method: 'PATCH',
     body: JSON.stringify(req),

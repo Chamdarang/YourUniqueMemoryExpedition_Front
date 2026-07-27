@@ -5,12 +5,15 @@ import { useMapsLibrary, useMap } from "@vis.gl/react-google-maps";
 
 // API & Utils
 import { createSpot, getMySpots } from "../../api/spotApi";
-import { getSpotTypeInfo } from "../../utils/spotUtils";
+import { estimateRoute } from "../../api/routeApi";
+import { getSpotDisplayName, getSpotTypeInfo } from "../../utils/spotUtils";
+import { decodeGooglePolyline } from "../../utils/polylineUtils";
 
 // Types
 import type { DayScheduleResponse, ScheduleUpdateRequest } from "../../types/schedule";
 import type {SpotType, Transportation} from "../../types/enums";
 import type { SpotResponse, SpotCreateRequest } from "../../types/spot";
+import type { RouteEstimateResponse } from "../../types/route";
 
 const mapGoogleTypeToSpotType = (types: string[] = []): SpotType => {
     if (types.includes('restaurant') || types.includes('food')) return 'FOOD';
@@ -23,12 +26,43 @@ const mapGoogleTypeToSpotType = (types: string[] = []): SpotType => {
     return 'OTHER';
 };
 
+const GOOGLE_TYPE_LABELS: Record<string, string> = {
+    restaurant: '음식점',
+    cafe: '카페',
+    coffee_shop: '카페',
+    tourist_attraction: '관광명소',
+    park: '공원',
+    lodging: '숙소',
+    hotel: '호텔',
+    store: '상점',
+    shopping_mall: '쇼핑몰',
+    transit_station: '교통시설',
+    train_station: '기차역',
+    subway_station: '지하철역',
+    bus_station: '버스정류장',
+    museum: '박물관',
+    university: '대학교',
+    school: '학교',
+    hospital: '병원',
+    establishment: '시설',
+    point_of_interest: '명소',
+};
+
+const getGoogleTypeLabel = (spot: SpotResponse) => {
+    const types = Array.isArray(spot.metadata?.googleTypes)
+        ? spot.metadata.googleTypes.filter((type): type is string => typeof type === 'string')
+        : [];
+    return types.map(type => GOOGLE_TYPE_LABELS[type]).find(Boolean) || getSpotTypeInfo(spot.spotType).label;
+};
+
 interface Props {
     schedule: DayScheduleResponse;
+    previousSchedule?: DayScheduleResponse | null;
+    routeDate?: string;
     index: number;
     showInjury: boolean;
     // 훅에서 전달받는 개별 작업 핸들러들
-    onUpdate: (id: number, req: ScheduleUpdateRequest) => void;
+    onUpdate: (id: number, req: ScheduleUpdateRequest) => Promise<void>;
     onDelete: (id: number) => void;
     onInsert: (orderIndex: number) => void;
     onToggleVisit: (id: number) => void;
@@ -77,7 +111,7 @@ const subTimeStr = (startTime: string, duration: number) => {
 const INJURY_OPTIONS = [0, 5, 10, 15];
 
 export default function ScheduleItem({
-                                         schedule, index, showInjury, onUpdate, onDelete, onInsert, onToggleVisit, onRequestMapPick, isPickingMap
+                                         schedule, previousSchedule, routeDate, index, showInjury, onUpdate, onDelete, onInsert, onToggleVisit, onRequestMapPick, isPickingMap
                                      }: Props) {
     // dnd-kit 설정
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: schedule.id });
@@ -95,6 +129,12 @@ export default function ScheduleItem({
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isRegistering, setIsRegistering] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const routePolylineRef = useRef<google.maps.Polyline | null>(null);
+    const autoMovingMemoRef = useRef("");
+    const [routeEstimate, setRouteEstimate] = useState<RouteEstimateResponse | null>(null);
+    const [routeLoading, setRouteLoading] = useState(false);
+    const [routeError, setRouteError] = useState("");
+    const [spotFeedback, setSpotFeedback] = useState<{ type: 'success' | 'info' | 'error', message: string } | null>(null);
 
     const [stayInjury, setStayInjury] = useState(0);
     const [moveInjury, setMoveInjury] = useState(0);
@@ -104,6 +144,7 @@ export default function ScheduleItem({
     const [form, setForm] = useState({
         spotUserId: schedule.spotUserId,
         startTime: schedule.startTime ? schedule.startTime.substring(0, 5) : '',
+        fixedStartTime: schedule.fixedStartTime || false,
         duration: schedule.duration ?? 60,
         transportation: schedule.transportation || 'WALK',
         movingDuration: schedule.movingDuration || 0,
@@ -112,6 +153,113 @@ export default function ScheduleItem({
     });
 
     const [selectedSpotInfo, setSelectedSpotInfo] = useState<{name: string, type: SpotType, lat?: number, lng?: number} | null>(null);
+
+    const supportsAutomaticRoute = (transportation: Transportation) =>
+        transportation !== 'BUS'
+        && transportation !== 'SHIP'
+        && transportation !== 'AIRPLANE';
+
+    const calculateRoute = async (
+        destinationLat?: number,
+        destinationLng?: number,
+        transportation: Transportation = form.transportation,
+    ) => {
+        if (
+            previousSchedule?.lat == null ||
+            previousSchedule?.lng == null ||
+            destinationLat == null ||
+            destinationLng == null
+        ) {
+            setRouteError("이전 장소와 현재 장소의 위치 정보가 필요합니다.");
+            return;
+        }
+        if (!supportsAutomaticRoute(transportation)) {
+            setRouteEstimate(null);
+            setRouteError("이 이동수단은 Google 지도에서 확인 후 소요시간을 직접 입력해 주세요.");
+            return;
+        }
+
+        setRouteLoading(true);
+        setRouteError("");
+        try {
+            const result = await estimateRoute({
+                originLat: previousSchedule.lat,
+                originLng: previousSchedule.lng,
+                destinationLat,
+                destinationLng,
+                transportation,
+                departureTime: routeDate && previousSchedule?.endTime
+                    ? `${routeDate}T${previousSchedule.endTime.substring(0, 8)}`
+                    : undefined,
+            });
+            setRouteEstimate(result);
+            setBaseMove(result.durationMinutes);
+            const generatedMemo = result.movingMemo?.trim();
+            if (generatedMemo) {
+                const previousGeneratedMemo = autoMovingMemoRef.current;
+                setForm(current => {
+                    if (current.movingMemo.trim() && current.movingMemo !== previousGeneratedMemo) {
+                        return current;
+                    }
+                    return { ...current, movingMemo: generatedMemo };
+                });
+                autoMovingMemoRef.current = generatedMemo;
+            }
+        } catch (error) {
+            setRouteEstimate(null);
+            setRouteError(error instanceof Error ? error.message : "경로를 계산하지 못했습니다.");
+        } finally {
+            setRouteLoading(false);
+        }
+    };
+
+    const calculateCurrentRoute = (transportation: Transportation = form.transportation) => {
+        const destination = selectedSpotInfo || (
+            schedule.lat != null && schedule.lng != null
+                ? { lat: schedule.lat, lng: schedule.lng }
+                : null
+        );
+        void calculateRoute(destination?.lat, destination?.lng, transportation);
+    };
+
+    const handleTransportationChange = (transportation: Transportation) => {
+        setForm(current => ({ ...current, transportation }));
+        setRouteEstimate(null);
+        setRouteError("");
+    };
+
+    useEffect(() => {
+        routePolylineRef.current?.setMap(null);
+        routePolylineRef.current = null;
+
+        if (!map || !routeEstimate?.encodedPolyline) return;
+
+        try {
+            const path = decodeGooglePolyline(routeEstimate.encodedPolyline);
+            if (path.length === 0) return;
+
+            const polyline = new google.maps.Polyline({
+                map,
+                path,
+                strokeColor: "#2563EB",
+                strokeOpacity: 0.9,
+                strokeWeight: 5,
+                zIndex: 50,
+            });
+            routePolylineRef.current = polyline;
+
+            const bounds = new google.maps.LatLngBounds();
+            path.forEach(point => bounds.extend(point));
+            map.fitBounds(bounds, 64);
+        } catch (error) {
+            console.warn("Google 경로선을 지도에 표시하지 못했습니다.", error);
+        }
+
+        return () => {
+            routePolylineRef.current?.setMap(null);
+            routePolylineRef.current = null;
+        };
+    }, [map, routeEstimate]);
 
     // 데이터 초기화 및 동기화
     useEffect(() => {
@@ -129,6 +277,7 @@ export default function ScheduleItem({
         setForm({
             spotUserId: schedule.spotUserId,
             startTime: schedule.startTime ? schedule.startTime.substring(0, 5) : '',
+            fixedStartTime: schedule.fixedStartTime || false,
             duration: schedule.duration ?? 60,
             transportation: schedule.transportation || 'WALK',
             movingDuration: schedule.movingDuration || 0,
@@ -150,12 +299,12 @@ export default function ScheduleItem({
     // 장소 검색 로직 (세션 토큰 생성)
     useEffect(() => {
         if (placesLibrary && !sessionToken) setSessionToken(new placesLibrary.AutocompleteSessionToken());
-    }, [placesLibrary]);
+    }, [placesLibrary, sessionToken]);
 
     // 구글/내 장소 검색 실행
     useEffect(() => {
         const safeSearchTerm = searchTerm || "";
-        if (!editMode || safeSearchTerm.trim() === "" || (selectedSpotInfo && safeSearchTerm === selectedSpotInfo.name)) {
+        if (editMode === 'NONE' || safeSearchTerm.trim() === "") {
             setSearchResults([]); return;
         }
         const timer = setTimeout(async () => {
@@ -167,19 +316,30 @@ export default function ScheduleItem({
                 } else {
                     if (!placesLibrary || !sessionToken) return;
                     const request = { input: safeSearchTerm, sessionToken, language: 'ko' };
-                    // @ts-ignore (Places API v3)
                     const { suggestions } = await placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
-                    const mappedResults: SpotResponse[] = suggestions.map((s: any) => {
-                        const p = s.placePrediction;
-                        return { id: 0, placeId: p.placeId, spotName: p.text.text.split(',')[0], address: p.text.text, spotType: 'OTHER' };
+                    const mappedResults = suggestions.flatMap((suggestion): SpotResponse[] => {
+                        const prediction = suggestion.placePrediction;
+                        if (!prediction) return [];
+                        return [{
+                            id: 0,
+                            placeId: prediction.placeId,
+                            spotName: prediction.mainText?.text || prediction.text.text.split(',')[0],
+                            address: prediction.secondaryText?.text || prediction.text.text,
+                            spotType: mapGoogleTypeToSpotType(prediction.types || []),
+                            lat: 0,
+                            lng: 0,
+                            isVisit: false,
+                            metadata: { googleTypes: prediction.types || [] },
+                            userMetadata: {},
+                        }];
                     });
                     setSearchResults(mappedResults);
                     setIsDropdownOpen(true);
                 }
-            } catch (e) { setSearchResults([]); }
+            } catch { setSearchResults([]); }
         }, 300);
         return () => clearTimeout(timer);
-    }, [searchTerm, editMode, searchMode]);
+    }, [searchTerm, editMode, searchMode, placesLibrary, selectedSpotInfo, sessionToken]);
 
     // 외부 클릭 시 드롭다운 닫기
     useEffect(() => {
@@ -194,8 +354,8 @@ export default function ScheduleItem({
     const handleSpotSelect = async (spot: SpotResponse) => {
         if (!spot.id || spot.id === 0) {
             setIsRegistering(true);
+            setSpotFeedback(null);
             try {
-                // @ts-ignore
                 const place = new google.maps.places.Place({ id: spot.placeId });
                 await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location', 'types'] });
                 if (place.location) {
@@ -206,30 +366,51 @@ export default function ScheduleItem({
                         address: place.formattedAddress || spot.address || '',
                         lat: place.location.lat(),
                         lng: place.location.lng(),
-                        isVisit: false
+                        isVisit: false,
+                        metadata: {}
                     };
+                    const mySpots = await getMySpots({ keyword: createReq.spotName, page: 0, size: 50 });
+                    const existingSpot = mySpots.content.find(item => item.placeId === createReq.placeId);
+                    if (existingSpot) {
+                        updateFormWithSpot(existingSpot.id, existingSpot);
+                        setSearchMode('MINE');
+                        setSpotFeedback({ type: 'info', message: '이미 내 장소에 등록되어 있어 기존 장소를 선택했습니다.' });
+                        return;
+                    }
+
                     const savedSpot = await createSpot(createReq);
                     updateFormWithSpot(savedSpot.id, savedSpot);
+                    setSearchMode('MINE');
+                    setSpotFeedback({ type: 'success', message: '내 장소에 등록하고 일정에 선택했습니다.' });
                 }
+            } catch (error) {
+                setSpotFeedback({
+                    type: 'error',
+                    message: error instanceof Error ? error.message : '장소 등록에 실패했습니다.'
+                });
             } finally { setIsRegistering(false); }
         } else {
             updateFormWithSpot(spot.id, spot);
+            setSpotFeedback({ type: 'info', message: '내 장소에서 선택했습니다.' });
         }
     };
 
     const updateFormWithSpot = (id: number, spot: SpotResponse) => {
-        setForm({ ...form, spotUserId: id });
-        setSearchTerm(spot.spotName || "");
-        setSelectedSpotInfo({ name: spot.spotName, type: spot.spotType, lat: spot.lat, lng: spot.lng });
+        setForm(current => ({ ...current, spotUserId: id }));
+        const displayName = getSpotDisplayName(spot);
+        setSearchTerm(displayName);
+        setSelectedSpotInfo({ name: displayName, type: spot.spotType, lat: spot.lat, lng: spot.lng });
         setIsDropdownOpen(false);
+        setRouteEstimate(null);
+        setRouteError("");
     };
 
     // 완료 버튼 클릭 시 개별 업데이트 요청
-    const handleDone = () => {
+    const handleDone = async () => {
         const finalName = (searchTerm || "").trim();
         if (!finalName) return alert("장소 이름을 입력해주세요.");
 
-        let finalSpotInfo = selectedSpotInfo || (schedule.spotName ? { name: schedule.spotName, type: schedule.spotType, lat: schedule.lat, lng: schedule.lng } : null);
+        const finalSpotInfo = selectedSpotInfo || (schedule.spotName ? { name: schedule.spotName, type: schedule.spotType, lat: schedule.lat, lng: schedule.lng } : null);
         if (!finalSpotInfo?.lat) return alert("장소 정보가 없습니다.");
 
         const updatePayload: ScheduleUpdateRequest = {
@@ -239,6 +420,7 @@ export default function ScheduleItem({
             lng: finalSpotInfo.lng,
             spotType: finalSpotInfo.type,
             startTime: form.startTime,
+            fixedStartTime: form.fixedStartTime,
             duration: baseStay + stayInjury,
             movingDuration: baseMove + moveInjury,
             extraDuration: stayInjury,
@@ -248,8 +430,12 @@ export default function ScheduleItem({
             movingMemo: form.movingMemo
         };
 
-        onUpdate(schedule.id, updatePayload); // 훅의 함수 호출
-        setEditMode('NONE');
+        try {
+            await onUpdate(schedule.id, updatePayload);
+            setEditMode('NONE');
+        } catch (error) {
+            alert(error instanceof Error ? error.message : "스케줄 수정에 실패했습니다.");
+        }
     };
 
     const handleCancel = () => {
@@ -269,6 +455,80 @@ export default function ScheduleItem({
         const labels: Record<string, string> = { WALK: '도보', BUS: '버스', TRAIN: '열차', TAXI: '택시', SHIP: '배', AIRPLANE: '비행기' };
         return labels[type] || '이동';
     };
+
+    const routeDestination = selectedSpotInfo || (
+        schedule.lat != null && schedule.lng != null
+            ? { lat: schedule.lat, lng: schedule.lng }
+            : null
+    );
+    const googleMapsDirectionsUrl = previousSchedule?.lat != null
+        && previousSchedule?.lng != null
+        && routeDestination?.lat != null
+        && routeDestination?.lng != null
+        ? `https://www.google.com/maps/dir/?api=1&origin=${previousSchedule.lat},${previousSchedule.lng}&destination=${routeDestination.lat},${routeDestination.lng}&travelmode=transit`
+        : null;
+
+    const routeEstimator = index > 0 ? (
+        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/70 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                    <div className="text-xs font-black text-blue-800">
+                        {form.transportation === 'TRAIN' ? 'NAVITIME 열차 소요시간' : 'Google Maps 이동시간'}
+                    </div>
+                    <div className="mt-0.5 truncate text-[10px] text-blue-500">
+                        {previousSchedule?.spotName || "이전 장소"} → {selectedSpotInfo?.name || schedule.spotName || "현재 장소"}
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    disabled={routeLoading || isRegistering || !supportsAutomaticRoute(form.transportation)}
+                    onClick={() => calculateCurrentRoute()}
+                    className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 shadow-sm hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                    {isRegistering ? "장소 등록 중…" : routeLoading ? "검색 중…" : routeEstimate ? "다시 검색" : "소요시간 검색"}
+                </button>
+            </div>
+            <select
+                className="mb-2 w-full rounded-lg border border-blue-200 bg-white p-2 text-sm font-bold text-blue-900 outline-none focus:ring-2 focus:ring-blue-300"
+                value={form.transportation}
+                onChange={event => handleTransportationChange(event.target.value as Transportation)}
+            >
+                <option value="WALK">🚶 도보</option>
+                <option value="BUS">🚌 버스·대중교통</option>
+                <option value="TRAIN">🚆 전철·대중교통</option>
+                <option value="TAXI">🚕 택시·자동차</option>
+                <option value="BICYCLE">🚲 자전거</option>
+                <option value="MOTORCYCLE">🏍️ 오토바이</option>
+                <option value="SHIP">⛴️ 배 (수동 입력)</option>
+                <option value="AIRPLANE">✈️ 항공 (수동 입력)</option>
+            </select>
+            {(form.transportation === 'BUS' || form.transportation === 'TRAIN') && googleMapsDirectionsUrl && (
+                <a
+                    href={googleMapsDirectionsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mb-2 block rounded-lg border border-blue-200 bg-white px-3 py-2 text-center text-xs font-bold text-blue-700 shadow-sm hover:bg-blue-100"
+                >
+                    Google 지도에서 경로 확인
+                </a>
+            )}
+            {routeEstimate && (
+                <div className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-sm shadow-sm">
+                    <span className="shrink-0 font-bold text-blue-900">
+                        약 {routeEstimate.durationMinutes}분
+                    </span>
+                    <span className="truncate text-xs text-gray-500">
+                        {(routeEstimate.distanceMeters / 1000).toFixed(1)}km · 일정에 자동 반영
+                    </span>
+                </div>
+            )}
+            {routeError && (
+                <div className="rounded-lg bg-white px-3 py-2 text-xs font-medium text-orange-600">
+                    {routeError}
+                </div>
+            )}
+        </div>
+    ) : null;
 
     const timeDisplay = schedule.startTime ? `${schedule.startTime.substring(0, 5)} - ${spotEndTime}` : "시간 미정";
     const durationDisplay = `체류 ${formatDurationWithInjury(schedule.duration, stayInjury, showInjury)}`;
@@ -323,8 +583,9 @@ export default function ScheduleItem({
                                             </div>
                                             <div className="text-right mt-2 text-xs font-bold text-gray-500">총 {formatSimple(baseMove + moveInjury)}</div>
                                         </div>
+                                        {routeEstimator}
                                         <div className="grid grid-cols-2 gap-3 mb-3">
-                                            <div><label className="text-xs text-blue-600 font-bold mb-1 block">수단</label><select className="w-full p-2 border border-blue-200 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-300" value={form.transportation} onChange={e => setForm({...form, transportation: e.target.value as Transportation})}><option value="WALK">🚶 도보</option><option value="BUS">🚌 버스</option><option value="TRAIN">🚃 열차</option><option value="TAXI">🚕 택시</option><option value="SHIP">🚢 배</option><option value="AIRPLANE">✈️ 비행기</option></select></div>
+                                            <div><label className="text-xs text-blue-600 font-bold mb-1 block">수단</label><select className="w-full p-2 border border-blue-200 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-300" value={form.transportation} onChange={e => handleTransportationChange(e.target.value as Transportation)}><option value="WALK">🚶 도보</option><option value="BUS">🚌 버스</option><option value="TRAIN">🚃 열차</option><option value="TAXI">🚕 택시</option><option value="SHIP">🚢 배</option><option value="AIRPLANE">✈️ 비행기</option></select></div>
                                             <div><label className="text-xs text-blue-600 font-bold mb-1 block">이동 메모</label><input type="text" className="w-full p-2 border border-blue-200 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-300" placeholder="예) 205번 버스" value={form.movingMemo} onChange={e => setForm({...form, movingMemo: e.target.value})} /></div>
                                         </div>
                                         <div className="flex gap-2"><button onClick={handleCancel} className="flex-1 bg-white border border-blue-200 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">취소</button><button onClick={handleDone} className="flex-1 bg-blue-500 text-white py-2 rounded-lg text-sm font-bold hover:bg-blue-600">확인</button></div>
@@ -373,6 +634,7 @@ export default function ScheduleItem({
                                                 <span className="whitespace-nowrap">{durationDisplay}</span>
                                             </div>
                                             {schedule.movingDuration > 0 && <span className="text-xs text-blue-500 bg-blue-50 px-2 py-0.5 rounded flex items-center gap-1 font-medium whitespace-nowrap">⏱ {schedule.movingDuration}분 이동</span>}
+                                            {schedule.fixedStartTime && <span className="text-xs text-violet-600 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded font-bold whitespace-nowrap">📌 시작 고정</span>}
                                         </div>
                                     </div>
                                 </div>
@@ -395,6 +657,17 @@ export default function ScheduleItem({
                                         <button onClick={() => setSearchMode('GOOGLE')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${searchMode === 'GOOGLE' ? 'bg-white text-orange-500 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>구글 검색</button>
                                     </div>
                                     <input type="text" className={`w-full p-3 border rounded-xl font-bold outline-none transition ${searchMode === 'MINE' ? 'bg-blue-50/50 border-blue-100 focus:bg-white focus:ring-2 focus:ring-blue-300 text-blue-900 placeholder-blue-300' : 'bg-orange-50/50 border-orange-100 focus:bg-white focus:ring-2 focus:ring-orange-300 text-orange-900 placeholder-orange-300'}`} placeholder="장소 검색..." value={searchTerm} onFocus={() => { if(searchTerm.trim()) setIsDropdownOpen(true); }} onChange={(e) => { setSearchTerm(e.target.value); setIsDropdownOpen(e.target.value.trim() !== ""); }} />
+                                    {spotFeedback && (
+                                        <div className={`mt-2 rounded-lg border px-3 py-2 text-xs font-bold ${
+                                            spotFeedback.type === 'error'
+                                                ? 'border-red-200 bg-red-50 text-red-600'
+                                                : spotFeedback.type === 'success'
+                                                    ? 'border-green-200 bg-green-50 text-green-700'
+                                                    : 'border-blue-200 bg-blue-50 text-blue-700'
+                                        }`}>
+                                            {spotFeedback.message}
+                                        </div>
+                                    )}
                                     {searchMode === 'GOOGLE' && (
                                         <p className="mt-2 ml-1 text-[11px] text-orange-400 font-bold animate-pulse">
                                             💡 주변에 무엇이 있는지 모를 땐 '탐색'에서 찾아보는 것을 권장합니다!
@@ -413,14 +686,19 @@ export default function ScheduleItem({
                                                              onClick={() => handleSpotSelect(spot)}>
                                                             <div className="flex items-center gap-2">
                                                                 <span
-                                                                    className="font-bold text-gray-900 text-sm leading-tight">{spot.spotName}</span>
+                                                                    className="font-bold text-gray-900 text-sm leading-tight">{getSpotDisplayName(spot)}</span>
                                                                 {isGoogle && (
                                                                     <span
                                                                         className="text-[9px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded font-black border border-blue-100">GOOGLE</span>
                                                                 )}
                                                             </div>
                                                             <span
-                                                                className="text-[11px] text-gray-400 truncate leading-normal">{spot.address}</span>
+                                                                className="text-[11px] text-gray-500 leading-normal">{spot.address || '주소 정보 없음'}</span>
+                                                            {isGoogle && (
+                                                                <span className="text-[10px] font-bold text-blue-500">
+                                                                    유형: {getGoogleTypeLabel(spot)}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     );
                                                 }
@@ -429,8 +707,25 @@ export default function ScheduleItem({
                                     )}
                                 </div>
 
+                                {routeEstimator}
+
                                 <div className="grid grid-cols-2 gap-4 mb-4">
-                                    <div><label className="text-sm text-gray-500 font-bold block mb-1">시작 시간</label><input type="time" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm font-bold outline-none" value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})} /></div>
+                                    <div>
+                                        <div className="mb-1 flex items-center justify-between gap-2">
+                                            <label className="text-sm text-gray-500 font-bold">시작 시간</label>
+                                            <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-bold text-violet-600" title="앞 일정 종료시간과 관계없이 입력한 시간부터 시작합니다.">
+                                                <input
+                                                    type="checkbox"
+                                                    className="accent-violet-600"
+                                                    checked={form.fixedStartTime}
+                                                    onChange={e => setForm({...form, fixedStartTime: e.target.checked})}
+                                                />
+                                                시간 고정
+                                            </label>
+                                        </div>
+                                        <input type="time" className={`w-full p-3 border rounded-xl text-sm font-bold outline-none ${form.fixedStartTime ? 'border-violet-300 bg-violet-50 text-violet-900' : 'border-gray-200 bg-gray-50'}`} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})} />
+                                        {form.fixedStartTime && <p className="mt-1 text-[10px] font-medium text-violet-500">앞 일정과 이어 계산하지 않습니다.</p>}
+                                    </div>
                                     <div><label className="text-sm text-gray-500 font-bold block mb-1">기본 체류(분)</label><input type="number" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm font-bold outline-none" value={baseStay} onChange={e => setBaseStay(Math.max(0, Number(e.target.value)))} /></div>
                                 </div>
 

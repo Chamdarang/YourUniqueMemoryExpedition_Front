@@ -1,25 +1,23 @@
 // src/router.tsx
+import { lazy } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 // Pages
-import HomePage from "./pages/HomePage";
-import LoginPage from "./pages/LoginPage";
-import ExplorePage from "./pages/ExplorePage";
-
-import PlanListPage from "./pages/PlanListPage";
-import PlanCreatePage from "./pages/PlanCreatePage";
-import PlanDetailPage from "./pages/PlanDetailPage";
-
-import DayListPage from "./pages/DayListPage";
-import DayDetailPage from "./pages/DayDetailPage";
-
-import SpotListPage from "./pages/SpotListPage";
-import SpotDetailPage from "./pages/SpotDetailPage";
+const HomePage = lazy(() => import("./pages/HomePage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const ExplorePage = lazy(() => import("./pages/ExplorePage"));
+const PlanListPage = lazy(() => import("./pages/PlanListPage"));
+const PlanCreatePage = lazy(() => import("./pages/PlanCreatePage"));
+const PlanDetailPage = lazy(() => import("./pages/PlanDetailPage"));
+const DayListPage = lazy(() => import("./pages/DayListPage"));
+const DayDetailPage = lazy(() => import("./pages/DayDetailPage"));
+const SpotListPage = lazy(() => import("./pages/SpotListPage"));
+const SpotDetailPage = lazy(() => import("./pages/SpotDetailPage"));
+const SpotDataUpdater = lazy(() => import("./pages/SpotDataUpdater"));
 
 // Components
 import Layout from "./components/common/Layout";
 import {PrivateRoute, PublicRoute} from "./components/auth/RouteGuard.tsx";
-import SpotDataUpdater from "./pages/SpotDataUpdater.tsx";
 
 export const router = createBrowserRouter([
     {

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
 // API
-import { getPlans, deletePlan, updatePlan, type GetPlansParams } from '../api/planApi';
+import { getPlans, deletePlan, importPlanData, previewPlanSpreadsheet, updatePlan, type GetPlansParams } from '../api/planApi';
 
 // Types & Utils
-import type { PlanResponse } from '../types/plan';
+import type { PlanResponse, PlanTransferData } from '../types/plan';
 import { getDurationInfo } from '../utils/timeUtils';
 
 // Components
@@ -14,6 +14,8 @@ import PlanFilter, { type PlanStatus, type SearchParams } from '../components/pl
 import Pagination from '../components/common/Pagination'; // ✅ 페이지네이션 컴포넌트
 
 export default function PlanListPage() {
+  const navigate = useNavigate();
+  const importInputRef = useRef<HTMLInputElement>(null);
   // 데이터 상태
   const [plans, setPlans] = useState<PlanResponse[]>([]);
 
@@ -21,24 +23,29 @@ export default function PlanListPage() {
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
-  const [currentSearchParams, setCurrentSearchParams] = useState<SearchParams>({ selectedMonths: [] }); // 현재 검색 조건 저장
+  const currentSearchParamsRef = useRef<SearchParams>({ startDate: '', endDate: '', selectedMonths: [] });
 
   const [viewStatus, setViewStatus] = useState<PlanStatus>('ALL');
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
+  const [spreadsheetFile, setSpreadsheetFile] = useState<File | null>(null);
+  const [spreadsheetName, setSpreadsheetName] = useState('');
+  const [spreadsheetStartDate, setSpreadsheetStartDate] = useState('');
+  const [spreadsheetPreview, setSpreadsheetPreview] = useState<PlanTransferData | null>(null);
 
   // 수정 팝업 상태
   const [editingPlan, setEditingPlan] = useState<PlanResponse | null>(null);
   const [editForm, setEditForm] = useState({ planName: '', planStartDate: '', planEndDate: '', planMemo: '' });
 
   // 1. 목록 불러오기 (페이징 적용)
-  const fetchPlans = async (searchParams?: SearchParams, pageNum: number = 0) => {
+  const fetchPlans = useCallback(async (searchParams?: SearchParams, pageNum: number = 0) => {
     setLoading(true);
     try {
       // 검색 조건이 새로 들어오면 저장, 아니면 기존 저장된 조건 사용
-      const paramsToUse = searchParams || currentSearchParams;
+      const paramsToUse = searchParams || currentSearchParamsRef.current;
 
       if (searchParams) {
-        setCurrentSearchParams(searchParams);
+        currentSearchParamsRef.current = searchParams;
         setPage(0); // 검색 조건이 바뀌면 1페이지(0)로 리셋
         pageNum = 0;
       }
@@ -64,10 +71,10 @@ export default function PlanListPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // 초기 로드
-  useEffect(() => { fetchPlans(); }, []);
+  useEffect(() => { void fetchPlans(); }, [fetchPlans]);
 
   // ✅ 페이지 변경 핸들러
   const handlePageChange = (newPage: number) => {
@@ -134,6 +141,78 @@ export default function PlanListPage() {
 
   const durationInfo = getDurationInfo(editForm.planStartDate, editForm.planEndDate);
 
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (/\.(xlsx|xls)$/i.test(file.name)) {
+      setSpreadsheetFile(file);
+      setSpreadsheetName(file.name.replace(/\.(xlsx|xls)$/i, ''));
+      setSpreadsheetStartDate('');
+      setSpreadsheetPreview(null);
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const parsed = JSON.parse(await file.text()) as PlanTransferData;
+      if (parsed?.formatVersion !== 1 || !parsed.planName || !Array.isArray(parsed.days)) {
+        throw new Error("YUME에서 내보낸 계획 JSON 파일이 아닙니다.");
+      }
+      const imported = await importPlanData(parsed);
+      alert("새 여행 계획으로 불러왔습니다.");
+      navigate(`/plans/${imported.id}`);
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "계획을 불러오지 못했습니다.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const closeSpreadsheetImport = () => {
+    if (importing) return;
+    setSpreadsheetFile(null);
+    setSpreadsheetPreview(null);
+  };
+
+  const handleSpreadsheetPreview = async () => {
+    if (!spreadsheetFile) return;
+    if (!spreadsheetName.trim()) return alert("여행 이름을 입력해 주세요.");
+    if (!spreadsheetStartDate) return alert("여행 시작일을 입력해 주세요.");
+
+    setImporting(true);
+    try {
+      const preview = await previewPlanSpreadsheet(
+        spreadsheetFile,
+        spreadsheetName.trim(),
+        spreadsheetStartDate,
+      );
+      setSpreadsheetPreview(preview);
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "엑셀을 분석하지 못했습니다.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleSpreadsheetImport = async () => {
+    if (!spreadsheetPreview) return;
+    setImporting(true);
+    try {
+      const imported = await importPlanData(spreadsheetPreview);
+      alert("엑셀 계획을 새 여행으로 불러왔습니다.");
+      navigate(`/plans/${imported.id}`);
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "계획을 불러오지 못했습니다.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
       <div className="max-w-5xl mx-auto p-4 md:p-6 pb-20">
 
@@ -145,9 +224,26 @@ export default function PlanListPage() {
             <p className="text-gray-500 mt-1 md:mt-2 text-sm">총 <span className="text-blue-600 font-bold">{totalElements}</span>개의 여행</p>
           </div>
 
-          <Link to="/plans/create" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 md:px-5 rounded-xl shadow transition text-sm flex items-center gap-2 shrink-0 h-10 md:h-auto">
-            <span>+</span> 새 여행
-          </Link>
+          <div className="flex items-center gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json,.xlsx,.xls,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+            <button
+              type="button"
+              disabled={importing}
+              onClick={() => importInputRef.current?.click()}
+              className="border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold py-2.5 px-3 md:px-4 rounded-xl shadow-sm transition text-sm shrink-0 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {importing ? '불러오는 중...' : '📂 불러오기'}
+            </button>
+            <Link to="/plans/create" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 md:px-5 rounded-xl shadow transition text-sm flex items-center gap-2 shrink-0 h-10 md:h-auto">
+              <span>+</span> 새 여행
+            </Link>
+          </div>
         </div>
 
         {/* 필터 */}
@@ -238,6 +334,128 @@ export default function PlanListPage() {
                 </form>
               </div>
             </div>
+        )}
+
+        {spreadsheetFile && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 md:p-8 shadow-2xl">
+              <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-extrabold text-gray-900">📊 Excel 계획 불러오기</h3>
+                  <p className="mt-1 text-xs text-gray-500">{spreadsheetFile.name}</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={importing}
+                  onClick={closeSpreadsheetImport}
+                  className="text-xl text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {!spreadsheetPreview ? (
+                <div className="space-y-5">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-bold text-gray-700">여행 이름</label>
+                    <input
+                      value={spreadsheetName}
+                      onChange={event => setSpreadsheetName(event.target.value)}
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      maxLength={200}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-bold text-gray-700">여행 시작일</label>
+                    <input
+                      type="date"
+                      value={spreadsheetStartDate}
+                      onChange={event => setSpreadsheetStartDate(event.target.value)}
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    />
+                    <p className="mt-2 text-xs leading-relaxed text-gray-400">
+                      엑셀의 일자 열에 연도와 월이 없을 수 있어 첫날 날짜를 기준으로 일차별 날짜를 계산합니다.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs leading-relaxed text-blue-700">
+                    `일자 / 목적 / 시작시간 / 소요시간 / 종료시간 / 비고` 열을 찾아 일정으로 변환합니다.
+                    이동 행은 목적지와 이동수단을 추출하고, 바로 다음 활동 행과 자동으로 묶습니다.
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      disabled={importing}
+                      onClick={closeSpreadsheetImport}
+                      className="flex-1 rounded-xl bg-gray-100 py-3 font-bold text-gray-600 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      disabled={importing}
+                      onClick={handleSpreadsheetPreview}
+                      className="flex-[2] rounded-xl bg-blue-600 py-3 font-bold text-white shadow hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {importing ? '분석 중...' : '미리보기 만들기'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="mb-5 grid grid-cols-3 gap-3">
+                    <div className="rounded-xl bg-blue-50 p-3 text-center">
+                      <div className="text-lg font-black text-blue-700">{spreadsheetPreview.planDays}</div>
+                      <div className="text-[11px] font-bold text-blue-400">일차</div>
+                    </div>
+                    <div className="rounded-xl bg-blue-50 p-3 text-center">
+                      <div className="text-lg font-black text-blue-700">
+                        {spreadsheetPreview.days.reduce((sum, day) => sum + day.schedules.length, 0)}
+                      </div>
+                      <div className="text-[11px] font-bold text-blue-400">일정</div>
+                    </div>
+                    <div className="rounded-xl bg-blue-50 p-3 text-center">
+                      <div className="truncate text-sm font-black text-blue-700">{spreadsheetPreview.planStartDate}</div>
+                      <div className="text-[11px] font-bold text-blue-400">시작일</div>
+                    </div>
+                  </div>
+
+                  <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-1">
+                    {spreadsheetPreview.days.map(day => (
+                      <div key={day.dayOrder} className="rounded-xl border border-gray-200 p-4">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <h4 className="font-extrabold text-gray-800">{day.dayName}</h4>
+                          <span className="shrink-0 text-xs font-bold text-blue-600">{day.schedules.length}개 일정</span>
+                        </div>
+                        <p className="text-xs leading-relaxed text-gray-500">
+                          {day.schedules.slice(0, 5).map(schedule => schedule.spotName).filter(Boolean).join(' → ')}
+                          {day.schedules.length > 5 ? ' → …' : ''}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 flex gap-3">
+                    <button
+                      type="button"
+                      disabled={importing}
+                      onClick={() => setSpreadsheetPreview(null)}
+                      className="flex-1 rounded-xl bg-gray-100 py-3 font-bold text-gray-600 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      다시 설정
+                    </button>
+                    <button
+                      type="button"
+                      disabled={importing}
+                      onClick={handleSpreadsheetImport}
+                      className="flex-[2] rounded-xl bg-blue-600 py-3 font-bold text-white shadow hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {importing ? '등록 중...' : '새 계획으로 등록'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
   );

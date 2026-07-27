@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 // API
@@ -12,7 +12,7 @@ import type { SpotPurchaseSaveRequest, SpotPurchaseResponse } from '../types/pur
 import type { SpotType } from '../types/enums';
 
 // Utils & Components
-import { getSpotTypeInfo, SPOT_TYPE_INFO } from '../utils/spotUtils';
+import { getSpotDisplayName, getSpotTypeInfo, SPOT_TYPE_INFO } from '../utils/spotUtils';
 import PurchaseEditCard from '../components/purchase/PurchaseEditCard.tsx';
 import SpotGroupModal from '../components/spot/SpotGroupModal';
 import {AdvancedMarker, APIProvider, Map, Pin} from "@vis.gl/react-google-maps";
@@ -53,22 +53,22 @@ export default function SpotDetailPage() {
 
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
 
-    const fetchDetail = async () => {
+    const fetchDetail = useCallback(async () => {
         if (!id) return;
         try {
             setLoading(true);
             const data = await getSpotDetail(Number(id));
             setSpot(data);
             setEditForm({
-                spotName: data.spotName, spotType: data.spotType, address: data.address,
+                spotName: getSpotDisplayName(data), spotType: data.spotType, address: data.address,
                 shortAddress: data.shortAddress || '', website: data.website || '',
                 googleMapUrl: data.googleMapUrl || '', lat: data.lat, lng: data.lng,
                 isVisit: data.isVisit, description: data.description || '', metadata: data.metadata || {}
             });
-        } catch (err) { navigate('/spots'); } finally { setLoading(false); }
-    };
+        } catch { navigate('/spots'); } finally { setLoading(false); }
+    }, [id, navigate]);
 
-    useEffect(() => { fetchDetail(); }, [id]);
+    useEffect(() => { void fetchDetail(); }, [fetchDetail]);
 
     const handleUpdateSpot = async () => {
         if (!id) return;
@@ -171,7 +171,7 @@ export default function SpotDetailPage() {
                                 </div>
                             ) : (
                                 <div>
-                                    <h1 className="text-3xl md:text-5xl font-black text-gray-900 leading-tight break-keep tracking-tight">{spot.spotName}</h1>
+                                    <h1 className="text-3xl md:text-5xl font-black text-gray-900 leading-tight break-keep tracking-tight">{getSpotDisplayName(spot)}</h1>
                                     <div className="flex flex-wrap items-center gap-3 mt-4">
                                         <span className={`px-4 py-2 rounded-xl text-sm font-black shadow-sm flex items-center gap-2 ${currentTypeInfo.color}`}>
                                             {currentTypeInfo.icon} {currentTypeInfo.label}
@@ -236,7 +236,7 @@ export default function SpotDetailPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-2">
                                 {/* ✅ getStatusInfo 프롭 제거 (PurchaseCard 내부에서 유틸 사용) */}
                                 {isAddingPurchase && (
-                                    <PurchaseCard
+                                    <PurchaseEditCard
                                         mode="add"
                                         form={newPurchase}
                                         onChange={(updates) => setNewPurchase(prev => ({ ...prev, ...updates }))}

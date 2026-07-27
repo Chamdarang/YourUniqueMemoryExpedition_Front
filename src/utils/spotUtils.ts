@@ -1,4 +1,5 @@
 import type { SpotType } from "../types/enums";
+import type { SpotResponse } from "../types/spot";
 
 // 타입별 설정 (라벨, Tailwind 색상, Hex 색상)
 export const SPOT_TYPE_INFO: Record<string, { label: string; color: string; hex: string; icon: string }> = {
@@ -21,3 +22,7 @@ export const SPOT_TYPE_INFO: Record<string, { label: string; color: string; hex:
 export const getSpotTypeInfo = (type: string | undefined) => {
     return SPOT_TYPE_INFO[type as SpotType] || SPOT_TYPE_INFO.OTHER;
 };
+
+export const getSpotDisplayName = (
+    spot: Pick<SpotResponse, "displayName" | "spotName">
+) => spot.displayName?.trim() || spot.spotName;

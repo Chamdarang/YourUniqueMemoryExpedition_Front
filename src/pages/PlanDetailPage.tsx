@@ -1,16 +1,13 @@
-// ✅ [필수] google 객체 전역 선언
-declare let google: any;
-
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { useParams, useNavigate, useBlocker } from "react-router-dom";
+import { useParams, useBlocker } from "react-router-dom";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary, InfoWindow, Pin } from "@vis.gl/react-google-maps";
+import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary, InfoWindow, Pin, type MapMouseEvent } from "@vis.gl/react-google-maps";
 
 // API
-import { getPlanDetail } from "../api/planApi";
+import { exportPlanData, getPlanDetail } from "../api/planApi";
 import { createDayInPlan, swapPlanDay, getIndependentDays } from "../api/dayApi";
-import { getSchedulesByDay } from "../api/scheduleApi";
+import { getSchedulesByDay, updateSchedule as updateScheduleApi } from "../api/scheduleApi";
 import { createSpot } from "../api/spotApi";
 // ✅ 지도 생성 API
 import { makeStaticGoogleMap } from "../api/mapApi";
@@ -29,15 +26,24 @@ import { recalculateSchedules } from "../utils/scheduleUtils";
 // ✅ Export 관련 컴포넌트
 import {
     ImageExportModal,
-    useScheduleExport,
-    getStaticMapQuery,
-    type ExportSection,
     PlanScheduleExportView,
     DayScheduleExportView
 } from "../components/common/ScheduleExport";
+import { useScheduleExport } from "../components/common/useScheduleExport";
+import { getStaticMapQuery, type ExportSection } from "../components/common/scheduleExportUtils";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const scrollbarHideStyle = `.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`;
+
+const getPlanDayDate = (startDate: string, dayOrder: number) => {
+    const [year, month, day] = startDate.split('-').map(Number);
+    const date = new Date(year, month - 1, day + dayOrder - 1);
+    return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+};
 
 // 🛠️ 임시 장소 파싱 제거됨 (필드 직접 사용)
 
@@ -52,15 +58,26 @@ function NumberedMarker({ number, color, onClick }: { number: number, color: str
     );
 }
 
-function MapDirections({ daySchedulesMap, dayOrderMap, mapViewMode, visibleDays }: any) {
+interface MapDirectionsProps {
+    daySchedulesMap: Record<number, DayScheduleResponse[]>;
+    dayOrderMap: Record<number, number>;
+    mapViewMode: 'ALL' | 'PINS' | 'NONE';
+    visibleDays: Set<number>;
+}
+
+function MapDirections({ daySchedulesMap, dayOrderMap, mapViewMode, visibleDays }: MapDirectionsProps) {
     const map = useMap();
     const mapsLibrary = useMapsLibrary("maps");
-    const [polylines, setPolylines] = useState<google.maps.Polyline[]>([]);
+    const polylinesRef = useRef<google.maps.Polyline[]>([]);
 
     useEffect(() => {
+        const clearPolylines = () => {
+            polylinesRef.current.forEach(polyline => polyline.setMap(null));
+            polylinesRef.current = [];
+        };
+
+        clearPolylines();
         if (!map || !mapsLibrary) return;
-        polylines.forEach(p => p.setMap(null));
-        setPolylines([]);
         if (mapViewMode !== 'ALL') return;
 
         const newPolylines: google.maps.Polyline[] = [];
@@ -70,19 +87,15 @@ function MapDirections({ daySchedulesMap, dayOrderMap, mapViewMode, visibleDays 
         Object.entries(daySchedulesMap).forEach(([dayIdStr, schedules]) => {
             const dayId = Number(dayIdStr);
             if (!visibleDays.has(dayId)) return;
-            // @ts-ignore
             if (!schedules) return;
 
             const dayOrder = dayOrderMap[dayId] || 1;
             const color = getDayColor(dayOrder);
-            console.log(schedules)
-            // @ts-ignore
             const path = schedules.map(s => ({
                 lat: Number(s.lat),
                 lng: Number(s.lng)
-            })).filter((pos: any) => !isNaN(pos.lat) && !isNaN(pos.lng) && pos.lat !== 0 && pos.lng !== 0);
+            })).filter(pos => !isNaN(pos.lat) && !isNaN(pos.lng) && pos.lat !== 0 && pos.lng !== 0);
             if (path.length > 0) {
-                // @ts-ignore
                 path.forEach(pos => bounds.extend(pos));
                 hasPoints = true;
                 const polyline = new mapsLibrary.Polyline({
@@ -93,14 +106,14 @@ function MapDirections({ daySchedulesMap, dayOrderMap, mapViewMode, visibleDays 
                 newPolylines.push(polyline);
             }
         });
-        setPolylines(newPolylines);
+        polylinesRef.current = newPolylines;
 
         if (hasPoints && !bounds.isEmpty()) {
             const currentBounds = map.getBounds();
             const isAllVisible = currentBounds && currentBounds.contains(bounds.getNorthEast()) && currentBounds.contains(bounds.getSouthWest());
             if (!isAllVisible) map.fitBounds(bounds);
         }
-        return () => newPolylines.forEach(p => p.setMap(null));
+        return clearPolylines;
     }, [map, mapsLibrary, daySchedulesMap, dayOrderMap, mapViewMode, visibleDays]);
     return null;
 }
@@ -113,7 +126,7 @@ function EmptySlot({ dayOrder, onCreateNew, onImportSelect }: { dayOrder: number
 
     const handleLoadList = async () => {
         setMode('LIST'); setLoading(true);
-        try { setCandidates(await getIndependentDays()); } catch { alert("로드 실패"); setMode('MENU'); } finally { setLoading(false); }
+        try { setCandidates((await getIndependentDays()).content); } catch { alert("로드 실패"); setMode('MENU'); } finally { setLoading(false); }
     };
 
     if (isExpanded) {
@@ -162,11 +175,11 @@ export default function PlanDetailPage() {
 
 function PlanDetailContent() {
     const { id } = useParams<{ id: string }>();
-    const navigate = useNavigate();
     const planId = Number(id);
     const [plan, setPlan] = useState<PlanDetailResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [mapSchedulesMap, setMapSchedulesMap] = useState<Record<number, DayScheduleResponse[]>>({});
+    const [scheduleRefreshVersions, setScheduleRefreshVersions] = useState<Record<number, number>>({});
     const [dayOrderMap, setDayOrderMap] = useState<Record<number, number>>({});
 
     const [mapViewMode, setMapViewMode] = useState<'ALL' | 'PINS' | 'NONE'>('ALL');
@@ -191,8 +204,10 @@ function PlanDetailContent() {
     const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
     const geocodingLibrary = useMapsLibrary("geocoding");
-    const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
-    useEffect(() => { if (geocodingLibrary) setGeocoder(new geocodingLibrary.Geocoder()); }, [geocodingLibrary]);
+    const geocoder = useMemo(
+        () => geocodingLibrary ? new geocodingLibrary.Geocoder() : null,
+        [geocodingLibrary]
+    );
 
     const [dirtyMap, setDirtyMap] = useState<Record<string | number, boolean>>({});
     const isAnyDirty = useMemo(() => Object.values(dirtyMap).some(Boolean), [dirtyMap]);
@@ -224,7 +239,7 @@ function PlanDetailContent() {
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
-    const fetchPlanDetail = () => {
+    const fetchPlanDetail = useCallback(() => {
         setLoading(true);
         getPlanDetail(planId).then(data => {
             setPlan(data);
@@ -232,8 +247,8 @@ function PlanDetailContent() {
             data.days.forEach(d => { map[d.id] = d.dayOrder; });
             setDayOrderMap(map);
         }).finally(() => setLoading(false));
-    };
-    useEffect(() => { if (planId) fetchPlanDetail(); }, [planId]);
+    }, [planId]);
+    useEffect(() => { if (planId) fetchPlanDetail(); }, [planId, fetchPlanDetail]);
 
     const handlePlanExportClick = async () => {
         if (!plan || !plan.days) return;
@@ -242,8 +257,8 @@ function PlanDetailContent() {
         if(btn) btn.innerText = "⏳ 생성 중...";
 
         try {
-            const missingDayIds = plan.days.filter((d: any) => !mapSchedulesMap[d.id]).map((d: any) => d.id);
-            let newSchedulesMap = { ...mapSchedulesMap };
+            const missingDayIds = plan.days.filter(day => !mapSchedulesMap[day.id]).map(day => day.id);
+            const newSchedulesMap = { ...mapSchedulesMap };
             if (missingDayIds.length > 0) {
                 const results = await Promise.all(missingDayIds.map((id: number) => getSchedulesByDay(id)));
                 missingDayIds.forEach((id: number, idx: number) => { newSchedulesMap[id] = recalculateSchedules(results[idx]); });
@@ -269,6 +284,27 @@ function PlanDetailContent() {
             openExportModal();
 
         } catch (e) { console.error(e); alert("일정 로딩 실패"); } finally { if(btn && originalText) btn.innerText = originalText; }
+    };
+
+    const handlePlanDataExport = async () => {
+        if (!plan) return;
+        try {
+            const transfer = await exportPlanData(plan.id);
+            const blob = new Blob(
+                [JSON.stringify(transfer, null, 2)],
+                { type: "application/json;charset=utf-8" }
+            );
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const safeName = plan.planName.replace(/[\\/:*?"<>|]/g, "_").trim() || "여행계획";
+            link.href = url;
+            link.download = `${safeName}.yume.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error(error);
+            alert(error instanceof Error ? error.message : "계획을 내보내지 못했습니다.");
+        }
     };
 
     const handleDayExportClick = async (dayId: number) => {
@@ -335,7 +371,9 @@ function PlanDetailContent() {
                 const calculated = recalculateSchedules(raw);
                 setMapSchedulesMap(prev => ({ ...prev, [dayId]: calculated }));
                 setDayOrderMap(prev => ({ ...prev, [dayId]: dayOrder }));
-            } catch {}
+            } catch (error) {
+                console.error("일차 일정을 불러오지 못했습니다.", error);
+            }
         }
     };
 
@@ -389,13 +427,13 @@ function PlanDetailContent() {
         }
     };
 
-    const handleMapClick = useCallback(async (e: any) => {
+    const handleMapClick = useCallback(async (e: MapMouseEvent) => {
         if (!pickingTarget || !geocoder) return;
         if (e.domEvent) e.domEvent.stopPropagation();
         const processSpotData = (spotReq: SpotCreateRequest) => { setTempSelectedSpot(spotReq); };
 
-        if (e.detail.placeId) {
-            // @ts-ignore
+        try {
+        if (e.detail?.placeId) {
             const place = new google.maps.places.Place({ id: e.detail.placeId });
             await place.fetchFields({
                 // ✅ 동일하게 필드 추가
@@ -427,6 +465,27 @@ function PlanDetailContent() {
                     photoUrl: photoUrl          // ✅ 추가
                 }
             });
+            return;
+        }
+
+        const clickedLocation = e.detail?.latLng;
+        if (!clickedLocation) return;
+        const { results } = await geocoder.geocode({ location: clickedLocation });
+        const result = results[0];
+        const lat = clickedLocation.lat;
+        const lng = clickedLocation.lng;
+        processSpotData({
+            spotName: result?.address_components?.[0]?.long_name || result?.formatted_address || '지도에서 선택한 위치',
+            spotType: 'OTHER',
+            address: result?.formatted_address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+            lat,
+            lng,
+            placeId: result?.place_id || `map:${lat.toFixed(6)},${lng.toFixed(6)}`,
+            isVisit: false,
+            metadata: { source: 'map_click' }
+        });
+        } catch {
+            alert("선택한 위치의 장소 정보를 불러오지 못했습니다.");
         }
     }, [pickingTarget, geocoder]);
 
@@ -435,24 +494,43 @@ function PlanDetailContent() {
         const { dayId, scheduleId } = pickingTarget;
         try {
             const savedSpot = await createSpot(tempSelectedSpot);
-            setMapSchedulesMap(prev => ({
-                ...prev,
-                [dayId]: recalculateSchedules((prev[dayId] || []).map(s => s.id === scheduleId ? { ...s, spotUserId: savedSpot.id, spotName: savedSpot.spotName, spotType: savedSpot.spotType, lat: savedSpot.lat, lng: savedSpot.lng, address: savedSpot.address, isVisit: savedSpot.isVisit } : s))
-            }));
-            handleSetDirty(`day-${dayId}`, true); setTempSelectedSpot(null); setPickingTarget(null);
-        } catch { alert("장소 등록 실패"); }
+            const updatedSchedules = await updateScheduleApi(scheduleId, {
+                spotUserId: savedSpot.id,
+                spotName: savedSpot.displayName?.trim() || savedSpot.spotName,
+                spotType: savedSpot.spotType,
+                lat: savedSpot.lat,
+                lng: savedSpot.lng,
+            });
+            setMapSchedulesMap(prev => ({ ...prev, [dayId]: updatedSchedules }));
+            setScheduleRefreshVersions(prev => ({ ...prev, [dayId]: (prev[dayId] || 0) + 1 }));
+            setTempSelectedSpot(null);
+            setPickingTarget(null);
+            if (window.innerWidth < 768) setMobileViewMode('LIST');
+            alert("내 장소에 등록하고 일정에 선택했습니다.");
+        } catch (error) {
+            alert(error instanceof Error ? error.message : "장소 등록 실패");
+        }
     };
 
-    const handleConfirmScheduleOnly = () => {
+    const handleConfirmScheduleOnly = async () => {
         if (!tempSelectedSpot || !pickingTarget) return;
         const { dayId, scheduleId } = pickingTarget;
-        setMapSchedulesMap(prev => ({
-            ...prev,
-            [dayId]: recalculateSchedules((prev[dayId] || []).map(s => s.id === scheduleId ? {
-                ...s, spotUserId: 0, spotName: tempSelectedSpot.spotName, spotType: tempSelectedSpot.spotType, lat: tempSelectedSpot.lat, lng: tempSelectedSpot.lng, address: tempSelectedSpot.address, memo: s.memo // 기존 메모 유지 (태그 제거 X)
-            } : s))
-        }));
-        handleSetDirty(`day-${dayId}`, true); setTempSelectedSpot(null); setPickingTarget(null);
+        try {
+            const updatedSchedules = await updateScheduleApi(scheduleId, {
+                spotUserId: 0,
+                spotName: tempSelectedSpot.spotName,
+                spotType: tempSelectedSpot.spotType,
+                lat: tempSelectedSpot.lat,
+                lng: tempSelectedSpot.lng,
+            });
+            setMapSchedulesMap(prev => ({ ...prev, [dayId]: updatedSchedules }));
+            setScheduleRefreshVersions(prev => ({ ...prev, [dayId]: (prev[dayId] || 0) + 1 }));
+            setTempSelectedSpot(null);
+            setPickingTarget(null);
+            if (window.innerWidth < 768) setMobileViewMode('LIST');
+        } catch {
+            alert("일정에 장소를 추가하지 못했습니다.");
+        }
     };
 
     const toggleMapViewMode = () => {
@@ -527,7 +605,6 @@ function PlanDetailContent() {
                 onConfirm={onModalConfirm}
                 options={exportOptions}
                 setOptions={setExportOptions}
-                mapUrl={generatedMapUrl}
                 schedules={exportMode === 'PLAN' ? exportSections.flatMap(s => s.schedules) : dayExportData?.schedules || []}
             />
 
@@ -608,6 +685,12 @@ function PlanDetailContent() {
                                     >
                                         📸 전체 저장
                                     </button>
+                                    <button
+                                        onClick={handlePlanDataExport}
+                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                    >
+                                        💾 JSON
+                                    </button>
                                 </div>
                             </div>
 
@@ -618,14 +701,18 @@ function PlanDetailContent() {
                                             item.data ? (
                                                 <PlanDayItem
                                                     key={item.id} id={item.id} dayOrder={item.dayOrder} data={item.data}
-                                                    schedules={item.data?.id ? mapSchedulesMap[item.data.id] || [] : []}
+                                                    routeDate={getPlanDayDate(plan.planStartDate, item.dayOrder)}
                                                     showInjury={showInjury}
                                                     onSchedulesChange={handleSchedulesChange}
+                                                    refreshVersion={scheduleRefreshVersions[item.data.id] || 0}
                                                     onRefresh={fetchPlanDetail}
                                                     onUpdateDayInfo={handleDayInfoUpdate}
                                                     setDirty={handleSetDirty} onToggle={handleDayToggle}
                                                     pickingTarget={pickingTarget}
-                                                    setPickingTarget={setPickingTarget}
+                                                    setPickingTarget={(target) => {
+                                                        setPickingTarget(target);
+                                                        if (target && window.innerWidth < 768) setMobileViewMode('MAP');
+                                                    }}
                                                     isVisibleOnMap={visibleDays.has(item.data.id)}
                                                     onToggleMapVisibility={handleToggleMapVisibility}
                                                     onExportDay={() => handleDayExportClick(item.data!.id)}

@@ -3,6 +3,7 @@ import { PURCHASE_KIND_KEYS, PURCHASE_STATUS_KEYS, getPurchaseKindInfo, getPurch
 import type { PurchaseSearchParams, SpotPurchaseSaveRequest } from "../../types/purchase";
 import type { PurchaseKind, PurchaseStatus } from "../../types/enums";
 import type { SpotResponse } from "../../types/spot";
+import { getSpotDisplayName } from "../../utils/spotUtils";
 
 interface Props {
     spots: SpotResponse[];
@@ -13,7 +14,7 @@ interface Props {
     editingId: number | null;
     setEditingId: (id: number | null) => void;
     formPurchase: SpotPurchaseSaveRequest & { spotUserId: number };
-    setFormPurchase: (val: any) => void;
+    setFormPurchase: React.Dispatch<React.SetStateAction<SpotPurchaseSaveRequest & { spotUserId: number }>>;
 }
 
 export default function PurchaseFilter({
@@ -50,7 +51,7 @@ export default function PurchaseFilter({
                         <input className="p-3 bg-white rounded-xl text-sm border border-gray-200 outline-none focus:ring-2 focus:ring-pink-400" placeholder="아이템 이름 (필수)" value={formPurchase.itemName} onChange={e => setFormPurchase({...formPurchase, itemName: e.target.value})} />
                         <select className="p-3 bg-white rounded-xl text-sm font-bold border border-gray-200 outline-none" value={formPurchase.spotUserId} onChange={e => setFormPurchase({...formPurchase, spotUserId: Number(e.target.value)})}>
                             <option value="0">📍 장소를 선택하세요</option>
-                            {spots.map(s => <option key={s.id} value={s.id}>{s.spotName}</option>)}
+                            {spots.map(s => <option key={s.id} value={s.id}>{getSpotDisplayName(s)}</option>)}
                         </select>
                         <select className="p-3 bg-white rounded-xl text-sm font-bold border border-gray-200 outline-none" value={formPurchase.kind} onChange={e => setFormPurchase({...formPurchase, kind: e.target.value as PurchaseKind})}>
                             {PURCHASE_KIND_KEYS.map(k => <option key={k} value={k}>{getPurchaseKindInfo(k).icon} {getPurchaseKindInfo(k).label}</option>)}

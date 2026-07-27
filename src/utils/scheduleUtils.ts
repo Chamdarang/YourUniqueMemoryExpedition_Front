@@ -32,17 +32,12 @@ export const recalculateSchedules = (items: DayScheduleResponse[]): DayScheduleR
         // 이동 시간
         const movingDuration = currentItem.movingDuration || 0;
 
-        // 현재 일정 시작 시간 = 이전 종료 + 이동 시간
-        // (여기서는 빈틈없이 딱 붙여서 계산하는 로직을 기본으로 합니다)
         const arrivalTime = calculateEndTime(prevEndTime, movingDuration);
 
-        // 사용자가 수동으로 시간을 뒤로 미룬 경우(공백 시간)를 지원하려면 아래 로직 사용 가능
-        // const manualStartTimeMinutes = timeToMinutes(currentItem.startTime || "00:00");
-        // const arrivalTimeMinutes = timeToMinutes(arrivalTime);
-        // currentItem.startTime = minutesToTime(Math.max(arrivalTimeMinutes, manualStartTimeMinutes));
-
-        // 현재는 '빈틈없이 연결' 모드 적용
-        currentItem.startTime = arrivalTime;
+        // 고정 일정은 저장된 시작시간을 보존하고, 나머지만 앞 일정에 이어 붙인다.
+        currentItem.startTime = currentItem.fixedStartTime && currentItem.startTime
+            ? currentItem.startTime.substring(0, 5)
+            : arrivalTime;
 
         // 현재 일정 종료 시간 = 시작 + 체류 시간
         currentItem.endTime = calculateEndTime(currentItem.startTime, currentItem.duration);

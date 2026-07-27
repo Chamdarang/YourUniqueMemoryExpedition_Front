@@ -30,7 +30,7 @@ export const useSchedule = () => {
             const data = await scheduleApi.createSchedule(dayId, req); // ✅ API 호출
             setSchedules(data); // 반환된 최신 리스트로 갱신
             return true;
-        } catch (error) {
+        } catch {
             alert("스케줄 추가에 실패했습니다.");
         } finally {
             setLoading(false);
@@ -44,8 +44,6 @@ export const useSchedule = () => {
             setLoading(true);
             const data = await scheduleApi.updateSchedule(scheduleId, req); // ✅ API 호출
             setSchedules(data); // 반환된 최신 리스트로 갱신
-        } catch (error) {
-            alert("스케줄 수정에 실패했습니다.");
         } finally {
             setLoading(false);
         }
@@ -58,7 +56,7 @@ export const useSchedule = () => {
             setLoading(true);
             const data = await scheduleApi.deleteSchedule(scheduleId); // ✅ API 호출
             setSchedules(data); // 반환된 최신 리스트로 갱신
-        } catch (error) {
+        } catch {
             alert("스케줄 삭제에 실패했습니다.");
         } finally {
             setLoading(false);
@@ -84,7 +82,7 @@ export const useSchedule = () => {
             setLoading(true);
             const data = await scheduleApi.reorderSchedule(dayId, scheduleId, req);
             setSchedules(data);
-        } catch (error) {
+        } catch {
             alert("순서 변경에 실패했습니다.");
         } finally {
             setLoading(false);

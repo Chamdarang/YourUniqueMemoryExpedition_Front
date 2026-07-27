@@ -76,13 +76,10 @@ const recalculateSchedules = (items: DayScheduleResponse[]): DayScheduleResponse
   for (let i = 1; i < newItems.length; i++) {
     const prevItem = newItems[i - 1];
     const currentItem = newItems[i];
-    const minStartTime = timeToMinutes(prevItem.endTime) + currentItem.movingDuration;
-    const currentStartTime = timeToMinutes(currentItem.startTime || "00:00");
-    let finalStartTime = minStartTime;
-    if (currentItem.startTime) {
-      finalStartTime = Math.max(minStartTime, currentStartTime);
-    }
-    currentItem.startTime = minutesToTime(finalStartTime);
+    const calculatedStartTime = timeToMinutes(prevItem.endTime) + currentItem.movingDuration;
+    currentItem.startTime = currentItem.fixedStartTime && currentItem.startTime
+        ? currentItem.startTime.substring(0, 5)
+        : minutesToTime(calculatedStartTime);
     currentItem.endTime = addTime(currentItem.startTime, currentItem.duration);
   }
   return newItems;

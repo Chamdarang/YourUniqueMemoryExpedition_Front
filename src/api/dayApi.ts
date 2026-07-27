@@ -113,7 +113,7 @@ export const deleteDay = async (dayId: number): Promise<void> => {
   try {
     const json = await res.json();
     throw new Error(json.message || "삭제 중 오류가 발생했습니다.");
-  } catch (e) {
+  } catch {
     // JSON 파싱 실패
     throw new Error("서버 응답을 처리할 수 없습니다.");
   }

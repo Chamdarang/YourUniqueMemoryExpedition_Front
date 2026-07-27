@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary
@@ -7,6 +7,7 @@ import { createSpot, getMySpots, deleteSpot, updateSpot } from "../api/spotApi";
 import { mapGoogleTypeToSpotType } from "../utils/mapUtils";
 import type { SpotResponse, SpotCreateRequest } from "../types/spot";
 import type { SpotType } from "../types/enums";
+import { getSpotDisplayName } from "../utils/spotUtils";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const DEFAULT_CENTER = { lat: 34.9858, lng: 135.7588 };
@@ -81,7 +82,10 @@ function ExploreMapContent() {
     const [cameraTarget, setCameraTarget] = useState<{ center: { lat: number, lng: number }, zoom?: number } | null>(null);
 
     const [mySpots, setMySpots] = useState<SpotResponse[]>([]);
-    const [allMyPlaceIds, setAllMyPlaceIds] = useState<Set<string>>(new Set());
+    const allMyPlaceIds = useMemo(
+        () => new Set(mySpots.map(spot => spot.placeId).filter((id): id is string => !!id)),
+        [mySpots]
+    );
 
     const [selectedMySpot, setSelectedMySpot] = useState<SpotResponse | null>(null);
     const [selectedResult, setSelectedResult] = useState<GooglePlaceResult | null>(null);
@@ -90,7 +94,10 @@ function ExploreMapContent() {
 
     const placesLibrary = useMapsLibrary("places");
     const geocodingLibrary = useMapsLibrary("geocoding");
-    const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
+    const geocoder = useMemo(
+        () => geocodingLibrary ? new geocodingLibrary.Geocoder() : null,
+        [geocodingLibrary]
+    );
 
     useEffect(() => {
         const stateToSave = { center: savedMapState.center, zoom: savedMapState.zoom, mode, googleResults };
@@ -106,26 +113,11 @@ function ExploreMapContent() {
         }
     }, []);
 
-    useEffect(() => { if (geocodingLibrary) setGeocoder(new geocodingLibrary.Geocoder()); }, [geocodingLibrary]);
-
-    const fetchAllMySpots = async () => {
-        try {
-            const response = await getMySpots({ page: 0, size: 2000 });
-            setMySpots(response.content);
-        } catch (err) { console.error(err); }
-    };
-    useEffect(() => { fetchAllMySpots(); }, []);
-
     useEffect(() => {
-        const ids = new Set(mySpots.map(s => s.placeId).filter((id): id is string => !!id));
-        setAllMyPlaceIds(ids);
-    }, [mySpots]);
-
-    useEffect(() => {
-        if (selectedResult) {
-            setDraftType(mapGoogleTypeToSpotType(selectedResult.types));
-        }
-    }, [selectedResult]);
+        getMySpots({ page: 0, size: 2000 })
+            .then(response => setMySpots(response.content))
+            .catch(console.error);
+    }, []);
 
     const handleMapIdle = (map: google.maps.Map) => {
         const center = map.getCenter();
@@ -152,6 +144,7 @@ function ExploreMapContent() {
 
     const handleSelectGooglePlace = (place: GooglePlaceResult) => {
         setSelectedResult(place);
+        setDraftType(mapGoogleTypeToSpotType(place.types));
         setSelectedMySpot(null);
         setCameraTarget({ center: place.location });
         setShowList(true);
@@ -300,7 +293,7 @@ function ExploreMapContent() {
 
     const handleToggleVisit = async (spot: SpotResponse) => {
         try {
-            const updated = await updateSpot(spot.id, { isVisit: !spot.isVisit } as any);
+            const updated = await updateSpot(spot.id, { isVisit: !spot.isVisit });
             setMySpots(prev => prev.map(s => s.id === spot.id ? updated : s));
             setSelectedMySpot(updated);
         } catch { alert("상태 변경 실패"); }
@@ -335,7 +328,7 @@ function ExploreMapContent() {
                                 {selectedMySpot ? (
                                     <div className="space-y-4">
                                         <div>
-                                            <div className="flex justify-between items-start"><h2 className="text-xl font-extrabold text-gray-900 leading-tight flex-1 mr-2">{selectedMySpot.spotName}</h2><span className={`inline-block px-2 py-1 rounded text-[10px] font-bold shrink-0 ${getSpotTypeInfo(selectedMySpot.spotType).color}`}>{getSpotTypeInfo(selectedMySpot.spotType).label}</span></div>
+                                            <div className="flex justify-between items-start"><h2 className="text-xl font-extrabold text-gray-900 leading-tight flex-1 mr-2">{getSpotDisplayName(selectedMySpot)}</h2><span className={`inline-block px-2 py-1 rounded text-[10px] font-bold shrink-0 ${getSpotTypeInfo(selectedMySpot.spotType).color}`}>{getSpotTypeInfo(selectedMySpot.spotType).label}</span></div>
                                             <div className="flex items-center gap-1.5 mt-2 text-gray-500 text-sm"><span className="text-base">📍</span><p className="line-clamp-2">{selectedMySpot.address}</p></div>
                                         </div>
                                         {selectedMySpot.description && <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-600 border border-gray-100">{selectedMySpot.description}</div>}
@@ -369,7 +362,7 @@ function ExploreMapContent() {
                                         googleResults.map(place => {
                                             const isSaved = allMyPlaceIds.has(place.place_id);
                                             return (
-                                                <div key={place.place_id} className={`p-4 hover:bg-blue-50 cursor-pointer transition ${selectedResult?.place_id === place.place_id ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`} onClick={() => { if (isSaved) { const spot = mySpots.find(s => s.placeId === place.place_id); if (spot) handleSelectSpot(spot); } else { handleSelectSearchResult(place); } }}>
+                                                <div key={place.place_id} className="p-4 hover:bg-blue-50 cursor-pointer transition" onClick={() => { if (isSaved) { const spot = mySpots.find(s => s.placeId === place.place_id); if (spot) handleSelectSpot(spot); } else { handleSelectSearchResult(place); } }}>
                                                     <div className="flex justify-between items-start"><div className="font-bold text-sm text-gray-800 line-clamp-1">{place.name}</div>{isSaved && <span className="ml-2 px-1.5 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold rounded shrink-0">저장됨</span>}</div>
                                                     <div className="text-xs text-gray-500 mt-1 line-clamp-1">{place.address}</div>
                                                     {place.rating && <div className="text-[10px] text-orange-500 mt-1">⭐ {place.rating}</div>}
@@ -380,7 +373,7 @@ function ExploreMapContent() {
                                     mySpots.length === 0 ? <div className="p-8 text-center text-gray-400 text-sm">저장된 장소가 없습니다.</div> :
                                         mySpots.map(spot => (
                                             <div key={spot.id} className="p-4 hover:bg-green-50 cursor-pointer transition" onClick={() => handleSelectSpot(spot)}>
-                                                <div className="font-bold text-sm text-gray-800 line-clamp-1">{spot.spotName}</div>
+                                                <div className="font-bold text-sm text-gray-800 line-clamp-1">{getSpotDisplayName(spot)}</div>
                                                 <div className="text-xs text-gray-500 mt-1 line-clamp-1">{spot.shortAddress || spot.address}</div>
                                                 <div className="flex gap-1 mt-2"><span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${getSpotTypeInfo(spot.spotType).color}`}>{getSpotTypeInfo(spot.spotType).label}</span>{spot.isVisit && <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-bold rounded">방문함</span>}</div>
                                             </div>
@@ -394,7 +387,7 @@ function ExploreMapContent() {
             <button onClick={() => setShowList(!showList)} className={`hidden md:flex absolute top-1/2 z-30 bg-white border border-gray-300 shadow-md rounded-r-lg py-4 px-1 items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-gray-50 transition-all duration-300 ease-in-out ${showList ? 'left-96' : 'left-0'}`} style={{ transform: 'translateY(-50%)' }}>{showList ? '◀' : '▶'}</button>
             <div className="absolute inset-0 w-full h-full z-0">
                 <MapCameraHandler target={cameraTarget} />
-                <Map defaultCenter={initialState.center} defaultZoom={initialState.zoom} mapId="EXPLORE_MAP_ID" disableDefaultUI={true} className="w-full h-full" onIdle={(ev) => handleMapIdle(ev.map)} onClick={(e) => { if (e.detail.placeId) { e.stop(); handlePoiClick(e.detail.placeId); } else if (e.detail.latLng) { const lat = typeof e.detail.latLng.lat === 'function' ? e.detail.latLng.lat() : e.detail.latLng.lat; const lng = typeof e.detail.latLng.lng === 'function' ? e.detail.latLng.lng() : e.detail.latLng.lng; handleReverseGeocode(lat as number, lng as number); } }}>
+                <Map defaultCenter={initialState.center} defaultZoom={initialState.zoom} mapId="EXPLORE_MAP_ID" disableDefaultUI={true} className="w-full h-full" onIdle={(ev) => handleMapIdle(ev.map)} onClick={(e) => { if (e.detail.placeId) { e.stop(); handlePoiClick(e.detail.placeId); } else if (e.detail.latLng) { handleReverseGeocode(e.detail.latLng.lat, e.detail.latLng.lng); } }}>
                     <MapController mode={mode} onModeChange={handleModeChange} onSearchStart={handleBackToList} onSpotsFound={(spots) => { setMySpots(spots); if(spots.length > 0) setShowList(true); }} onGoogleFound={(results) => { setGoogleResults(results); if(results.length > 0) setShowList(true); }} showList={showList} />
                     {mode === 'MINE' && mySpots.map(spot => (<AdvancedMarker key={spot.id} position={{ lat: spot.lat, lng: spot.lng }} onClick={(e) => { e.domEvent.stopPropagation(); handleSelectSpot(spot); }} zIndex={10}><MarkerIcon color="#10B981" borderColor="#059669" /></AdvancedMarker>))}
                     {mode === 'GOOGLE' && googleResults.map(place => { const isSaved = allMyPlaceIds.has(place.place_id); const isSelected = selectedResult?.place_id === place.place_id; return (<AdvancedMarker key={place.place_id} position={place.location} onClick={(e) => { e.domEvent.stopPropagation(); if (isSaved) { const spot = mySpots.find(s => s.placeId === place.place_id); if (spot) handleSelectSpot(spot); } else { handleSelectSearchResult(place); } }} zIndex={isSelected ? 100 : (isSaved ? 50 : 20)}><MarkerIcon color={isSaved ? "#10B981" : (isSelected ? "#3B82F6" : "#EF4444")} borderColor={isSaved ? "#059669" : (isSelected ? "#1D4ED8" : "#B91C1C")} scale={isSelected || isSaved ? 1.2 : 1.0} /></AdvancedMarker>); })}
@@ -421,7 +414,7 @@ function MapController({ mode, onModeChange, onSearchStart, onSpotsFound, onGoog
 interface SearchBoxProps { mode: SearchMode; onModeChange: (mode: SearchMode) => void; onSearchStart: () => void; map: google.maps.Map | null; onGoogleSearch: (results: GooglePlaceResult[]) => void; onMySpotSearch: (spots: SpotResponse[]) => void; showList: boolean; }
 function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onMySpotSearch, showList }: SearchBoxProps) {
     const [keyword, setKeyword] = useState("");
-    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [suggestions, setSuggestions] = useState<google.maps.places.AutocompleteSuggestion[]>([]);
     const placesLibrary = useMapsLibrary("places");
     const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -446,7 +439,7 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
                 }
             }, 300);
             return () => clearTimeout(timer);
-        } else { setSuggestions([]); }
+        }
     }, [keyword, mode, placesLibrary, map]);
 
     const handleGoogleTextSearch = async () => {
@@ -477,7 +470,7 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
         } catch (error) { console.error("Text Search Error:", error); alert("검색 중 오류가 발생했습니다."); }
     };
 
-    const handleGoogleSelectSuggestion = async (suggestion: any) => {
+    const handleGoogleSelectSuggestion = async (suggestion: google.maps.places.AutocompleteSuggestion) => {
         if (!placesLibrary || !suggestion.placePrediction) return;
         onSearchStart();
         const placeId = suggestion.placePrediction.placeId;
@@ -519,7 +512,15 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
                         <><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><span>내 장소</span></>
                     )}
                 </button>
-                <input type="text" className="flex-1 outline-none text-sm font-medium text-gray-700 min-w-0" placeholder={mode === 'GOOGLE' ? "장소, 주소 검색 (엔터)" : "이름 검색 (엔터)"} value={keyword} onChange={e => setKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') mode === 'GOOGLE' ? handleGoogleTextSearch() : handleMySpotSearch(); }} />
+                <input type="text" className="flex-1 outline-none text-sm font-medium text-gray-700 min-w-0" placeholder={mode === 'GOOGLE' ? "장소, 주소 검색 (엔터)" : "이름 검색 (엔터)"} value={keyword} onChange={e => {
+                    setKeyword(e.target.value);
+                    if (!e.target.value) setSuggestions([]);
+                }} onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                        if (mode === 'GOOGLE') void handleGoogleTextSearch();
+                        else void handleMySpotSearch();
+                    }
+                }} />
                 <button onClick={mode === 'GOOGLE' ? handleGoogleTextSearch : handleMySpotSearch} className="text-gray-400 hover:text-blue-600 p-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
                 </button>

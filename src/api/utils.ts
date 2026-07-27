@@ -1,3 +1,15 @@
+const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
+
+const normalizedApiBaseUrl = configuredApiBaseUrl
+    ? `${/^https?:\/\//i.test(configuredApiBaseUrl) ? '' : 'http://'}${configuredApiBaseUrl}`.replace(/\/+$/, '')
+    : '';
+
+export const getApiUrl = (url: string): string => {
+    if (/^https?:\/\//i.test(url)) return url;
+    const normalizedPath = url.startsWith('/') ? url : `/${url}`;
+    return `${normalizedApiBaseUrl}${normalizedPath}`;
+};
+
 export const getAuthHeaders = (): Record<string, string> => {
     const token = localStorage.getItem('accessToken');
 
@@ -13,12 +25,16 @@ export const getAuthHeaders = (): Record<string, string> => {
 
 export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
     // 1. 헤더 병합 (기존 옵션 + 인증 헤더)
+    const authHeaders = getAuthHeaders();
+    if (options.body instanceof FormData) {
+        delete authHeaders['Content-Type'];
+    }
     const headers = {
-        ...getAuthHeaders(),
+        ...authHeaders,
         ...(options.headers as Record<string, string>),
     };
 
-    const response = await fetch(url, {
+    const response = await fetch(getApiUrl(url), {
         ...options,
         headers,
     });

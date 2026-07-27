@@ -1,11 +1,8 @@
-// ✅ [필수] google 객체 전역 선언
-declare let google: any;
-
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary, InfoWindow, Pin } from "@vis.gl/react-google-maps";
+import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary, InfoWindow, Pin, type MapMouseEvent } from "@vis.gl/react-google-maps";
 
 // API & Hook
 import { getPlanDayDetail, updatePlanDay } from "../api/dayApi";
@@ -24,10 +21,10 @@ import type { SpotCreateRequest } from "../types/spot";
 // ✅ Export 관련 컴포넌트
 import {
     ImageExportModal,
-    useScheduleExport,
-    getStaticMapQuery,
     DayScheduleExportView
 } from "../components/common/ScheduleExport";
+import { useScheduleExport } from "../components/common/useScheduleExport";
+import { getStaticMapQuery } from "../components/common/scheduleExportUtils";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const scrollbarHideStyle = `.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`;
@@ -46,11 +43,16 @@ function NumberedMarker({ number, color, onClick }: { number: number, color: str
 function MapDirections({ schedules, mapViewMode }: { schedules: DayScheduleResponse[], mapViewMode: 'ALL' | 'PINS' | 'NONE' }) {
     const map = useMap();
     const mapsLibrary = useMapsLibrary("maps");
-    const [polyline, setPolyline] = useState<google.maps.Polyline | null>(null);
+    const polylineRef = useRef<google.maps.Polyline | null>(null);
 
     useEffect(() => {
+        const clearPolyline = () => {
+            polylineRef.current?.setMap(null);
+            polylineRef.current = null;
+        };
+
+        clearPolyline();
         if (!map || !mapsLibrary) return;
-        if (polyline) { polyline.setMap(null); setPolyline(null); }
         if (mapViewMode !== 'ALL') return;
 
         const path = schedules.map(s => ({
@@ -64,13 +66,13 @@ function MapDirections({ schedules, mapViewMode }: { schedules: DayScheduleRespo
                 icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW }, offset: '50%', repeat: '100px' }]
             });
             newPolyline.setMap(map);
-            setPolyline(newPolyline);
+            polylineRef.current = newPolyline;
 
             const bounds = new google.maps.LatLngBounds();
             path.forEach(p => bounds.extend(p));
             if (!bounds.isEmpty()) map.fitBounds(bounds);
         }
-        return () => { if (polyline) polyline.setMap(null); };
+        return clearPolyline;
     }, [map, mapsLibrary, schedules, mapViewMode]);
     return null;
 }
@@ -103,7 +105,7 @@ function DayDetailContent() {
     const [loading, setLoading] = useState(true);
 
     // UI State
-    const [mapViewMode, setMapViewMode] = useState<'ALL' | 'PINS' | 'NONE'>('ALL');
+    const [mapViewMode] = useState<'ALL' | 'PINS' | 'NONE'>('ALL');
     const [showInjury, setShowInjury] = useState(false);
     const [mobileViewMode, setMobileViewMode] = useState<'LIST' | 'MAP'>('LIST');
 
@@ -115,7 +117,10 @@ function DayDetailContent() {
     const [pickingTarget, setPickingTarget] = useState<{ dayId: number, scheduleId: number } | null>(null);
     const [tempSelectedSpot, setTempSelectedSpot] = useState<SpotCreateRequest | null>(null);
     const geocodingLibrary = useMapsLibrary("geocoding");
-    const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
+    const geocoder = useMemo(
+        () => geocodingLibrary ? new geocodingLibrary.Geocoder() : null,
+        [geocodingLibrary]
+    );
 
     // Export State
     const { isExportModalOpen, openExportModal, closeExportModal, exportOptions, setExportOptions, handleSaveImage } = useScheduleExport();
@@ -125,12 +130,9 @@ function DayDetailContent() {
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
-    useEffect(() => { if (geocodingLibrary) setGeocoder(new geocodingLibrary.Geocoder()); }, [geocodingLibrary]);
-
     // ✅ 데이터 로드 (일차 정보 + 스케줄 목록)
     useEffect(() => {
         if (!dayId) return;
-        setLoading(true);
 
         // 일차 기본 정보 조회
         getPlanDayDetail(dayId).then(data => {
@@ -169,12 +171,12 @@ function DayDetailContent() {
     };
 
     // ✅ Map Click & Spot Selection
-    const handleMapClick = useCallback(async (e: any) => {
+    const handleMapClick = useCallback(async (e: MapMouseEvent) => {
         if (!pickingTarget || !geocoder) return;
         if (e.domEvent) e.domEvent.stopPropagation();
 
-        if (e.detail.placeId) {
-            // @ts-ignore
+        try {
+        if (e.detail?.placeId) {
             const place = new google.maps.places.Place({ id: e.detail.placeId });
             await place.fetchFields({
                 fields: ['displayName', 'formattedAddress', 'location', 'types', 'googleMapsURI', 'websiteURI', 'regularOpeningHours', 'photos']
@@ -201,6 +203,27 @@ function DayDetailContent() {
                     photoUrl: place.photos?.[0]?.getURI({ maxWidth: 800 }) || null
                 }
             });
+            return;
+        }
+
+        const clickedLocation = e.detail?.latLng;
+        if (!clickedLocation) return;
+        const { results } = await geocoder.geocode({ location: clickedLocation });
+        const result = results[0];
+        const lat = clickedLocation.lat;
+        const lng = clickedLocation.lng;
+        setTempSelectedSpot({
+            spotName: result?.address_components?.[0]?.long_name || result?.formatted_address || '지도에서 선택한 위치',
+            spotType: 'OTHER',
+            address: result?.formatted_address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+            lat,
+            lng,
+            placeId: result?.place_id || `map:${lat.toFixed(6)},${lng.toFixed(6)}`,
+            isVisit: false,
+            metadata: { source: 'map_click' }
+        });
+        } catch {
+            alert("선택한 위치의 장소 정보를 불러오지 못했습니다.");
         }
     }, [pickingTarget, geocoder]);
 
@@ -215,16 +238,15 @@ function DayDetailContent() {
             lat: tempSelectedSpot.lat,
             lng: tempSelectedSpot.lng,
             spotType: tempSelectedSpot.spotType,
-            memo: "", // 신규 추가 시 메모 비움
-            // 기존 폼 데이터가 없으므로 기본값 혹은 기존 객체 참조 필요
-            duration: 60,
-            transportation: 'WALK',
-            movingDuration: 0
         };
 
-        await updateSchedule(scheduleId, updateReq);
-        setTempSelectedSpot(null); setPickingTarget(null);
-        if (window.innerWidth < 768) setMobileViewMode('LIST');
+        try {
+            await updateSchedule(scheduleId, updateReq);
+            setTempSelectedSpot(null); setPickingTarget(null);
+            if (window.innerWidth < 768) setMobileViewMode('LIST');
+        } catch (error) {
+            alert(error instanceof Error ? error.message : "일정에 장소를 추가하지 못했습니다.");
+        }
     };
 
     // ✅ 내 장소 등록 후 추가
@@ -235,18 +257,18 @@ function DayDetailContent() {
             const savedSpot = await createSpot(tempSelectedSpot);
             const updateReq: ScheduleUpdateRequest = {
                 spotUserId: savedSpot.id,
-                spotName: savedSpot.spotName,
+                spotName: savedSpot.displayName?.trim() || savedSpot.spotName,
                 lat: savedSpot.lat,
                 lng: savedSpot.lng,
                 spotType: savedSpot.spotType,
-                duration: 60,
-                transportation: 'WALK',
-                movingDuration: 0
             };
             await updateSchedule(scheduleId, updateReq);
             setTempSelectedSpot(null); setPickingTarget(null);
             if (window.innerWidth < 768) setMobileViewMode('LIST');
-        } catch { alert("장소 등록 실패"); }
+            alert("내 장소에 등록하고 일정에 선택했습니다.");
+        } catch (error) {
+            alert(error instanceof Error ? error.message : "장소 등록 실패");
+        }
     };
 
     // ✅ 리스트 조작 핸들러 (훅으로 직접 연결)
@@ -293,7 +315,6 @@ function DayDetailContent() {
                 onConfirm={() => handleSaveImage(titleForm, exportRef.current)}
                 options={exportOptions}
                 setOptions={setExportOptions}
-                mapUrl={generatedMapUrl}
                 schedules={schedules}
             />
 
@@ -379,7 +400,10 @@ function DayDetailContent() {
                                     onDelete={removeSchedule} // ✅ 훅 함수 직접 전달
                                     onInsert={handleScheduleInsert}
                                     pickingTarget={pickingTarget}
-                                    setPickingTarget={setPickingTarget}
+                                    setPickingTarget={(target) => {
+                                        setPickingTarget(target);
+                                        if (target && window.innerWidth < 768) setMobileViewMode('MAP');
+                                    }}
                                     dayId={dayId}
                                 />
                             </DndContext>

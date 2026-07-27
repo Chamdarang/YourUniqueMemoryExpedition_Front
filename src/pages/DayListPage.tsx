@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createIndependentDay, deleteDay, getIndependentDays } from "../api/dayApi";
 import type { PlanDayResponse } from "../types/planDay.ts";
 
@@ -22,7 +22,7 @@ export default function DayListPage() {
     const [newDayName, setNewDayName] = useState('');
 
     // 1. 목록 불러오기
-    const fetchDays = async (pageNum = 0, currentSearchKeyword = searchKeyword) => {
+    const fetchDays = useCallback(async (pageNum = 0, currentSearchKeyword = '') => {
         try {
             setLoading(true);
 
@@ -42,9 +42,9 @@ export default function DayListPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    useEffect(() => { fetchDays(); }, []);
+    useEffect(() => { void fetchDays(); }, [fetchDays]);
 
     // 2. 검색 핸들러
     const handleSearch = () => {

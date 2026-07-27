@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
-import { toPng } from "html-to-image";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Map, useMap, AdvancedMarker, Pin } from "@vis.gl/react-google-maps";
 import { addTime } from "../../utils/scheduleUtils";
 import { getSpotTypeInfo } from "../../utils/spotUtils";
 import type { DayScheduleResponse } from "../../types/schedule";
+import type { ExportOptions, ExportSection } from "./scheduleExportUtils";
 
 // 🛠️ [유틸] 메모 파싱용 (인저리 타임 태그만 처리)
 const getInjuryTime = (memo: string, tag: string) => {
@@ -17,56 +17,6 @@ const cleanMemoTags = (memo: string) => {
     if (!memo) return '';
     return memo.replace(/#si:\s*\d+/g, '').replace(/#mi:\s*\d+/g, '').replace(/#visited/g, '').trim();
 };
-
-// 🗺️ 정적 지도 쿼리 생성 함수 (DTO 필드 직접 사용)
-export const getStaticMapQuery = (
-    schedules: DayScheduleResponse[],
-    customView?: { center: { lat: number, lng: number }, zoom: number }
-) => {
-    // ✅ [핵심 변경] 메모 파싱 없이 lat, lng 필드 직접 사용
-    const points = schedules
-        .map((s, idx) => ({
-            lat: s.lat,
-            lng: s.lng,
-            index: idx + 1
-        }))
-        .filter(p => p.lat !== 0 && p.lng !== 0 && p.lat != null && p.lng != null);
-
-    if (points.length === 0) return null;
-
-    // 마커 생성 로직
-    const limitedPoints = points.length > 20
-        ? points.filter((_, i) => i === 0 || i === points.length - 1 || i % Math.ceil(points.length / 20) === 0)
-        : points;
-
-    const markers = limitedPoints
-        .map(p => {
-            let label = "";
-            if (p.index < 10) label = p.index.toString();
-            else if (p.index < 36) label = String.fromCharCode('A'.charCodeAt(0) + (p.index - 10));
-
-            const labelParam = label ? `|label:${label}` : "";
-            // 파이프(|) 문자는 URL 인코딩 없이 그대로 사용 (mapApi에서 처리됨)
-            return `markers=color:blue${labelParam}|${p.lat},${p.lng}`;
-        })
-        .join("&");
-
-    const pathStr = points.map(p => `${p.lat},${p.lng}`).join("|");
-    const path = `path=color:0x3B82F6ff|weight:5|${pathStr}`;
-
-    // 사용자 지정 뷰가 있으면 해당 center/zoom 사용
-    let viewParams = "";
-    if (customView) {
-        viewParams = `&center=${customView.center.lat},${customView.center.lng}&zoom=${customView.zoom}`;
-    }
-
-    const cacheBuster = `&_t=${Date.now()}`;
-
-    return `size=600x400&scale=2&maptype=roadmap${viewParams}&${markers}&${path}${cacheBuster}`;
-};
-
-export interface ExportSection { id: number | string; title: string; memo: string; schedules: DayScheduleResponse[]; }
-export interface ExportOptions { header: boolean; map: boolean; schedule: boolean; }
 
 // 🎨 [View 1] 단일 일정 저장용
 export const DayScheduleExportView = ({ dayName, subTitle, memo, schedules, options, mapUrl }: {
@@ -208,13 +158,12 @@ const ModalMapController = ({ points, onStateChange }: {
     onStateChange: (state: { center: { lat: number, lng: number }, zoom: number }) => void
 }) => {
     const map = useMap();
-    const bounds = new google.maps.LatLngBounds();
-
     useEffect(() => {
         if (!map || points.length === 0) return;
+        const bounds = new google.maps.LatLngBounds();
         points.forEach(p => bounds.extend(p));
         map.fitBounds(bounds);
-    }, [map]);
+    }, [map, points]);
 
     const handleCameraChanged = useCallback(() => {
         if (!map) return;
@@ -242,15 +191,21 @@ export const ImageExportModal = ({ isOpen, onClose, onConfirm, options, setOptio
     schedules: DayScheduleResponse[];
 }) => {
     const [mapState, setMapState] = useState<{ center: { lat: number, lng: number }, zoom: number } | undefined>(undefined);
+    const points = useMemo(
+        () => schedules
+            .map(schedule => ({ lat: schedule.lat, lng: schedule.lng }))
+            .filter(point =>
+                point.lat !== 0
+                && point.lng !== 0
+                && point.lat != null
+                && point.lng != null
+            ),
+        [schedules]
+    );
 
     if (!isOpen) return null;
 
     const isValid = options.map || options.schedule;
-
-    // ✅ [변경] DTO 필드 직접 사용하여 핀 추출 (lat, lng 필드 확인)
-    const points = schedules
-        .map(s => ({ lat: s.lat, lng: s.lng }))
-        .filter(p => p.lat !== 0 && p.lng !== 0 && p.lat != null && p.lng != null);
 
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-left">
@@ -293,29 +248,4 @@ export const ImageExportModal = ({ isOpen, onClose, onConfirm, options, setOptio
             </div>
         </div>
     );
-};
-
-export const useScheduleExport = () => {
-    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-    const [exportOptions, setExportOptions] = useState<ExportOptions>({ header: true, map: true, schedule: true });
-    const openExportModal = () => setIsExportModalOpen(true);
-    const closeExportModal = () => setIsExportModalOpen(false);
-    const handleSaveImage = async (filename: string, element: HTMLElement | null) => {
-        if (!element) return;
-        try {
-            const imgs = Array.from(element.querySelectorAll("img"));
-            await Promise.all(imgs.map((img) => {
-                if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-                return new Promise<void>((resolve) => { const done = () => resolve(); img.addEventListener("load", done, { once: true }); img.addEventListener("error", done, { once: true }); });
-            }));
-            await new Promise((r) => requestAnimationFrame(() => r(null)));
-            const dataUrl = await toPng(element, { backgroundColor: "#ffffff", cacheBust: false, pixelRatio: 2, skipFonts: true });
-            const link = document.createElement("a");
-            link.download = `${filename}.png`;
-            link.href = dataUrl;
-            link.click();
-            closeExportModal();
-        } catch (err) { console.error(err); alert("이미지 저장 중 오류가 발생했습니다."); }
-    };
-    return { isExportModalOpen, openExportModal, closeExportModal, exportOptions, setExportOptions, handleSaveImage };
 };

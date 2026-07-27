@@ -15,12 +15,14 @@ import DayScheduleList from "../day/DayScheduleList";
 interface Props {
     id: number | string;
     dayOrder: number;
+    routeDate?: string;
     data?: PlanDayResponse;
     // schedules Props 제거: 이제 훅이 직접 서버에서 가져오고 관리합니다.
     showInjury: boolean;
     onRefresh: () => void;
     onUpdateDayInfo: (dayId: number, newName: string, newMemo: string) => void;
     onSchedulesChange: (dayId: number, schedules: DayScheduleResponse[]) => void;
+    refreshVersion: number;
     setDirty: (id: string, isDirty: boolean) => void;
     onToggle: (dayId: number, dayOrder: number, isOpen: boolean) => void;
     pickingTarget: { dayId: number, scheduleId: number } | null;
@@ -34,8 +36,8 @@ const DAY_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4
 const getDayColor = (dayOrder: number) => DAY_COLORS[(dayOrder - 1) % DAY_COLORS.length];
 
 export default function PlanDayItem({
-                                        id, dayOrder, data, showInjury, onUpdateDayInfo,
-                                        onSchedulesChange, onToggle, pickingTarget, setPickingTarget,
+                                        id, dayOrder, routeDate, data, showInjury, onUpdateDayInfo,
+                                        onSchedulesChange, refreshVersion, onToggle, pickingTarget, setPickingTarget,
                                         isVisibleOnMap, onToggleMapVisibility, onExportDay
                                     }: Props) {
 
@@ -56,8 +58,8 @@ export default function PlanDayItem({
     const [isExpanded, setIsExpanded] = useState(false);
 
     const [isEditingInfo, setIsEditingInfo] = useState(false);
-    const [editTitle, setEditTitle] = useState("");
-    const [editMemo, setEditMemo] = useState("");
+    const [editTitle, setEditTitle] = useState(data?.dayName || "");
+    const [editMemo, setEditMemo] = useState(data?.memo || "");
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -66,21 +68,14 @@ export default function PlanDayItem({
         if (isExpanded && data?.id) {
             fetchSchedules(data.id);
         }
-    }, [isExpanded, data?.id, fetchSchedules]);
+    }, [isExpanded, data?.id, fetchSchedules, refreshVersion]);
 
     // ✅ 훅의 데이터가 변경될 때마다 부모(지도 핀 등) 동기화
     useEffect(() => {
         if (data?.id) {
             onSchedulesChange(data.id, schedules);
         }
-    }, [schedules, data?.id]);
-
-    useEffect(() => {
-        if (data) {
-            setEditTitle(data.dayName);
-            setEditMemo(data.memo || "");
-        }
-    }, [data]);
+    }, [schedules, data?.id, onSchedulesChange]);
 
     const handleToggle = () => {
         if (isEditingInfo) return;
@@ -173,7 +168,13 @@ export default function PlanDayItem({
                                 <div className="group relative">
                                     <div className="flex items-center gap-2">
                                         <h3 className="text-lg font-bold text-gray-900 truncate">{data.dayName}</h3>
-                                        <button onClick={(e) => { e.stopPropagation(); setIsEditingInfo(true); setIsExpanded(true); }} className="text-gray-300 hover:text-orange-500 opacity-0 group-hover:opacity-100 transition p-1">✎</button>
+                                        <button onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditTitle(data.dayName);
+                                            setEditMemo(data.memo || "");
+                                            setIsEditingInfo(true);
+                                            setIsExpanded(true);
+                                        }} className="text-gray-300 hover:text-orange-500 opacity-0 group-hover:opacity-100 transition p-1">✎</button>
                                     </div>
                                     <p className={`text-xs truncate mt-0.5 ${data.memo ? 'text-gray-500' : 'text-gray-300'}`}>{data.memo || "메모 없음"}</p>
                                 </div>
@@ -209,6 +210,7 @@ export default function PlanDayItem({
                             <DayScheduleList
                                 variant="card"
                                 schedules={schedules}
+                                routeDate={routeDate}
                                 showInjury={showInjury}
                                 onUpdate={handleItemUpdate}
                                 onToggleVisit={toggleVisit}

@@ -39,7 +39,11 @@ export const isValidDate = (dateString: string): boolean => {
 };
 
 // ✅ [신규] 기간 계산 및 검증 결과 반환
-export const getDurationInfo = (startStr: string, endStr: string) => {
+type DurationInfo =
+  | { valid: false; msg: string; nights?: never; days?: never }
+  | { valid: true; msg: string; nights: number; days: number };
+
+export const getDurationInfo = (startStr: string, endStr: string): DurationInfo => {
   if (!startStr || !endStr) return { valid: false, msg: '날짜를 입력해주세요' };
 
   if (!isValidDate(startStr) || !isValidDate(endStr)) {

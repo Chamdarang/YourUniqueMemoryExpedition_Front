@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 // API
@@ -8,7 +8,7 @@ import { deletePurchase, updatePurchase, getAllPurchases, createPurchase } from 
 // Types
 import type { SpotResponse } from "../types/spot";
 import type { SpotPurchaseResponse, SpotPurchaseSaveRequest, PurchaseSearchParams } from "../types/purchase";
-import type { UsedScheduleResponse } from "../types/error";
+import type { SpotInUseError, UsedScheduleResponse } from "../types/error";
 
 // Components
 import SpotFilter, { type SpotSearchParams } from "../components/spot/SpotFilter";
@@ -55,7 +55,7 @@ export default function SpotListPage() {
         note: '', spotUserId: 0
     });
 
-    const fetchPurchasesData = async (pageNum = 0) => {
+    const fetchPurchasesData = useCallback(async (pageNum = 0) => {
         try {
             setLoading(true); // ✅ 로딩 시작
             const data = await getAllPurchases({ page: pageNum, size: 20, ...activePFilter });
@@ -64,9 +64,9 @@ export default function SpotListPage() {
             setTotalElements(data.totalElements);
             setPage(data.number);
         } finally { setLoading(false); } // ✅ 로딩 종료
-    };
+    }, [activePFilter]);
 
-    const fetchSpotsData = async (pageNum = 0, currentFilter = spotFilter) => {
+    const fetchSpotsData = useCallback(async (pageNum = 0, currentFilter = spotFilter) => {
         try {
             setLoading(true); // ✅ 로딩 시작
             const data = await getMySpots({
@@ -83,7 +83,7 @@ export default function SpotListPage() {
                 setPage(data.number);
             }
         } finally { setLoading(false); } // ✅ 로딩 종료
-    };
+    }, [spotFilter, viewMode]);
 
     useEffect(() => {
         if (viewMode === 'PURCHASE') {
@@ -93,7 +93,7 @@ export default function SpotListPage() {
         else if (viewMode === 'SPOT') {
             fetchSpotsData(0, spotFilter);
         }
-    }, [viewMode, activePFilter, spotFilter]);
+    }, [viewMode, activePFilter, spotFilter, fetchPurchasesData, fetchSpotsData]);
 
     const handleSpotSearch = (newParams: SpotSearchParams) => {
         setSpotFilter(newParams);
@@ -107,9 +107,10 @@ export default function SpotListPage() {
             alert("삭제되었습니다.");
             setIsInUseModalOpen(false);
             fetchSpotsData(page);
-        } catch (err: any) {
-            const errorCode = err.code || err.response?.data?.code;
-            const errorData = err.data || err.response?.data?.data;
+        } catch (error) {
+            const err = error as Partial<SpotInUseError> & Error;
+            const errorCode = err.code;
+            const errorData = err.data;
             if (errorCode === 'SPOT_IN_USE') {
                 setPendingDeleteId(id);
                 setConflictUsage(errorData || []);
@@ -123,12 +124,11 @@ export default function SpotListPage() {
     const handleToggleVisit = async (spot: SpotResponse) => {
         try {
             await updateSpot(spot.id, {
-                spotName: spot.spotName,
                 spotType: spot.spotType,
                 isVisit: !spot.isVisit
             });
             fetchSpotsData(page);
-        } catch (e) { alert("업데이트 실패"); }
+        } catch { alert("업데이트 실패"); }
     };
 
     const handleSavePurchase = async () => {
@@ -137,7 +137,7 @@ export default function SpotListPage() {
         try {
             const { spotUserId, ...requestBody } = formPurchase;
             if (editingId) {
-                await updatePurchase(editingId, { ...requestBody, spotUserId } as any);
+                await updatePurchase(editingId, { ...requestBody, spotUserId });
                 alert("수정되었습니다! ✨");
             } else {
                 await createPurchase(spotUserId, requestBody);
@@ -212,6 +212,7 @@ export default function SpotListPage() {
                         isAdding={isAdding}
                         setIsAdding={setIsAdding}
                         editingId={editingId}
+                        setEditingId={setEditingId}
                         formPurchase={formPurchase}
                         setFormPurchase={setFormPurchase}
                     />
@@ -219,7 +220,7 @@ export default function SpotListPage() {
                     <PurchaseList
                         purchases={purchases}
                         onEdit={handleEditStart}
-                        onToggleStatus={(p) => updatePurchase(p.id, { ...p, status: p.status === 'ACQUIRED' ? 'WANT' : 'ACQUIRED' } as any).then(() => fetchPurchasesData(page))}
+                        onToggleStatus={(p) => updatePurchase(p.id, { ...p, status: p.status === 'ACQUIRED' ? 'WANT' : 'ACQUIRED' }).then(() => fetchPurchasesData(page))}
                         onDelete={(id) => deletePurchase(id).then(() => fetchPurchasesData(page))}
                     />
 

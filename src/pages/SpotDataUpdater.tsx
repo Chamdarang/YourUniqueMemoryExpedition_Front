@@ -69,8 +69,6 @@ function SpotDataUpdaterContent() {
                     });
 
                     // 3. 데이터 가공
-                    const addrParts = place.formattedAddress?.split(' ') || [];
-                    const shortAddr = addrParts.length > 2 ? addrParts.slice(1).join(' ') : (place.formattedAddress || "");
                     const openingHours = place.regularOpeningHours?.weekdayDescriptions || [];
                     const photoUrl = place.photos && place.photos.length > 0
                         ? place.photos[0].getURI({ maxWidth: 800 })
@@ -99,7 +97,7 @@ function SpotDataUpdaterContent() {
             }
             addLog("🏁 모든 데이터 보정 작업이 끝났습니다.");
             alert("일괄 갱신 완료!");
-        } catch (err) {
+        } catch {
             addLog("🔥 치명적 오류 발생");
         } finally {
             setIsUpdating(false);

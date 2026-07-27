@@ -50,3 +50,7 @@ export interface PurchaseSearchParams {
   status?: PurchaseStatus;
   category?: string;
 }
+
+export type SpotPurchaseUpdateRequest = SpotPurchaseSaveRequest & {
+  spotUserId?: number;
+};

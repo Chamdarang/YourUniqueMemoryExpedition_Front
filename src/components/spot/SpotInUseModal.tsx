@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 // ✅ [수정] 주석 해제 (scheduleApi에서 가져오기)
@@ -15,13 +15,8 @@ interface Props {
 }
 
 export default function SpotInUseModal({ isOpen, onClose, usageList, onSpotDeleteRetry }: Props) {
-    const [conflicts, setConflicts] = useState<UsedScheduleResponse[]>([]);
-
-    useEffect(() => {
-        if (isOpen) {
-            setConflicts(usageList);
-        }
-    }, [isOpen, usageList]);
+    const [removedScheduleIds, setRemovedScheduleIds] = useState<Set<number>>(new Set());
+    const conflicts = usageList.filter(conflict => !removedScheduleIds.has(conflict.scheduleId));
 
     const handleRemoveSchedule = async (scheduleId: number) => {
         if (!confirm("이 일정에서만 장소를 제외하시겠습니까?")) return;
@@ -33,7 +28,7 @@ export default function SpotInUseModal({ isOpen, onClose, usageList, onSpotDelet
 
             // 성공 시 목록에서 제거 (UI 갱신)
             const remaining = conflicts.filter(c => c.scheduleId !== scheduleId);
-            setConflicts(remaining);
+            setRemovedScheduleIds(current => new Set(current).add(scheduleId));
 
             // 3. 더 이상 사용 중인 곳이 없다면? -> 장소 삭제 재시도
             if (remaining.length === 0) {

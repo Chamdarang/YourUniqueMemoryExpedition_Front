@@ -7,6 +7,7 @@ export interface SpotResponse {
   id: number;
   placeId: string;
   spotName: string;
+  displayName?: string | null;
   spotType: SpotType;
   address: string;
   shortAddress?: string;  
@@ -46,11 +47,17 @@ export interface SpotDetailResponse extends SpotResponse {
 
 // 3. [신규] 장소 수정 요청 (SpotUpdateRequest)
 export interface SpotUpdateRequest {
-  spotName: string;
-  spotType: SpotType;
-  isVisit: boolean;
+  spotName?: string;
+  spotType?: SpotType;
+  address?: string;
+  shortAddress?: string;
+  website?: string;
+  googleMapUrl?: string;
+  lat?: number;
+  lng?: number;
+  isVisit?: boolean;
   description?: string;
-  metadata: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   userMetadata?: Record<string, unknown>;
   
 }

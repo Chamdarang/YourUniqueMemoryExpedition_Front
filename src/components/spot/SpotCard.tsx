@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import type { SpotResponse } from "../../types/spot";
 
 // Utils
-import { getSpotTypeInfo } from "../../utils/spotUtils";
+import { getSpotDisplayName, getSpotTypeInfo } from "../../utils/spotUtils";
 
 interface SpotCardProps {
   spot: SpotResponse;
@@ -56,7 +56,7 @@ export default function SpotCard({ spot, onDelete, onToggleVisit }: SpotCardProp
           <div className="cursor-pointer mb-3" onClick={() => navigate(`/spots/${spot.id}`)}>
             {/* ✅ 텍스트 크기를 text-lg로 축소 */}
             <h3 className="text-lg font-bold text-gray-900 mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors">
-              {spot.spotName}
+              {getSpotDisplayName(spot)}
             </h3>
             <div className="flex items-center gap-1">
               <span className="text-gray-300 text-[10px]">📍</span>

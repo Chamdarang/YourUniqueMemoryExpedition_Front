@@ -8,7 +8,10 @@ interface Props {
     onEdit: (plan: PlanResponse) => void; // ✅ 수정 핸들러 받기
 }
 
-const getPlanStatus = (startDate: string, endDate: string) => {
+const getPlanStatus = (startDate: string, endDate: string): {
+    label: string;
+    color: 'blue' | 'orange' | 'gray';
+} => {
     // 로컬 시간 기준 오늘 날짜
     const d = new Date();
     const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -42,7 +45,6 @@ export default function PlanList({ plans, onDelete, onEdit }: Props) {
                     orange: { bar: 'bg-orange-500', badge: 'bg-orange-100 text-orange-600', text: 'group-hover:text-orange-600 text-gray-900' },
                     gray: { bar: 'bg-gray-300', badge: 'bg-gray-100 text-gray-500', text: 'text-gray-500' },
                 };
-                // @ts-ignore
                 const styles = colorClasses[color] || colorClasses.blue;
 
                 return (
