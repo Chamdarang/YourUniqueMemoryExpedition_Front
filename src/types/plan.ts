@@ -66,3 +66,64 @@ export interface PlanTransferSchedule {
     memo: string | null;
     movingMemo: string | null;
 }
+
+export interface PlanImportPreview {
+    plan: PlanTransferData;
+    summary: {
+        sourceRows: number;
+        importedDays: number;
+        importedSchedules: number;
+        skippedRows: number;
+        fixedStartTimes: number;
+        newSpots: number;
+    };
+    issues: Array<{
+        rowNumber: number;
+        severity: 'WARNING' | 'ERROR';
+        message: string;
+        value: string | null;
+    }>;
+}
+
+export interface PlanImportAnalysis {
+    fileName: string;
+    fileType: 'XLSX' | 'XLS' | 'CSV';
+    detectedCharset: string | null;
+    detectedDelimiter: string | null;
+    sheets: Array<{
+        name: string;
+        rowCount: number;
+        suggestedHeaderRow: number;
+        columns: Array<{
+            index: number;
+            label: string;
+            samples: string[];
+        }>;
+    }>;
+}
+
+export type ImportDayMode = 'NONE' | 'COLUMN' | 'DATE' | 'SHEET';
+export type ImportRowMode = 'ALL' | 'ARROW' | 'TYPE_COLUMN';
+export type ImportDurationUnit = 'AUTO' | 'MINUTES' | 'HOURS' | 'EXCEL';
+
+export interface GeneralImportConfig {
+    planName: string;
+    startDate: string | null;
+    sheetNames: string[];
+    headerRow: number;
+    dataStartRow: number;
+    dayMode: ImportDayMode;
+    rowMode: ImportRowMode;
+    columns: Record<string, number>;
+    movementTypeValues: string[];
+    durationUnit: ImportDurationUnit;
+    movingDurationUnit: ImportDurationUnit;
+    defaultStartTime: string;
+    defaultDurationMinutes: number;
+    lastDurationMinutes: number;
+    firstLineAsPlaceName: boolean;
+    inheritBlankDay: boolean;
+    transportationMappings: Record<string, Transportation>;
+    csvCharset: string;
+    csvDelimiter: string;
+}

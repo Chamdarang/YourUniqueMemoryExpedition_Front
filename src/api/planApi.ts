@@ -1,5 +1,5 @@
 import type {ApiResponse, PageResponse} from "../types/common";
-import type { PlanCreateRequest, PlanDetailResponse, PlanResponse, PlanTransferData, PlanUpdateRequest } from "../types/plan";
+import type { GeneralImportConfig, PlanCreateRequest, PlanDetailResponse, PlanImportAnalysis, PlanImportPreview, PlanResponse, PlanTransferData, PlanUpdateRequest } from "../types/plan";
 import { fetchWithAuth } from "./utils";
 
 export interface GetPlansParams {
@@ -111,19 +111,35 @@ export const importPlanData = async (data: PlanTransferData): Promise<PlanRespon
   return json.data;
 };
 
-export const previewPlanSpreadsheet = async (
+export const analyzePlanImportFile = async (
   file: File,
-  planName: string,
-  startDate: string,
-): Promise<PlanTransferData> => {
+  charset = 'AUTO',
+  delimiter = 'AUTO',
+): Promise<PlanImportAnalysis> => {
   const body = new FormData();
   body.append('file', file);
-  const query = new URLSearchParams({ planName, startDate });
-  const res = await fetchWithAuth(`/api/plans/import/spreadsheet/preview?${query}`, {
+  const query = new URLSearchParams({ charset, delimiter });
+  const res = await fetchWithAuth(`/api/plans/import/file/analyze?${query}`, {
     method: 'POST',
     body,
   });
-  const json: ApiResponse<PlanTransferData> = await res.json();
+  const json: ApiResponse<PlanImportAnalysis> = await res.json();
+  if (!json.success) throw new Error(json.message);
+  return json.data;
+};
+
+export const previewGeneralPlanImport = async (
+  file: File,
+  config: GeneralImportConfig,
+): Promise<PlanImportPreview> => {
+  const body = new FormData();
+  body.append('file', file);
+  body.append('config', new Blob([JSON.stringify(config)], { type: 'application/json' }));
+  const res = await fetchWithAuth('/api/plans/import/file/preview', {
+    method: 'POST',
+    body,
+  });
+  const json: ApiResponse<PlanImportPreview> = await res.json();
   if (!json.success) throw new Error(json.message);
   return json.data;
 };

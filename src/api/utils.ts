@@ -29,15 +29,25 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
     if (options.body instanceof FormData) {
         delete authHeaders['Content-Type'];
     }
+    const clientRequestId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const headers = {
         ...authHeaders,
+        'X-Request-ID': clientRequestId,
         ...(options.headers as Record<string, string>),
     };
 
-    const response = await fetch(getApiUrl(url), {
-        ...options,
-        headers,
-    });
+    let response: Response;
+    try {
+        response = await fetch(getApiUrl(url), {
+            ...options,
+            headers,
+        });
+    } catch (error) {
+        console.error('api_network_error', { requestId: clientRequestId, url, error });
+        throw new Error(`서버에 연결하지 못했습니다. 요청 ID: ${clientRequestId}`);
+    }
 
     // 2. 만약 백엔드에서 "401 Unauthorized" (토큰 만료/위조) 응답을 주면?
     if (response.status === 401) {
@@ -54,6 +64,33 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
         }
         // 에러를 던져서 이후 로직(데이터 처리 등)이 실행되지 않게 막음
         throw new Error("Session expired");
+    }
+
+    if (!response.ok) {
+        const requestId = response.headers.get('X-Request-ID') || clientRequestId;
+        try {
+            const payload = await response.clone().json() as { success?: boolean; message?: string };
+            if (payload.success === false
+                && payload.message
+                && !payload.message.includes('요청 ID:')) {
+                payload.message = `${payload.message} (요청 ID: ${requestId})`;
+                const responseHeaders = new Headers(response.headers);
+                responseHeaders.delete('content-length');
+                responseHeaders.delete('content-encoding');
+                responseHeaders.set('content-type', 'application/json');
+                return new Response(JSON.stringify(payload), {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: responseHeaders,
+                });
+            }
+        } catch {
+            console.error('api_error_response_parse_failed', {
+                requestId,
+                url,
+                status: response.status,
+            });
+        }
     }
 
     return response;

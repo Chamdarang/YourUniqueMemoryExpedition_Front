@@ -38,6 +38,14 @@ export const isValidDate = (dateString: string): boolean => {
   return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
 };
 
+export const shiftDate = (dateString: string, days: number): string => {
+  if (!isValidDate(dateString)) return '';
+  const [year, month, day] = dateString.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
 // ✅ [신규] 기간 계산 및 검증 결과 반환
 type DurationInfo =
   | { valid: false; msg: string; nights?: never; days?: never }

@@ -62,6 +62,13 @@ export interface SpotUpdateRequest {
   
 }
 
+export interface SpotDuplicateCandidate {
+  first: SpotResponse;
+  second: SpotResponse;
+  reason: string;
+  distanceMeters: number;
+}
+
 
 
 

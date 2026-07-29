@@ -7,7 +7,7 @@ import { detachPlanDay } from "../../api/dayApi";
 
 // Types & Utils
 import type { PlanDetailResponse } from "../../types/plan";
-import { getDurationInfo } from "../../utils/timeUtils";
+import { getDurationInfo, shiftDate } from "../../utils/timeUtils";
 
 interface Props {
   plan: PlanDetailResponse;
@@ -93,6 +93,19 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
 
   const viewDuration = getDurationInfo(plan.planStartDate, plan.planEndDate);
   const editDuration = getDurationInfo(editForm.planStartDate, editForm.planEndDate);
+  const scheduleDayCount = Math.max(1, plan.days?.length || plan.planDays || 1);
+
+  const fitEndDateToSchedules = () => {
+    const fittedEndDate = shiftDate(editForm.planStartDate, scheduleDayCount - 1);
+    if (!fittedEndDate) return alert("시작일을 먼저 입력해주세요.");
+    setEditForm(current => ({ ...current, planEndDate: fittedEndDate }));
+  };
+
+  const fitStartDateToSchedules = () => {
+    const fittedStartDate = shiftDate(editForm.planEndDate, -(scheduleDayCount - 1));
+    if (!fittedStartDate) return alert("종료일을 먼저 입력해주세요.");
+    setEditForm(current => ({ ...current, planStartDate: fittedStartDate }));
+  };
 
   const getStatusLabel = () => {
     // ✅ [수정] UTC 대신 로컬 타임존 기준으로 오늘 날짜 가져오기
@@ -145,16 +158,31 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                     <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">여행 이름</label>
                     <input type="text" className="w-full text-3xl font-extrabold text-gray-900 border-b-2 border-blue-200 focus:border-blue-500 bg-transparent outline-none py-1 transition placeholder-gray-300" value={editForm.planName} onChange={(e) => setEditForm({ ...editForm, planName: e.target.value })} placeholder="여행 제목 입력" autoFocus />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                       <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">시작일</label>
-                      <input type="date" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-gray-700 focus:ring-2 focus:ring-blue-100 outline-none transition" value={editForm.planStartDate} onChange={(e) => setEditForm({ ...editForm, planStartDate: e.target.value })} />
+                      <input type="date" min="1900-01-01" max="2100-12-31" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-gray-700 focus:ring-2 focus:ring-blue-100 outline-none transition" value={editForm.planStartDate} onChange={(e) => setEditForm({ ...editForm, planStartDate: e.target.value })} />
+                      <button
+                        type="button"
+                        onClick={fitEndDateToSchedules}
+                        className="mt-2 w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                      >
+                        시작일 기준으로 종료일 맞추기
+                      </button>
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">종료일</label>
-                      <input type="date" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-gray-700 focus:ring-2 focus:ring-blue-100 outline-none transition" value={editForm.planEndDate} onChange={(e) => setEditForm({ ...editForm, planEndDate: e.target.value })} />
+                      <input type="date" min="1900-01-01" max="2100-12-31" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-gray-700 focus:ring-2 focus:ring-blue-100 outline-none transition" value={editForm.planEndDate} onChange={(e) => setEditForm({ ...editForm, planEndDate: e.target.value })} />
+                      <button
+                        type="button"
+                        onClick={fitStartDateToSchedules}
+                        className="mt-2 w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                      >
+                        종료일 기준으로 시작일 맞추기
+                      </button>
                     </div>
                   </div>
+                  <div className="text-center text-xs font-bold text-gray-400">현재 등록된 일정 {scheduleDayCount}일 기준</div>
                   <div className={`text-center py-2 rounded-lg text-sm font-bold ${editDuration.valid ? 'text-blue-600 bg-blue-50' : 'text-red-500 bg-red-50'}`}>{editDuration.msg}</div>
                   <div>
                     <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">메모</label>

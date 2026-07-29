@@ -1,6 +1,7 @@
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import ScheduleItem from "../schedule/ScheduleItem";
 import type { DayScheduleResponse, ScheduleUpdateRequest } from "../../types/schedule";
+import { getScheduleTimingWarning } from "../../utils/scheduleUtils";
 
 interface Props {
     schedules: DayScheduleResponse[];
@@ -62,6 +63,11 @@ export default function DayScheduleList({
                         // ✅ 각 항목 렌더링 시에도 유효성 검사 추가
                         if (!schedule || !schedule.id) return null;
 
+                        const timingWarning = getScheduleTimingWarning(
+                            index > 0 ? schedules[index - 1] : null,
+                            schedule,
+                        );
+
                         return (
                             <div
                                 key={schedule.id}
@@ -72,6 +78,16 @@ export default function DayScheduleList({
                                 }`}
                                 onClick={() => onSelect && onSelect(schedule.id)}
                             >
+                                {timingWarning && (
+                                    <div className={`mb-2 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold ${
+                                        timingWarning.type === 'CONFLICT'
+                                            ? 'border-red-200 bg-red-50 text-red-700'
+                                            : 'border-orange-200 bg-orange-50 text-orange-700'
+                                    }`}>
+                                        <span>{timingWarning.type === 'CONFLICT' ? '⚠️' : '⏳'}</span>
+                                        <span>{timingWarning.message}</span>
+                                    </div>
+                                )}
                                 <ScheduleItem
                                     schedule={schedule}
                                     previousSchedule={index > 0 ? schedules[index - 1] : null}

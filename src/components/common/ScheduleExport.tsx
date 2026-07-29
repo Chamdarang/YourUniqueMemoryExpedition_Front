@@ -111,7 +111,7 @@ const ScheduleList = ({ schedules }: { schedules: DayScheduleResponse[] }) => {
                 const typeInfo = getSpotTypeInfo(item.spotType || 'OTHER');
 
                 const cleanMemo = cleanMemoTags(item.memo);
-                const transportIcons: Record<string, string> = { WALK: '🚶', BUS: '🚌', TRAIN: '🚃', TAXI: '🚕', SHIP: '🚢', AIRPLANE: '✈️' };
+                const transportIcons: Record<string, string> = { WALK: '🚶', BUS: '🚌', TRAIN: '🚃', TAXI: '🚕', CAR: '🚗', SHIP: '🚢', AIRPLANE: '✈️' };
 
                 const moveInjury = getInjuryTime(item.movingMemo, '#mi:');
                 const pureMovingDuration = Math.max(0, item.movingDuration - moveInjury);

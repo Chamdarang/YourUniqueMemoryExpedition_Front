@@ -448,11 +448,11 @@ export default function ScheduleItem({
     const moveStartTime = subTimeStr(form.startTime, form.movingDuration);
 
     const getTransIcon = (type: Transportation) => {
-        const icons: Record<string, string> = { WALK: '🚶', BUS: '🚌', TRAIN: '🚃', TAXI: '🚕', SHIP: '🚢', AIRPLANE: '✈️' };
+        const icons: Record<string, string> = { WALK: '🚶', BUS: '🚌', TRAIN: '🚃', TAXI: '🚕', CAR: '🚗', SHIP: '🚢', AIRPLANE: '✈️' };
         return icons[type] || '➡️';
     };
     const getTransLabel = (type: Transportation) => {
-        const labels: Record<string, string> = { WALK: '도보', BUS: '버스', TRAIN: '열차', TAXI: '택시', SHIP: '배', AIRPLANE: '비행기' };
+        const labels: Record<string, string> = { WALK: '도보', BUS: '버스', TRAIN: '열차', TAXI: '택시', CAR: '자동차', SHIP: '배', AIRPLANE: '비행기' };
         return labels[type] || '이동';
     };
 
@@ -496,7 +496,8 @@ export default function ScheduleItem({
                 <option value="WALK">🚶 도보</option>
                 <option value="BUS">🚌 버스·대중교통</option>
                 <option value="TRAIN">🚆 전철·대중교통</option>
-                <option value="TAXI">🚕 택시·자동차</option>
+                <option value="TAXI">🚕 택시</option>
+                <option value="CAR">🚗 자동차</option>
                 <option value="BICYCLE">🚲 자전거</option>
                 <option value="MOTORCYCLE">🏍️ 오토바이</option>
                 <option value="SHIP">⛴️ 배 (수동 입력)</option>
@@ -585,7 +586,7 @@ export default function ScheduleItem({
                                         </div>
                                         {routeEstimator}
                                         <div className="grid grid-cols-2 gap-3 mb-3">
-                                            <div><label className="text-xs text-blue-600 font-bold mb-1 block">수단</label><select className="w-full p-2 border border-blue-200 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-300" value={form.transportation} onChange={e => handleTransportationChange(e.target.value as Transportation)}><option value="WALK">🚶 도보</option><option value="BUS">🚌 버스</option><option value="TRAIN">🚃 열차</option><option value="TAXI">🚕 택시</option><option value="SHIP">🚢 배</option><option value="AIRPLANE">✈️ 비행기</option></select></div>
+                                            <div><label className="text-xs text-blue-600 font-bold mb-1 block">수단</label><select className="w-full p-2 border border-blue-200 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-300" value={form.transportation} onChange={e => handleTransportationChange(e.target.value as Transportation)}><option value="WALK">🚶 도보</option><option value="BUS">🚌 버스</option><option value="TRAIN">🚃 열차</option><option value="TAXI">🚕 택시</option><option value="CAR">🚗 자동차</option><option value="SHIP">🚢 배</option><option value="AIRPLANE">✈️ 비행기</option></select></div>
                                             <div><label className="text-xs text-blue-600 font-bold mb-1 block">이동 메모</label><input type="text" className="w-full p-2 border border-blue-200 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-300" placeholder="예) 205번 버스" value={form.movingMemo} onChange={e => setForm({...form, movingMemo: e.target.value})} /></div>
                                         </div>
                                         <div className="flex gap-2"><button onClick={handleCancel} className="flex-1 bg-white border border-blue-200 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">취소</button><button onClick={handleDone} className="flex-1 bg-blue-500 text-white py-2 rounded-lg text-sm font-bold hover:bg-blue-600">확인</button></div>

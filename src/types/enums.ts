@@ -6,6 +6,7 @@ export type Transportation =
   | 'SHIP' 
   | 'AIRPLANE' 
   | 'TAXI' 
+  | 'CAR'
   | 'BICYCLE' 
   | 'MOTORCYCLE';
 
