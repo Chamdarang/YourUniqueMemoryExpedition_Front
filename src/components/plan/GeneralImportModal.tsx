@@ -10,6 +10,7 @@ import type {
   PlanResponse,
 } from '../../types/plan';
 import type { Transportation } from '../../types/enums';
+import { enforceFourDigitDateYear, limitDateYear } from '../../utils/timeUtils';
 
 interface Props {
   file: File;
@@ -289,9 +290,10 @@ export default function GeneralImportModal({ file, onClose, onImported }: Props)
                   type="date"
                   min="1900-01-01"
                   max="2100-12-31"
+                  onInput={enforceFourDigitDateYear}
                   value={config.startDate ?? ''}
                   onChange={event => {
-                    const value = event.target.value;
+                    const value = limitDateYear(event.target.value);
                     if (!value) {
                       update('startDate', null);
                       return;

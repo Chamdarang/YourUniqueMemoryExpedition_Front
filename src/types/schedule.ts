@@ -27,8 +27,18 @@ export interface ScheduleSyncRequest {
   schedules: ScheduleItemRequest[];
 }
 
-export interface ScheduleCreateRequest {
+export interface ScheduleCreateRequest extends ScheduleQuickCreateFields {
   scheduleOrder: number; // 추가될 순서
+}
+
+export interface ScheduleQuickCreateFields {
+  spotUserId?: number | null;
+  spotName?: string;
+  lat?: number;
+  lng?: number;
+  spotType?: SpotType;
+  startTime?: string;
+  memo?: string;
 }
 
 export interface ScheduleUpdateRequest {

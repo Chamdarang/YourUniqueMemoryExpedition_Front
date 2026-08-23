@@ -4,9 +4,9 @@ import { CSS } from "@dnd-kit/utilities";
 import { useSensor, useSensors, PointerSensor, DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 
 // Types & API
-import type { DayScheduleResponse, ScheduleUpdateRequest } from "../../types/schedule";
+import type { DayScheduleResponse, ScheduleCreateRequest, ScheduleUpdateRequest } from "../../types/schedule";
 import type { PlanDayResponse } from "../../types/planDay.ts";
-import { updatePlanDay } from "../../api/dayApi";
+import { deleteDay, detachPlanDay, updatePlanDay } from "../../api/dayApi";
 
 // ✅ 훅 기반 개별 작업 전환
 import { useSchedule } from "../../hooks/useSchedule";
@@ -27,6 +27,7 @@ interface Props {
     onToggle: (dayId: number, dayOrder: number, isOpen: boolean) => void;
     pickingTarget: { dayId: number, scheduleId: number } | null;
     setPickingTarget: (target: { dayId: number, scheduleId: number } | null) => void;
+    onQuickMapPickStart: () => void;
     isVisibleOnMap: boolean;
     onToggleMapVisibility: (dayId: number) => void;
     onExportDay: () => void;
@@ -37,8 +38,8 @@ const getDayColor = (dayOrder: number) => DAY_COLORS[(dayOrder - 1) % DAY_COLORS
 
 export default function PlanDayItem({
                                         id, dayOrder, routeDate, data, showInjury, onUpdateDayInfo,
-                                        onSchedulesChange, refreshVersion, onToggle, pickingTarget, setPickingTarget,
-                                        isVisibleOnMap, onToggleMapVisibility, onExportDay
+                                        onSchedulesChange, refreshVersion, onRefresh, onToggle, pickingTarget, setPickingTarget,
+                                        onQuickMapPickStart, isVisibleOnMap, onToggleMapVisibility, onExportDay
                                     }: Props) {
 
     // ✅ [변경] 개별 스케줄 작업용 훅 연결
@@ -52,14 +53,21 @@ export default function PlanDayItem({
         reorderSchedule
     } = useSchedule();
 
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-    const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 999 : 'auto', opacity: isDragging ? 0.5 : 1 };
-
     const [isExpanded, setIsExpanded] = useState(false);
 
     const [isEditingInfo, setIsEditingInfo] = useState(false);
+    const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+    const [isDayActionPending, setIsDayActionPending] = useState(false);
     const [editTitle, setEditTitle] = useState(data?.dayName || "");
     const [editMemo, setEditMemo] = useState(data?.memo || "");
+
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 999 : isActionMenuOpen ? 50 : 'auto',
+        opacity: isDragging ? 0.5 : 1,
+    };
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -120,6 +128,49 @@ export default function PlanDayItem({
         }
     };
 
+    const handleQuickAdd = async (request: ScheduleCreateRequest) => {
+        if (!data?.id) return false;
+        return addSchedule(data.id, request);
+    };
+
+    const handleDetachDay = async (event: React.MouseEvent) => {
+        event.stopPropagation();
+        if (!data || isDayActionPending) return;
+        if (!window.confirm(`'${data.dayName}'을 여행에서 빼고 내 하루 일정에 보관할까요?\n안의 일정은 삭제되지 않습니다.`)) return;
+
+        setIsDayActionPending(true);
+        try {
+            await detachPlanDay(data.id);
+            onSchedulesChange(data.id, []);
+            setPickingTarget(null);
+            await onRefresh();
+        } catch (error) {
+            alert(error instanceof Error ? error.message : "하루 일정을 여행에서 빼지 못했습니다.");
+        } finally {
+            setIsDayActionPending(false);
+            setIsActionMenuOpen(false);
+        }
+    };
+
+    const handleDeleteDay = async (event: React.MouseEvent) => {
+        event.stopPropagation();
+        if (!data || isDayActionPending) return;
+        if (!window.confirm(`'${data.dayName}'과 안의 모든 일정을 완전히 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`)) return;
+
+        setIsDayActionPending(true);
+        try {
+            await deleteDay(data.id);
+            onSchedulesChange(data.id, []);
+            setPickingTarget(null);
+            await onRefresh();
+        } catch (error) {
+            alert(error instanceof Error ? error.message : "하루 일정을 삭제하지 못했습니다.");
+        } finally {
+            setIsDayActionPending(false);
+            setIsActionMenuOpen(false);
+        }
+    };
+
     const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;
         if (over && active.id !== over.id) {
@@ -141,8 +192,8 @@ export default function PlanDayItem({
     const dayColor = getDayColor(dayOrder);
 
     return (
-        <div ref={setNodeRef} style={style} className="mb-4">
-            <div className={`bg-white rounded-2xl border transition overflow-hidden shadow-sm ${isExpanded ? `border-[${dayColor}]` : 'border-gray-200'}`} style={isExpanded ? { borderColor: dayColor } : {}}>
+        <div ref={setNodeRef} style={style} className="relative mb-4">
+            <div className={`rounded-2xl border bg-white shadow-sm transition ${isActionMenuOpen ? 'overflow-visible' : 'overflow-hidden'} ${isExpanded ? `border-[${dayColor}]` : 'border-gray-200'}`} style={isExpanded ? { borderColor: dayColor } : {}}>
 
                 <div className="p-4 cursor-pointer relative z-10 flex flex-col justify-center min-h-[72px]" onClick={handleToggle}>
                     <div className="flex items-start md:items-center gap-4 w-full">
@@ -198,6 +249,28 @@ export default function PlanDayItem({
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.676 12.553a11.249 11.249 0 01-2.631 4.31l-3.099-3.099a5.25 5.25 0 00-6.71-6.71L7.759 4.577a11.217 11.217 0 014.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113z" /><path d="M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0115.75 12zM12.53 15.713l-4.243-4.244a3.75 3.75 0 004.243 4.243z" /><path d="M6.75 12c0-.619.107-1.213.304-1.764l-3.1-3.1a11.25 11.25 0 00-2.63 4.31c-.12.362-.12.752 0 1.114 1.489 4.467 5.704 7.69 10.675 7.69 1.5 0 2.933-.294 4.242-.827l-2.477-2.477A5.25 5.25 0 016.75 12z" /></svg>
                                     )}
                                 </button>
+                                <div className="relative" onClick={(event) => event.stopPropagation()}>
+                                    <button
+                                        type="button"
+                                        disabled={isDayActionPending}
+                                        onClick={() => setIsActionMenuOpen((open) => !open)}
+                                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-100 bg-white font-black text-gray-400 shadow-sm transition hover:bg-gray-50 hover:text-gray-700 disabled:cursor-wait disabled:opacity-50"
+                                        aria-label="하루 일정 관리"
+                                    >
+                                        ⋯
+                                    </button>
+                                    {isActionMenuOpen && (
+                                        <div className="absolute right-0 top-11 z-50 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+                                            <button type="button" onClick={handleDetachDay} className="block w-full px-4 py-2.5 text-left text-xs font-bold text-blue-700 hover:bg-blue-50">
+                                                여행에서 빼기
+                                                <span className="mt-0.5 block text-[10px] font-medium text-gray-400">내 하루 일정에 보관</span>
+                                            </button>
+                                            <button type="button" onClick={handleDeleteDay} className="block w-full border-t border-gray-100 px-4 py-2.5 text-left text-xs font-bold text-red-600 hover:bg-red-50">
+                                                완전히 삭제
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                                 <span className="text-gray-400 text-xs ml-1">{isExpanded ? '▲' : '▼'}</span>
                             </div>
                         )}
@@ -216,6 +289,9 @@ export default function PlanDayItem({
                                 onToggleVisit={toggleVisit}
                                 onDelete={handleItemDelete}
                                 onInsert={handleItemInsert}
+                                onQuickAdd={handleQuickAdd}
+                                onQuickMapPickStart={onQuickMapPickStart}
+                                scheduleMode={data.scheduleMode}
                                 pickingTarget={pickingTarget}
                                 setPickingTarget={setPickingTarget}
                                 dayId={data?.id}

@@ -26,6 +26,17 @@ export const subtractTime = (endTime?: string, duration?: number): string => {
 };
 
 // ✅ [신규] 날짜 유효성 검사 (2월 31일 등 존재하지 않는 날짜 차단)
+export const limitDateYear = (value: string): string => {
+  const match = value.match(/^(\d{5,})(.*)$/);
+  if (!match) return value;
+  return `${match[1].slice(0, 4)}${match[2]}`;
+};
+
+export const enforceFourDigitDateYear = (event: { currentTarget: HTMLInputElement }): void => {
+  const limited = limitDateYear(event.currentTarget.value);
+  if (limited !== event.currentTarget.value) event.currentTarget.value = limited;
+};
+
 export const isValidDate = (dateString: string): boolean => {
   if (!dateString) return false;
   const regex = /^\d{4}-\d{2}-\d{2}$/;

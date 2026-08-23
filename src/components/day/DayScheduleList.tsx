@@ -1,7 +1,10 @@
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import ScheduleItem from "../schedule/ScheduleItem";
-import type { DayScheduleResponse, ScheduleUpdateRequest } from "../../types/schedule";
+import type { DayScheduleResponse, ScheduleCreateRequest, ScheduleUpdateRequest } from "../../types/schedule";
 import { getScheduleTimingWarning } from "../../utils/scheduleUtils";
+import QuickScheduleAdd from "../schedule/QuickScheduleAdd";
+import SimpleScheduleRow from "../schedule/SimpleScheduleRow";
+import type { ScheduleMode } from "../../types/planDay";
 
 interface Props {
     schedules: DayScheduleResponse[];
@@ -12,6 +15,9 @@ interface Props {
     onToggleVisit: (id: number) => void;
     onDelete: (id: number) => void;
     onInsert: (index: number) => void;
+    onQuickAdd: (request: ScheduleCreateRequest) => Promise<boolean>;
+    onQuickMapPickStart?: () => void;
+    scheduleMode?: ScheduleMode;
     variant?: 'page' | 'card';
     pickingTarget?: { dayId: number, scheduleId: number } | null;
     setPickingTarget?: (target: { dayId: number, scheduleId: number } | null) => void;
@@ -28,6 +34,9 @@ export default function DayScheduleList({
                                             onToggleVisit,
                                             onDelete,
                                             onInsert,
+                                            onQuickAdd,
+                                            onQuickMapPickStart,
+                                            scheduleMode = 'DETAILED',
                                             variant = 'page',
                                             pickingTarget,
                                             setPickingTarget,
@@ -43,6 +52,30 @@ export default function DayScheduleList({
     const validScheduleIds = (schedules || [])
         .filter(s => s && s.id !== undefined && s.id !== null)
         .map(s => s.id);
+
+    if (scheduleMode === 'SIMPLE') {
+        return (
+            <div className={containerClass}>
+                <div className="space-y-3">
+                    <QuickScheduleAdd scheduleOrder={schedules.length} onSubmit={onQuickAdd} onMapPickStart={onQuickMapPickStart} />
+                    {schedules.length === 0 && (
+                        <div className="rounded-xl border-2 border-dashed border-gray-200 px-4 py-8 text-center text-sm font-medium text-gray-400">
+                            위의 간편 일정 추가를 눌러 첫 장소를 입력해 주세요.
+                        </div>
+                    )}
+                    {schedules.map((schedule) => (
+                        <SimpleScheduleRow
+                            key={`${schedule.id}-${schedule.startTime}-${schedule.spotName}-${schedule.memo}`}
+                            schedule={schedule}
+                            onUpdate={onUpdate}
+                            onDelete={onDelete}
+                            onToggleVisit={onToggleVisit}
+                        />
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={containerClass}>

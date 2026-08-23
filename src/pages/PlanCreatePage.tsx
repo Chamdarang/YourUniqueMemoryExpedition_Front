@@ -6,6 +6,7 @@ import { createPlan } from '../api/planApi';
 
 // Types
 import type { PlanCreateRequest } from '../types/plan';
+import { enforceFourDigitDateYear, limitDateYear } from '../utils/timeUtils';
 
 export default function PlanCreatePage() {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ export default function PlanCreatePage() {
 
   // 1. 시작일 변경 시 -> 기간은 유지하고, 종료일을 뒤로 미룸
   const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newStartDate = e.target.value;
+    const newStartDate = limitDateYear(e.target.value);
     const newEndDate = addDaysToDate(newStartDate, form.planDays);
     setForm({
       ...form,
@@ -56,7 +57,7 @@ export default function PlanCreatePage() {
 
   // 2. 종료일 변경 시 -> 기간(Days)을 다시 계산
   const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newEndDate = e.target.value;
+    const newEndDate = limitDateYear(e.target.value);
     const newDuration = calculateDuration(form.planStartDate, newEndDate);
 
     // 종료일이 시작일보다 빠르면 1일로 보정
@@ -132,6 +133,8 @@ export default function PlanCreatePage() {
               <input
                   name="planStartDate"
                   type="date"
+                  max="9999-12-31"
+                  onInput={enforceFourDigitDateYear}
                   value={form.planStartDate}
                   className="w-full px-3 py-2 border rounded-lg outline-none focus:border-blue-500"
                   onChange={handleStartDateChange}
@@ -160,6 +163,8 @@ export default function PlanCreatePage() {
               <input
                   name="planEndDate"
                   type="date"
+                  max="9999-12-31"
+                  onInput={enforceFourDigitDateYear}
                   value={form.planEndDate}
                   className="w-full px-3 py-2 border rounded-lg outline-none focus:border-blue-500"
                   onChange={handleEndDateChange}

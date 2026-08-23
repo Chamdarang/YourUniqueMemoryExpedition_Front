@@ -104,7 +104,7 @@ export default function LoginPage() {
                                 maxLength={30}
                                 autoComplete="username"
                                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                                placeholder="예: chamchi"
+                                placeholder="아이디 입력"
                                 value={username}
                                 onChange={event => setUsername(event.target.value)}
                             />

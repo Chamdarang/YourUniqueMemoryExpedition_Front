@@ -7,7 +7,7 @@ import { detachPlanDay } from "../../api/dayApi";
 
 // Types & Utils
 import type { PlanDetailResponse } from "../../types/plan";
-import { getDurationInfo, shiftDate } from "../../utils/timeUtils";
+import { enforceFourDigitDateYear, getDurationInfo, limitDateYear, shiftDate } from "../../utils/timeUtils";
 
 interface Props {
   plan: PlanDetailResponse;
@@ -161,7 +161,7 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                       <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">시작일</label>
-                      <input type="date" min="1900-01-01" max="2100-12-31" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-gray-700 focus:ring-2 focus:ring-blue-100 outline-none transition" value={editForm.planStartDate} onChange={(e) => setEditForm({ ...editForm, planStartDate: e.target.value })} />
+                      <input type="date" min="1900-01-01" max="2100-12-31" onInput={enforceFourDigitDateYear} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-gray-700 focus:ring-2 focus:ring-blue-100 outline-none transition" value={editForm.planStartDate} onChange={(e) => setEditForm({ ...editForm, planStartDate: limitDateYear(e.target.value) })} />
                       <button
                         type="button"
                         onClick={fitEndDateToSchedules}
@@ -172,7 +172,7 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">종료일</label>
-                      <input type="date" min="1900-01-01" max="2100-12-31" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-gray-700 focus:ring-2 focus:ring-blue-100 outline-none transition" value={editForm.planEndDate} onChange={(e) => setEditForm({ ...editForm, planEndDate: e.target.value })} />
+                      <input type="date" min="1900-01-01" max="2100-12-31" onInput={enforceFourDigitDateYear} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-gray-700 focus:ring-2 focus:ring-blue-100 outline-none transition" value={editForm.planEndDate} onChange={(e) => setEditForm({ ...editForm, planEndDate: limitDateYear(e.target.value) })} />
                       <button
                         type="button"
                         onClick={fitStartDateToSchedules}

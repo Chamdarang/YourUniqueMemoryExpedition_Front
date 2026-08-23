@@ -15,7 +15,7 @@ import DayScheduleList from "../components/day/DayScheduleList";
 
 // Types & Utils
 import type { PlanDayDetailResponse } from "../types/planDay.ts";
-import type { DayScheduleResponse, ScheduleUpdateRequest } from "../types/schedule";
+import type { DayScheduleResponse, ScheduleCreateRequest, ScheduleUpdateRequest } from "../types/schedule";
 import type { SpotCreateRequest } from "../types/spot";
 
 // ✅ Export 관련 컴포넌트
@@ -277,6 +277,11 @@ function DayDetailContent() {
         await addSchedule(dayId, { scheduleOrder: index });
     };
 
+    const handleQuickAdd = async (request: ScheduleCreateRequest) => {
+        if (!dayId) return false;
+        return addSchedule(dayId, request);
+    };
+
     const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;
         if (over && active.id !== over.id) {
@@ -399,6 +404,13 @@ function DayDetailContent() {
                                     onToggleVisit={toggleVisit} // ✅ 훅 함수 직접 전달
                                     onDelete={removeSchedule} // ✅ 훅 함수 직접 전달
                                     onInsert={handleScheduleInsert}
+                                    onQuickAdd={handleQuickAdd}
+                                    scheduleMode={dayDetail?.scheduleMode}
+                                    onQuickMapPickStart={() => {
+                                        setPickingTarget(null);
+                                        setTempSelectedSpot(null);
+                                        if (window.innerWidth < 768) setMobileViewMode('MAP');
+                                    }}
                                     pickingTarget={pickingTarget}
                                     setPickingTarget={(target) => {
                                         setPickingTarget(target);

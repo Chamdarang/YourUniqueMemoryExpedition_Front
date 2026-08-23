@@ -6,7 +6,7 @@ import { useMapsLibrary, useMap } from "@vis.gl/react-google-maps";
 // API & Utils
 import { createSpot, getMySpots } from "../../api/spotApi";
 import { estimateRoute } from "../../api/routeApi";
-import { getSpotDisplayName, getSpotTypeInfo } from "../../utils/spotUtils";
+import { getSpotDisplayName, getSpotTypeInfo, mapGoogleTypeToSpotType } from "../../utils/spotUtils";
 import { decodeGooglePolyline } from "../../utils/polylineUtils";
 
 // Types
@@ -14,17 +14,6 @@ import type { DayScheduleResponse, ScheduleUpdateRequest } from "../../types/sch
 import type {SpotType, Transportation} from "../../types/enums";
 import type { SpotResponse, SpotCreateRequest } from "../../types/spot";
 import type { RouteEstimateResponse } from "../../types/route";
-
-const mapGoogleTypeToSpotType = (types: string[] = []): SpotType => {
-    if (types.includes('restaurant') || types.includes('food')) return 'FOOD';
-    if (types.includes('cafe') || types.includes('coffee_shop')) return 'CAFE';
-    if (types.includes('tourist_attraction')) return 'LANDMARK';
-    if (types.includes('park')) return 'PARK';
-    if (types.includes('lodging')) return 'ACCOMMODATION';
-    if (types.includes('store') || types.includes('shopping_mall')) return 'SHOPPING';
-    if (types.includes('transit_station') || types.includes('train_station')) return 'STATION';
-    return 'OTHER';
-};
 
 const GOOGLE_TYPE_LABELS: Record<string, string> = {
     restaurant: '음식점',

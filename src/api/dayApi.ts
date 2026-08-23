@@ -1,5 +1,5 @@
 import type { ApiResponse, PageResponse } from "../types/common";
-import type { PlanDayDetailResponse, PlanDayIndependentCreateRequest, PlanDayResponse, PlanDaySwapRequest, PlanDayUpdateRequest } from "../types/planDay.ts";
+import type { PlanDayDetailResponse, PlanDayIndependentCreateRequest, PlanDayResponse, PlanDaySwapRequest, PlanDayUpdateRequest, ScheduleMode } from "../types/planDay.ts";
 import { fetchWithAuth, getAuthHeaders } from "./utils";
 
 // ✅ 검색 및 페이징 조건 파라미터
@@ -82,10 +82,10 @@ export const swapPlanDay = async (req: PlanDaySwapRequest): Promise<void> => {
 };
 
 // 7. 여행 내 계획 생성
-export const createDayInPlan = async (planId: number, dayOrder: number, dayName: string): Promise<PlanDayResponse> => {
+export const createDayInPlan = async (planId: number, dayOrder: number, dayName: string, scheduleMode: ScheduleMode = 'DETAILED'): Promise<PlanDayResponse> => {
   const res = await fetchWithAuth(`/api/days/plan/${planId}`, {
     method: 'POST',
-    body: JSON.stringify({ dayName, dayOrder }),
+    body: JSON.stringify({ dayName, dayOrder, scheduleMode }),
   });
   const json: ApiResponse<PlanDayResponse> = await res.json();
   if (!json.success) throw new Error(json.message);

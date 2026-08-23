@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { enforceFourDigitDateYear, limitDateYear } from '../../utils/timeUtils';
 
 // ----------------------------------------------------------------
 // 📝 타입 정의
@@ -100,15 +101,19 @@ export default function PlanFilter({ status, onStatusChange, onSearch }: Props) 
               <div className="flex items-center gap-2">
                 <input
                     type="date"
+                    max="9999-12-31"
+                    onInput={enforceFourDigitDateYear}
                     value={localParams.startDate}
-                    onChange={(e) => setLocalParams({...localParams, startDate: e.target.value})}
+                    onChange={(e) => setLocalParams({...localParams, startDate: limitDateYear(e.target.value)})}
                     className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <span className="text-gray-400">~</span>
                 <input
                     type="date"
+                    max="9999-12-31"
+                    onInput={enforceFourDigitDateYear}
                     value={localParams.endDate}
-                    onChange={(e) => setLocalParams({...localParams, endDate: e.target.value})}
+                    onChange={(e) => setLocalParams({...localParams, endDate: limitDateYear(e.target.value)})}
                     className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>

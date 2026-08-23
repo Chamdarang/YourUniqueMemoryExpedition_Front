@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createIndependentDay, deleteDay, getIndependentDays } from "../api/dayApi";
-import type { PlanDayResponse } from "../types/planDay.ts";
+import type { PlanDayResponse, ScheduleMode } from "../types/planDay.ts";
 
 // Components
 import DayList from "../components/day/DayList";
@@ -20,6 +20,7 @@ export default function DayListPage() {
     const [searchKeyword, setSearchKeyword] = useState(''); // 실제 검색에 사용된 키워드
     const [isCreating, setIsCreating] = useState(false);
     const [newDayName, setNewDayName] = useState('');
+    const [newDayMode, setNewDayMode] = useState<ScheduleMode>('SIMPLE');
 
     // 1. 목록 불러오기
     const fetchDays = useCallback(async (pageNum = 0, currentSearchKeyword = '') => {
@@ -70,7 +71,7 @@ export default function DayListPage() {
         e.preventDefault();
         if (!newDayName.trim()) return;
         try {
-            await createIndependentDay({ dayName: newDayName });
+            await createIndependentDay({ dayName: newDayName, scheduleMode: newDayMode });
             setNewDayName('');
             setIsCreating(false);
             setPage(0);
@@ -133,7 +134,18 @@ export default function DayListPage() {
                     <h3 className="font-bold text-orange-800 mb-3 flex items-center gap-2">
                         <span>✨</span> 새로운 하루 계획 만들기
                     </h3>
-                    <form onSubmit={handleCreate} className="flex gap-3">
+                    <form onSubmit={handleCreate} className="space-y-3">
+                        <div className="grid grid-cols-2 gap-2 rounded-xl bg-white p-1.5 shadow-sm">
+                            <button type="button" onClick={() => setNewDayMode('SIMPLE')} className={`rounded-lg px-3 py-2.5 text-sm font-bold transition ${newDayMode === 'SIMPLE' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
+                                간편 일정
+                                <span className="mt-0.5 block text-[10px] font-medium opacity-75">장소 · 시간 · 메모만</span>
+                            </button>
+                            <button type="button" onClick={() => setNewDayMode('DETAILED')} className={`rounded-lg px-3 py-2.5 text-sm font-bold transition ${newDayMode === 'DETAILED' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
+                                상세 일정
+                                <span className="mt-0.5 block text-[10px] font-medium opacity-75">체류 · 이동 · 교통수단 포함</span>
+                            </button>
+                        </div>
+                        <div className="flex gap-3">
                         <input
                             type="text"
                             placeholder="예) 오사카 맛집 탐방 (1일차 후보)"
@@ -145,6 +157,7 @@ export default function DayListPage() {
                         <button type="submit" className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-6 py-3 rounded-xl transition shadow-md shadow-orange-200 whitespace-nowrap">
                             생성
                         </button>
+                        </div>
                     </form>
                 </div>
             )}

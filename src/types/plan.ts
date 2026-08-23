@@ -1,4 +1,4 @@
-import type { PlanDayResponse } from "./planDay.ts";
+import type { PlanDayResponse, ScheduleMode } from "./planDay.ts";
 import type { SpotType, Transportation } from "./enums";
 
 export interface PlanResponse{
@@ -44,6 +44,7 @@ export interface PlanTransferDay {
     dayName: string;
     dayOrder: number;
     memo: string | null;
+    scheduleMode?: ScheduleMode;
     schedules: PlanTransferSchedule[];
 }
 

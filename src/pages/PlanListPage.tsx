@@ -6,7 +6,7 @@ import { getPlans, deletePlan, importPlanData, updatePlan, type GetPlansParams }
 
 // Types & Utils
 import type { PlanResponse, PlanTransferData } from '../types/plan';
-import { getDurationInfo } from '../utils/timeUtils';
+import { enforceFourDigitDateYear, getDurationInfo, limitDateYear } from '../utils/timeUtils';
 
 // Components
 import PlanList from '../components/plan/PlanList';
@@ -286,18 +286,22 @@ export default function PlanListPage() {
                       <label className="block text-base font-bold text-gray-700 mb-2">시작일</label>
                       <input
                           type="date"
+                          max="9999-12-31"
+                          onInput={enforceFourDigitDateYear}
                           className="w-full border border-gray-300 rounded-xl p-4 text-gray-700 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition shadow-sm cursor-pointer"
                           value={editForm.planStartDate}
-                          onChange={e => setEditForm({ ...editForm, planStartDate: e.target.value })}
+                          onChange={e => setEditForm({ ...editForm, planStartDate: limitDateYear(e.target.value) })}
                       />
                     </div>
                     <div>
                       <label className="block text-base font-bold text-gray-700 mb-2">종료일</label>
                       <input
                           type="date"
+                          max="9999-12-31"
+                          onInput={enforceFourDigitDateYear}
                           className="w-full border border-gray-300 rounded-xl p-4 text-gray-700 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition shadow-sm cursor-pointer"
                           value={editForm.planEndDate}
-                          onChange={e => setEditForm({ ...editForm, planEndDate: e.target.value })}
+                          onChange={e => setEditForm({ ...editForm, planEndDate: limitDateYear(e.target.value) })}
                       />
                     </div>
                   </div>
