@@ -7,8 +7,10 @@ import { createPlan } from '../api/planApi';
 // Types
 import type { PlanCreateRequest } from '../types/plan';
 import { enforceFourDigitDateYear, limitDateYear } from '../utils/timeUtils';
+import { useFeedback } from '../components/common/useFeedback';
 
 export default function PlanCreatePage() {
+  const { showToast } = useFeedback();
   const navigate = useNavigate();
 
   const [form, setForm] = useState<PlanCreateRequest>({
@@ -92,18 +94,17 @@ export default function PlanCreatePage() {
     e.preventDefault();
 
     if (form.planDays <= 0) {
-      alert('여행 기간은 최소 1일 이상이어야 합니다.');
+      showToast({ message: '여행 기간은 최소 1일 이상이어야 합니다.', type: 'info' });
       return;
     }
 
     try {
       await createPlan(form);
-      alert(`'${form.planName}' 여행이 생성되었습니다! ✈️`);
+      showToast({ message: `'${form.planName}' 여행을 만들었습니다! ✈️`, type: 'success' });
       navigate('/plans');
     } catch (err: unknown) {
       console.error(err);
-      if (err instanceof Error) alert(err.message);
-      else alert('생성 실패');
+      showToast({ message: err instanceof Error ? err.message : '여행을 만들지 못했습니다.', type: 'error' });
     }
   };
 

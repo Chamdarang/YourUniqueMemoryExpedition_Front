@@ -14,6 +14,7 @@ import type { DayScheduleResponse, ScheduleUpdateRequest } from "../../types/sch
 import type {SpotType, Transportation} from "../../types/enums";
 import type { SpotResponse, SpotCreateRequest } from "../../types/spot";
 import type { RouteEstimateResponse } from "../../types/route";
+import { useFeedback } from '../common/useFeedback';
 
 const GOOGLE_TYPE_LABELS: Record<string, string> = {
     restaurant: '음식점',
@@ -57,6 +58,9 @@ interface Props {
     onToggleVisit: (id: number) => void;
     onRequestMapPick: () => void;
     isPickingMap: boolean;
+    openEditRequestKey?: number;
+    onDirtyChange?: (scheduleId: number, isDirty: boolean) => void;
+    onTransfer?: (schedule: DayScheduleResponse) => void;
 }
 
 // 시간 포맷 유틸리티
@@ -100,8 +104,10 @@ const subTimeStr = (startTime: string, duration: number) => {
 const INJURY_OPTIONS = [0, 5, 10, 15];
 
 export default function ScheduleItem({
-                                         schedule, previousSchedule, routeDate, index, showInjury, onUpdate, onDelete, onInsert, onToggleVisit, onRequestMapPick, isPickingMap
+                                         schedule, previousSchedule, routeDate, index, showInjury, onUpdate, onDelete, onInsert, onToggleVisit, onRequestMapPick, isPickingMap, openEditRequestKey, onDirtyChange, onTransfer
                                      }: Props) {
+    const { showToast, isUndoablePending } = useFeedback();
+    const isDeletePending = isUndoablePending(`schedule-delete:${schedule.id}`);
     // dnd-kit 설정
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: schedule.id });
     const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, zIndex: isDragging ? 999 : 'auto' };
@@ -112,7 +118,7 @@ export default function ScheduleItem({
 
     // 상태 관리
     const [editMode, setEditMode] = useState<'NONE' | 'MAIN' | 'MOVE'>('NONE');
-    const [searchTerm, setSearchTerm] = useState("");
+    const [searchTerm, setSearchTerm] = useState(schedule.spotName || "");
     const [searchMode, setSearchMode] = useState<'MINE' | 'GOOGLE'>('MINE');
     const [searchResults, setSearchResults] = useState<SpotResponse[]>([]);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -124,6 +130,10 @@ export default function ScheduleItem({
     const [routeLoading, setRouteLoading] = useState(false);
     const [routeError, setRouteError] = useState("");
     const [spotFeedback, setSpotFeedback] = useState<{ type: 'success' | 'info' | 'error', message: string } | null>(null);
+
+    useEffect(() => {
+        if (openEditRequestKey !== undefined) setEditMode('MAIN');
+    }, [openEditRequestKey]);
 
     const [stayInjury, setStayInjury] = useState(0);
     const [moveInjury, setMoveInjury] = useState(0);
@@ -142,6 +152,26 @@ export default function ScheduleItem({
     });
 
     const [selectedSpotInfo, setSelectedSpotInfo] = useState<{name: string, type: SpotType, lat?: number, lng?: number} | null>(null);
+
+    const isEditDirty = editMode !== 'NONE' && (
+        (editMode === 'MAIN' && (
+            searchTerm.trim() !== (schedule.spotName || "")
+            || form.spotUserId !== schedule.spotUserId
+            || form.startTime !== (schedule.startTime?.substring(0, 5) || "")
+            || form.fixedStartTime !== Boolean(schedule.fixedStartTime)
+            || baseStay + stayInjury !== (schedule.duration ?? 60)
+            || form.memo !== (schedule.memo || "")
+        ))
+        || baseMove + moveInjury !== (schedule.movingDuration || 0)
+        || form.transportation !== (schedule.transportation || 'WALK')
+        || form.movingMemo !== (schedule.movingMemo || "")
+    );
+
+    useEffect(() => {
+        onDirtyChange?.(schedule.id, isEditDirty);
+    }, [isEditDirty, onDirtyChange, schedule.id]);
+
+    useEffect(() => () => onDirtyChange?.(schedule.id, false), [onDirtyChange, schedule.id]);
 
     const supportsAutomaticRoute = (transportation: Transportation) =>
         transportation !== 'BUS'
@@ -274,7 +304,7 @@ export default function ScheduleItem({
             memo: schedule.memo || '',
         });
 
-        if (schedule.spotName) {
+        if (schedule.spotName && schedule.lat != null && schedule.lng != null) {
             setSearchTerm(schedule.spotName);
             setSelectedSpotInfo({
                 name: schedule.spotName,
@@ -397,10 +427,14 @@ export default function ScheduleItem({
     // 완료 버튼 클릭 시 개별 업데이트 요청
     const handleDone = async () => {
         const finalName = (searchTerm || "").trim();
-        if (!finalName) return alert("장소 이름을 입력해주세요.");
+        if (!finalName) return showToast({ message: "장소 이름을 입력해 주세요.", type: 'info' });
 
-        const finalSpotInfo = selectedSpotInfo || (schedule.spotName ? { name: schedule.spotName, type: schedule.spotType, lat: schedule.lat, lng: schedule.lng } : null);
-        if (!finalSpotInfo?.lat) return alert("장소 정보가 없습니다.");
+        const finalSpotInfo = selectedSpotInfo || (
+            schedule.spotName && schedule.spotType && schedule.lat != null && schedule.lng != null
+                ? { name: schedule.spotName, type: schedule.spotType, lat: schedule.lat, lng: schedule.lng }
+                : null
+        );
+        if (!finalSpotInfo) return showToast({ message: "장소 위치 정보가 없습니다.", type: 'info' });
 
         const updatePayload: ScheduleUpdateRequest = {
             spotUserId: form.spotUserId,
@@ -422,8 +456,9 @@ export default function ScheduleItem({
         try {
             await onUpdate(schedule.id, updatePayload);
             setEditMode('NONE');
+            showToast({ message: '일정을 저장했습니다.', type: 'success' });
         } catch (error) {
-            alert(error instanceof Error ? error.message : "스케줄 수정에 실패했습니다.");
+            showToast({ message: error instanceof Error ? error.message : "일정을 수정하지 못했습니다.", type: 'error' });
         }
     };
 
@@ -436,13 +471,13 @@ export default function ScheduleItem({
     const spotEndTime = addTimeStr(form.startTime, form.duration);
     const moveStartTime = subTimeStr(form.startTime, form.movingDuration);
 
-    const getTransIcon = (type: Transportation) => {
+    const getTransIcon = (type?: Transportation | null) => {
         const icons: Record<string, string> = { WALK: '🚶', BUS: '🚌', TRAIN: '🚃', TAXI: '🚕', CAR: '🚗', SHIP: '🚢', AIRPLANE: '✈️' };
-        return icons[type] || '➡️';
+        return type ? icons[type] || '➡️' : '➡️';
     };
-    const getTransLabel = (type: Transportation) => {
+    const getTransLabel = (type?: Transportation | null) => {
         const labels: Record<string, string> = { WALK: '도보', BUS: '버스', TRAIN: '열차', TAXI: '택시', CAR: '자동차', SHIP: '배', AIRPLANE: '비행기' };
-        return labels[type] || '이동';
+        return type ? labels[type] || '이동' : '이동';
     };
 
     const routeDestination = selectedSpotInfo || (
@@ -524,7 +559,7 @@ export default function ScheduleItem({
     const durationDisplay = `체류 ${formatDurationWithInjury(schedule.duration, stayInjury, showInjury)}`;
 
     return (
-        <div ref={setNodeRef} style={style} className="relative group mb-3">
+        <div ref={setNodeRef} style={style} aria-busy={isDeletePending} className={`relative group mb-3 rounded-2xl transition ${isDeletePending ? 'bg-amber-50/70 opacity-70 ring-2 ring-amber-200' : ''}`}>
             <div className="flex items-stretch gap-3">
                 {/* 1. 드래그 핸들 */}
                 <div className="flex flex-col items-center pt-4 w-8 shrink-0">
@@ -578,7 +613,7 @@ export default function ScheduleItem({
                                             <div><label className="text-xs text-blue-600 font-bold mb-1 block">수단</label><select className="w-full p-2 border border-blue-200 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-300" value={form.transportation} onChange={e => handleTransportationChange(e.target.value as Transportation)}><option value="WALK">🚶 도보</option><option value="BUS">🚌 버스</option><option value="TRAIN">🚃 열차</option><option value="TAXI">🚕 택시</option><option value="CAR">🚗 자동차</option><option value="SHIP">🚢 배</option><option value="AIRPLANE">✈️ 비행기</option></select></div>
                                             <div><label className="text-xs text-blue-600 font-bold mb-1 block">이동 메모</label><input type="text" className="w-full p-2 border border-blue-200 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-300" placeholder="예) 205번 버스" value={form.movingMemo} onChange={e => setForm({...form, movingMemo: e.target.value})} /></div>
                                         </div>
-                                        <div className="flex gap-2"><button onClick={handleCancel} className="flex-1 bg-white border border-blue-200 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">취소</button><button onClick={handleDone} className="flex-1 bg-blue-500 text-white py-2 rounded-lg text-sm font-bold hover:bg-blue-600">확인</button></div>
+                                        <div className="flex gap-2"><button onClick={handleCancel} className="flex-1 bg-white border border-blue-200 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">취소</button><button onClick={handleDone} className="flex-1 bg-blue-500 text-white py-2 rounded-lg text-sm font-bold hover:bg-blue-600">저장</button></div>
                                     </div>
                                 )}
                             </div>
@@ -625,17 +660,23 @@ export default function ScheduleItem({
                                             </div>
                                             {schedule.movingDuration > 0 && <span className="text-xs text-blue-500 bg-blue-50 px-2 py-0.5 rounded flex items-center gap-1 font-medium whitespace-nowrap">⏱ {schedule.movingDuration}분 이동</span>}
                                             {schedule.fixedStartTime && <span className="text-xs text-violet-600 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded font-bold whitespace-nowrap">📌 시작 고정</span>}
+                                            {isDeletePending && <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-600">⏳ 삭제 대기 중</span>}
                                         </div>
                                     </div>
                                 </div>
                                 {schedule.memo && <div className="mt-3 text-sm p-2.5 rounded-lg border-l-4 bg-gray-50 text-gray-600 border-gray-200">{schedule.memo}</div>}
                                 {isPickingMap && <div className="mt-2 text-center text-xs font-bold text-green-600 animate-pulse bg-green-50 py-1 rounded border border-green-200">🗺️ 지도에서 장소를 클릭하세요!</div>}
+                                {onTransfer && (
+                                    <div className="mt-2 flex justify-end">
+                                        <button type="button" onClick={event => { event.stopPropagation(); onTransfer(schedule); }} className="rounded-lg px-2.5 py-1 text-[10px] font-bold text-gray-400 hover:bg-violet-50 hover:text-violet-600">다른 일차로 이동·복사</button>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="p-5 bg-white" onClick={e => e.stopPropagation()}>
                                 <div className="flex justify-between mb-4 pb-2 border-b border-gray-100">
                                     <h3 className="font-bold text-base text-gray-800">일정 편집</h3>
-                                    <button onClick={() => onDelete(schedule.id)} className="text-sm text-red-500 font-bold hover:underline">삭제</button>
+                                    <button disabled={isDeletePending} onClick={() => onDelete(schedule.id)} className="text-sm font-bold text-red-500 hover:underline disabled:cursor-not-allowed disabled:text-amber-600 disabled:no-underline">{isDeletePending ? '삭제 대기 중…' : '삭제'}</button>
                                 </div>
                                 <div className="mb-4 relative" ref={dropdownRef}>
                                     <div className="flex justify-between items-end mb-1">
@@ -734,7 +775,7 @@ export default function ScheduleItem({
                                 </div>
 
                                 <div className="mb-4"><label className="text-sm text-gray-500 font-bold block mb-1">메모</label><textarea className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm outline-none resize-none" rows={2} value={form.memo} onChange={e => setForm({...form, memo: e.target.value})} /></div>
-                                <div className="flex gap-3 pt-2"><button onClick={handleCancel} className="flex-1 bg-white border border-gray-200 py-3 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">취소</button><button onClick={handleDone} className="flex-1 bg-orange-500 text-white py-3 rounded-xl text-sm font-bold hover:bg-orange-600 shadow-md">완료</button></div>
+                                <div className="flex gap-3 pt-2"><button onClick={handleCancel} className="flex-1 bg-white border border-gray-200 py-3 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">취소</button><button onClick={handleDone} className="flex-1 bg-orange-500 text-white py-3 rounded-xl text-sm font-bold hover:bg-orange-600 shadow-md">저장</button></div>
                             </div>
                         )}
                     </div>

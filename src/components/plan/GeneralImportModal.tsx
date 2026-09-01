@@ -561,9 +561,9 @@ export default function GeneralImportModal({ file, onClose, onImported }: Props)
                       )}
                       <div className="grid gap-2 border-t border-gray-100 px-4 py-3 md:grid-cols-[110px_minmax(0,1fr)_100px] md:items-start">
                         <div className="text-sm font-black text-gray-800">
-                          {schedule.startTime.slice(0, 5)}
+                          {schedule.startTime?.slice(0, 5) || '시간 미정'}
                           <span className="mx-1 text-gray-300">–</span>
-                          {schedule.endTime.slice(0, 5)}
+                          {schedule.endTime?.slice(0, 5) || '미정'}
                           {schedule.fixedStartTime && <div className="mt-1 text-[10px] text-green-600">시작시간 고정</div>}
                         </div>
                         <div className="min-w-0">

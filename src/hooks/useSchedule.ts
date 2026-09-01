@@ -5,10 +5,13 @@ import type {
     ScheduleCreateRequest, ScheduleReorderRequest,
     ScheduleUpdateRequest
 } from "../types/schedule";
+import { useFeedback } from "../components/common/useFeedback";
 
 export const useSchedule = () => {
+    const { showToast } = useFeedback();
     const [loading, setLoading] = useState(false);
     const [schedules, setSchedules] = useState<DayScheduleResponse[]>([]);
+    const replaceSchedules = useCallback((next: DayScheduleResponse[]) => setSchedules(next), []);
 
     /** 1. 특정 날짜의 스케줄 목록 조회 */
     const fetchSchedules = useCallback(async (dayId: number) => {
@@ -16,8 +19,10 @@ export const useSchedule = () => {
             setLoading(true);
             const data = await scheduleApi.getSchedulesByDay(dayId); // ✅ API 호출
             setSchedules(data);
+            return true;
         } catch (error) {
             console.error("스케줄 로드 실패:", error);
+            return false;
         } finally {
             setLoading(false);
         }
@@ -31,7 +36,7 @@ export const useSchedule = () => {
             setSchedules(data); // 반환된 최신 리스트로 갱신
             return true;
         } catch {
-            alert("스케줄 추가에 실패했습니다.");
+            showToast({ message: "일정을 추가하지 못했습니다.", type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -51,13 +56,10 @@ export const useSchedule = () => {
 
     /** 4. 스케줄 삭제 */
     const removeSchedule = async (scheduleId: number) => {
-        if (!confirm("이 일정을 삭제하시겠습니까?")) return;
         try {
             setLoading(true);
             const data = await scheduleApi.deleteSchedule(scheduleId); // ✅ API 호출
             setSchedules(data); // 반환된 최신 리스트로 갱신
-        } catch {
-            alert("스케줄 삭제에 실패했습니다.");
         } finally {
             setLoading(false);
         }
@@ -83,7 +85,7 @@ export const useSchedule = () => {
             const data = await scheduleApi.reorderSchedule(dayId, scheduleId, req);
             setSchedules(data);
         } catch {
-            alert("순서 변경에 실패했습니다.");
+            showToast({ message: "일정 순서를 변경하지 못했습니다.", type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -97,6 +99,7 @@ export const useSchedule = () => {
         updateSchedule,
         removeSchedule,
         toggleVisit,
-        reorderSchedule
+        reorderSchedule,
+        replaceSchedules
     };
 };

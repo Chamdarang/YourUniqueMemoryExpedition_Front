@@ -6,6 +6,7 @@ import { deleteSchedule } from "../../api/scheduleApi";
 
 // Types (경로에 .ts 제거)
 import type {UsedScheduleResponse} from "../../types/error.ts";
+import { useFeedback } from '../common/useFeedback';
 
 interface Props {
     isOpen: boolean;
@@ -15,11 +16,12 @@ interface Props {
 }
 
 export default function SpotInUseModal({ isOpen, onClose, usageList, onSpotDeleteRetry }: Props) {
+    const { confirm, showToast } = useFeedback();
     const [removedScheduleIds, setRemovedScheduleIds] = useState<Set<number>>(new Set());
     const conflicts = usageList.filter(conflict => !removedScheduleIds.has(conflict.scheduleId));
 
     const handleRemoveSchedule = async (scheduleId: number) => {
-        if (!confirm("이 일정에서만 장소를 제외하시겠습니까?")) return;
+        if (!await confirm({ title: '일정에서 제외', message: '이 세부 일정을 삭제해 장소 사용을 해제할까요?', confirmLabel: '일정 삭제', danger: true })) return;
 
         try {
             // ✅ [수정] 주석을 풀고 실제 API 호출!
@@ -29,18 +31,19 @@ export default function SpotInUseModal({ isOpen, onClose, usageList, onSpotDelet
             // 성공 시 목록에서 제거 (UI 갱신)
             const remaining = conflicts.filter(c => c.scheduleId !== scheduleId);
             setRemovedScheduleIds(current => new Set(current).add(scheduleId));
+            showToast({ message: '일정에서 장소 사용을 해제했습니다.', type: 'success' });
 
             // 3. 더 이상 사용 중인 곳이 없다면? -> 장소 삭제 재시도
             if (remaining.length === 0) {
                 // 이제 서버에서도 스케줄이 다 지워졌으므로 장소 삭제가 성공할 것입니다.
-                if(confirm("모든 일정에서 제외되었습니다. 장소를 영구 삭제하시겠습니까?")) {
+                if(await confirm({ title: '장소 영구 삭제', message: '모든 일정에서 제외되었습니다. 이제 장소를 영구 삭제할까요?', confirmLabel: '장소 삭제', danger: true })) {
                     onSpotDeleteRetry();
                     onClose();
                 }
             }
         } catch (err) {
             console.error(err);
-            alert("일정 제외 실패");
+            showToast({ message: "일정에서 장소 사용을 해제하지 못했습니다.", type: 'error' });
         }
     };
 

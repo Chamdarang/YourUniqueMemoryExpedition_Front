@@ -6,14 +6,14 @@ import type { DayScheduleResponse } from "../../types/schedule";
 import type { ExportOptions, ExportSection } from "./scheduleExportUtils";
 
 // 🛠️ [유틸] 메모 파싱용 (인저리 타임 태그만 처리)
-const getInjuryTime = (memo: string, tag: string) => {
+const getInjuryTime = (memo: string | null | undefined, tag: string) => {
     const regex = new RegExp(`${tag}\\s*(\\d+)`);
     const match = memo?.match(regex);
     return match ? parseInt(match[1], 10) : 0;
 };
 
 // #si: #mi: #visited 등 시스템 태그만 제거
-const cleanMemoTags = (memo: string) => {
+const cleanMemoTags = (memo: string | null | undefined) => {
     if (!memo) return '';
     return memo.replace(/#si:\s*\d+/g, '').replace(/#mi:\s*\d+/g, '').replace(/#visited/g, '').trim();
 };
@@ -130,7 +130,7 @@ const ScheduleList = ({ schedules }: { schedules: DayScheduleResponse[] }) => {
                         <div className="flex-1 pl-6 pb-12">
                             <div className="flex items-center gap-2 mb-1.5">
                                 <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded uppercase tracking-wider">{typeInfo.label}</span>
-                                {pureMovingDuration > 0 && <span className="text-[9px] font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded flex items-center gap-1">{transportIcons[item.transportation] || '➡️'} {pureMovingDuration}분 이동</span>}
+                                {pureMovingDuration > 0 && <span className="text-[9px] font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded flex items-center gap-1">{item.transportation ? transportIcons[item.transportation] || '➡️' : '➡️'} {pureMovingDuration}분 이동</span>}
                             </div>
                             <h3 className="text-xl font-bold text-gray-900 mb-1.5 break-all">{displaySpotName}</h3>
                             {cleanMemo && <p className="text-xs text-gray-500 leading-relaxed font-medium bg-gray-50/50 p-2 rounded-lg">{cleanMemo}</p>}
@@ -191,15 +191,12 @@ export const ImageExportModal = ({ isOpen, onClose, onConfirm, options, setOptio
     schedules: DayScheduleResponse[];
 }) => {
     const [mapState, setMapState] = useState<{ center: { lat: number, lng: number }, zoom: number } | undefined>(undefined);
-    const points = useMemo(
-        () => schedules
-            .map(schedule => ({ lat: schedule.lat, lng: schedule.lng }))
-            .filter(point =>
-                point.lat !== 0
-                && point.lng !== 0
-                && point.lat != null
-                && point.lng != null
-            ),
+    const points = useMemo<{ lat: number, lng: number }[]>(
+        () => schedules.flatMap(schedule =>
+            schedule.lat != null && schedule.lng != null && schedule.lat !== 0 && schedule.lng !== 0
+                ? [{ lat: schedule.lat, lng: schedule.lng }]
+                : []
+        ),
         [schedules]
     );
 

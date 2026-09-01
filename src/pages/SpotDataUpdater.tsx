@@ -3,6 +3,7 @@ import { useMapsLibrary, APIProvider } from "@vis.gl/react-google-maps";
 import {getMySpots, spotDataUpdate} from "../api/spotApi.ts";
 import type {SpotUpdateRequest} from "../types/spot.ts";
 import {mapGoogleTypeToSpotType} from "../utils/mapUtils.ts";
+import { useFeedback } from '../components/common/useFeedback';
 
 // API 및 유틸
 
@@ -20,6 +21,7 @@ export default function SpotDataUpdaterPage() {
 }
 
 function SpotDataUpdaterContent() {
+    const { confirm, showToast } = useFeedback();
     const [isUpdating, setIsUpdating] = useState(false);
     const [status, setStatus] = useState({ current: 0, total: 0, lastSpot: "" });
     const [logs, setLogs] = useState<string[]>([]);
@@ -40,7 +42,11 @@ function SpotDataUpdaterContent() {
     const handleUpdateAllSpots = async () => {
         if (!placesLibrary) return;
 
-        if (!window.confirm("DB의 모든 장소 정보를 구글 최신 데이터(사진, 영업시간 등)로 갱신하시겠습니까?")) return;
+        if (!await confirm({
+            title: '전체 장소 데이터 갱신',
+            message: '내 장소의 Google 정보(사진, 영업시간 등)를 최신 데이터로 갱신할까요?',
+            confirmLabel: '전체 갱신',
+        })) return;
 
         try {
             setIsUpdating(true);
@@ -96,7 +102,7 @@ function SpotDataUpdaterContent() {
                 }
             }
             addLog("🏁 모든 데이터 보정 작업이 끝났습니다.");
-            alert("일괄 갱신 완료!");
+            showToast({ message: "장소 데이터 일괄 갱신을 완료했습니다.", type: 'success' });
         } catch {
             addLog("🔥 치명적 오류 발생");
         } finally {

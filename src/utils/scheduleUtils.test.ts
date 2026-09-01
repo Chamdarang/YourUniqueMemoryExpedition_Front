@@ -15,6 +15,7 @@ const schedule = (
   spotName: `장소 ${id}`,
   spotType: 'OTHER',
   isChecked: false,
+  isSkipped: false,
   lat: 35,
   lng: 135,
   startTime,

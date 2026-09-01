@@ -1,11 +1,13 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useFeedback } from './useFeedback';
 
 export default function Layout() {
   const navigate = useNavigate();
   const username = localStorage.getItem('username');
+  const { confirm } = useFeedback();
 
-  const handleLogout = () => {
-    if (window.confirm('로그아웃 하시겠습니까?')) {
+  const handleLogout = async () => {
+    if (await confirm({ title: '로그아웃', message: '현재 계정에서 로그아웃할까요?', confirmLabel: '로그아웃' })) {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('username');
       navigate('/login', { replace: true });
@@ -93,7 +95,7 @@ export default function Layout() {
             <span className="text-2xl">✈️</span>
             <span className="font-black text-lg text-blue-600 tracking-widest">YUME</span>
           </Link>
-          <button onClick={handleLogout} className="text-sm text-gray-500">로그아웃</button>
+          <button onClick={() => void handleLogout()} className="text-sm text-gray-500">로그아웃</button>
         </header>
 
 

@@ -3,14 +3,12 @@ import type { ApiResponse } from "../types/common";
 import type {
   DayScheduleResponse,
   ScheduleCreateRequest, ScheduleReorderRequest,
-  ScheduleUpdateRequest
+  ScheduleUpdateRequest, ScheduleTransferRequest, ScheduleTransferResponse
 } from "../types/schedule";
 
 /** ✅ 1. 특정 날짜의 스케줄 목록 조회 */
 export const getSchedulesByDay = async (dayId: number): Promise<DayScheduleResponse[]> => {
-  const res = await fetchWithAuth(`/api/schedules/day/${dayId}`, {
-    method: 'GET'
-  });
+  const res = await fetchWithAuth(`/api/schedules/day/${dayId}`, { method: 'GET' });
 
   const json: ApiResponse<DayScheduleResponse[]> = await res.json();
   if (!json.success) throw new Error(json.message);
@@ -73,4 +71,44 @@ export const reorderSchedule = async (dayId: number, scheduleId: number, req: Sc
   const json: ApiResponse<DayScheduleResponse[]> = await res.json();
   if (!json.success) throw new Error(json.message);
   return json.data.sort((a, b) => a.scheduleOrder - b.scheduleOrder);
+};
+
+export const transferSchedule = async (scheduleId: number, req: ScheduleTransferRequest): Promise<ScheduleTransferResponse> => {
+  const res = await fetchWithAuth(`/api/schedules/${scheduleId}/transfer`, {
+    method: 'POST',
+    body: JSON.stringify(req),
+  });
+  const json: ApiResponse<ScheduleTransferResponse> = await res.json();
+  if (!json.success) throw new Error(json.message);
+  return json.data;
+};
+
+export const toggleScheduleSkip = async (scheduleId: number): Promise<void> => {
+  const res = await fetchWithAuth(`/api/schedules/${scheduleId}/skip`, {
+    method: 'PATCH',
+  });
+  const json: ApiResponse<null> = await res.json();
+  if (!json.success) throw new Error(json.message);
+};
+
+export interface UnlinkedSpotGroup {
+  spotName: string;
+  scheduleCount: number;
+}
+
+export const getUnlinkedSpotGroups = async (planId: number): Promise<UnlinkedSpotGroup[]> => {
+  const res = await fetchWithAuth(`/api/schedules/plan/${planId}/unlinked-spots`, { method: 'GET' });
+  const json: ApiResponse<UnlinkedSpotGroup[]> = await res.json();
+  if (!json.success) throw new Error(json.message);
+  return json.data;
+};
+
+export const linkPlanSchedulesToSpot = async (planId: number, sourceSpotName: string, spotUserId: number): Promise<number> => {
+  const res = await fetchWithAuth(`/api/schedules/plan/${planId}/link-spot`, {
+    method: 'PATCH',
+    body: JSON.stringify({ sourceSpotName, spotUserId }),
+  });
+  const json: ApiResponse<number> = await res.json();
+  if (!json.success) throw new Error(json.message);
+  return json.data;
 };

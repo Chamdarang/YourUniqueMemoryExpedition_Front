@@ -1,3 +1,5 @@
+import { saveFeedbackFlash } from '../components/common/feedbackBus';
+
 const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
 
 const normalizedApiBaseUrl = configuredApiBaseUrl
@@ -45,6 +47,7 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
             headers,
         });
     } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') throw error;
         console.error('api_network_error', { requestId: clientRequestId, url, error });
         throw new Error(`서버에 연결하지 못했습니다. 요청 ID: ${clientRequestId}`);
     }
@@ -53,7 +56,7 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
     if (response.status === 401) {
         // 중복 알림 방지 (이미 로그아웃 처리 중이면 무시)
         if (localStorage.getItem('accessToken')) {
-            alert("세션이 만료되었습니다. 다시 로그인해주세요. ✈️");
+            saveFeedbackFlash({ message: "세션이 만료되었습니다. 다시 로그인해 주세요. ✈️", type: 'info' });
             
             // 토큰 삭제 및 로그인 페이지로 강제 이동
             localStorage.removeItem('accessToken');

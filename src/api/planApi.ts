@@ -8,6 +8,7 @@ export interface GetPlansParams {
     from?: string;    // 'yyyy-MM-dd' 형식
     to?: string;      // 'yyyy-MM-dd' 형식
     months?: number[]; // [1, 2, 12] 등 월 리스트
+    status?: 'ALL' | 'UPCOMING' | 'PAST';
 }
 
 // 2. params를 선택적으로 받을 수 있게 수정
@@ -24,6 +25,7 @@ export const getPlans = async (params?: GetPlansParams): Promise<PageResponse<Pl
         if (params.months && params.months.length > 0) {  
             queryParams.append('months', params.months.join(','));
         }
+        if (params.status) queryParams.append('status', params.status);
     }
 
     // 쿼리 스트링이 있으면 ?를 붙여 URL 완성

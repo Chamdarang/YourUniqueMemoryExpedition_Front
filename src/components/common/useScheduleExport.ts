@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { toPng } from "html-to-image";
 import type { ExportOptions } from "./scheduleExportUtils";
+import { useFeedback } from './useFeedback';
 
 export const useScheduleExport = () => {
+    const { showToast } = useFeedback();
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [exportOptions, setExportOptions] = useState<ExportOptions>({
         header: true,
@@ -37,9 +39,10 @@ export const useScheduleExport = () => {
             link.href = dataUrl;
             link.click();
             closeExportModal();
+            showToast({ message: '일정 이미지를 저장했습니다.', type: 'success' });
         } catch (error) {
             console.error(error);
-            alert("이미지 저장 중 오류가 발생했습니다.");
+            showToast({ message: "이미지를 저장하지 못했습니다.", type: 'error' });
         }
     };
 

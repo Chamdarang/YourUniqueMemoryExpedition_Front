@@ -16,10 +16,12 @@ import { getSpotDisplayName, getSpotTypeInfo, SPOT_TYPE_INFO } from '../utils/sp
 import PurchaseEditCard from '../components/purchase/PurchaseEditCard.tsx';
 import SpotGroupModal from '../components/spot/SpotGroupModal';
 import {AdvancedMarker, APIProvider, Map, Pin} from "@vis.gl/react-google-maps";
+import { useFeedback } from '../components/common/useFeedback';
 
 // ❌ 기존에 중복 정의되어 있던 getStatusInfo 함수를 삭제했습니다.
 
 export default function SpotDetailPage() {
+    const { confirm, showToast } = useFeedback();
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [spot, setSpot] = useState<SpotDetailResponse | null>(null);
@@ -76,7 +78,8 @@ export default function SpotDetailPage() {
             await updateSpot(Number(id), editForm);
             setIsEditing(false);
             fetchDetail();
-        } catch { alert("수정 실패"); }
+            showToast({ message: '장소 정보를 수정했습니다.', type: 'success' });
+        } catch { showToast({ message: "장소 정보를 수정하지 못했습니다.", type: 'error' }); }
     };
 
     const handleToggleVisit = async () => {
@@ -84,17 +87,18 @@ export default function SpotDetailPage() {
         try {
             await updateSpot(Number(id), { ...editForm, isVisit: !spot.isVisit });
             fetchDetail();
-        } catch { alert("방문 상태 변경 실패"); }
+        } catch { showToast({ message: "방문 상태를 바꾸지 못했습니다.", type: 'error' }); }
     };
 
     const handleAddPurchase = async () => {
-        if (!id || !newPurchase.itemName.trim()) { alert("아이템 이름을 입력하세요."); return; }
+        if (!id || !newPurchase.itemName.trim()) { showToast({ message: "아이템 이름을 입력해 주세요.", type: 'info' }); return; }
         try {
             await createPurchase(Number(id), newPurchase);
             setIsAddingPurchase(false);
             setNewPurchase(initialPurchaseState);
             fetchDetail();
-        } catch { alert("아이템 추가 실패"); }
+            showToast({ message: '기념품을 추가했습니다.', type: 'success' });
+        } catch { showToast({ message: "기념품을 추가하지 못했습니다.", type: 'error' }); }
     };
 
     const handleUpdatePurchase = async (purchaseId: number) => {
@@ -102,15 +106,17 @@ export default function SpotDetailPage() {
             await updatePurchase(purchaseId, editPurchaseForm);
             setEditingPurchaseId(null);
             fetchDetail();
-        } catch { alert("아이템 수정 실패"); }
+            showToast({ message: '기념품 정보를 수정했습니다.', type: 'success' });
+        } catch { showToast({ message: "기념품 정보를 수정하지 못했습니다.", type: 'error' }); }
     };
 
     const handleDeletePurchase = async (purchaseId: number) => {
-        if (!window.confirm("정말 삭제하시겠습니까?")) return;
+        if (!await confirm({ title: '기념품 삭제', message: '이 기념품을 삭제할까요?', confirmLabel: '삭제', danger: true })) return;
         try {
             await deletePurchase(purchaseId);
             fetchDetail();
-        } catch { alert("삭제 실패"); }
+            showToast({ message: '기념품을 삭제했습니다.', type: 'success' });
+        } catch { showToast({ message: "기념품을 삭제하지 못했습니다.", type: 'error' }); }
     };
 
     const handleSaveGroups = async (newTags: string[]) => {
@@ -131,7 +137,8 @@ export default function SpotDetailPage() {
             }
             fetchDetail();
             setIsGroupModalOpen(false);
-        } catch { alert("태그 저장 실패"); }
+            showToast({ message: '장소 그룹을 저장했습니다.', type: 'success' });
+        } catch { showToast({ message: "장소 그룹을 저장하지 못했습니다.", type: 'error' }); }
     };
 
     const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";

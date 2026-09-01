@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 // API
@@ -13,6 +13,7 @@ import PlanList from '../components/plan/PlanList';
 import PlanFilter, { type PlanStatus, type SearchParams } from '../components/plan/PlanFilter';
 import GeneralImportModal from '../components/plan/GeneralImportModal';
 import Pagination from '../components/common/Pagination'; // ✅ 페이지네이션 컴포넌트
+import { useFeedback } from '../components/common/useFeedback';
 
 interface ImportCompletionReport {
   plan: PlanResponse;
@@ -32,6 +33,7 @@ interface ImportCompletionReport {
 }
 
 export default function PlanListPage() {
+  const { confirm, runUndoable, showToast } = useFeedback();
   const navigate = useNavigate();
   const importInputRef = useRef<HTMLInputElement>(null);
   // 데이터 상태
@@ -42,6 +44,7 @@ export default function PlanListPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const currentSearchParamsRef = useRef<SearchParams>({ startDate: '', endDate: '', selectedMonths: [] });
+  const currentStatusRef = useRef<PlanStatus>('ALL');
 
   const [viewStatus, setViewStatus] = useState<PlanStatus>('ALL');
   const [loading, setLoading] = useState(true);
@@ -54,7 +57,7 @@ export default function PlanListPage() {
   const [editForm, setEditForm] = useState({ planName: '', planStartDate: '', planEndDate: '', planMemo: '' });
 
   // 1. 목록 불러오기 (페이징 적용)
-  const fetchPlans = useCallback(async (searchParams?: SearchParams, pageNum: number = 0) => {
+  const fetchPlans = useCallback(async (searchParams?: SearchParams, pageNum: number = 0, status?: PlanStatus) => {
     setLoading(true);
     try {
       // 검색 조건이 새로 들어오면 저장, 아니면 기존 저장된 조건 사용
@@ -71,7 +74,8 @@ export default function PlanListPage() {
         size: 10, // ✅ 한 페이지에 보여줄 개수
         from: paramsToUse.startDate || undefined,
         to: paramsToUse.endDate || undefined,
-        months: paramsToUse.selectedMonths
+        months: paramsToUse.selectedMonths,
+        status: status ?? currentStatusRef.current,
       };
 
       const data = await getPlans(apiParams);
@@ -84,10 +88,11 @@ export default function PlanListPage() {
 
     } catch (err) {
       console.error(err);
+      showToast({ message: '여행 계획 목록을 불러오지 못했습니다.', type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   // 초기 로드
   useEffect(() => { void fetchPlans(); }, [fetchPlans]);
@@ -97,14 +102,27 @@ export default function PlanListPage() {
     fetchPlans(undefined, newPage); // 기존 검색 조건 유지하며 페이지 이동
   };
 
+  const handleStatusChange = (status: PlanStatus) => {
+    setViewStatus(status);
+    currentStatusRef.current = status;
+    void fetchPlans(undefined, 0, status);
+  };
+
   // 2. 삭제
   const handleDelete = async (id: number) => {
-    if (!confirm("정말 이 여행 계획을 삭제하시겠습니까?")) return;
-    try {
-      await deletePlan(id);
-      // 삭제 후 목록 새로고침 (현재 페이지 유지)
-      fetchPlans(undefined, page);
-    } catch { alert("삭제 실패"); }
+    const target = plans.find(plan => plan.id === id);
+    if (!await confirm({
+      title: '여행 계획 삭제',
+      message: `'${target?.planName || '이 여행'}'과 포함된 모든 일정을 삭제할까요?`,
+      confirmLabel: '삭제',
+      danger: true,
+    })) return;
+    runUndoable({
+      key: `plan-delete:${id}`,
+      message: `'${target?.planName || '여행 계획'}'을 6초 후 삭제합니다.`,
+      successMessage: '여행 계획을 삭제했습니다.',
+      commit: async () => { await deletePlan(id); await fetchPlans(undefined, page); },
+    });
   };
 
   // 3. 수정 팝업 열기
@@ -122,10 +140,10 @@ export default function PlanListPage() {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPlan) return;
-    if (!editForm.planName.trim()) return alert("여행 이름을 입력해주세요.");
+    if (!editForm.planName.trim()) return showToast({ message: "여행 이름을 입력해 주세요.", type: 'info' });
 
     const info = getDurationInfo(editForm.planStartDate, editForm.planEndDate);
-    if (!info.valid) return alert(info.msg);
+    if (!info.valid) return showToast({ message: info.msg, type: 'info' });
 
     try {
       // PlanHeader와 동일 로직: planDays 포함하여 전송
@@ -135,25 +153,10 @@ export default function PlanListPage() {
       });
 
       setEditingPlan(null);
-      alert("수정되었습니다.");
+      showToast({ message: '여행 정보를 수정했습니다.', type: 'success' });
       fetchPlans(undefined, page); // 목록 갱신
-    } catch { alert("수정 실패"); }
+    } catch { showToast({ message: "여행 정보를 수정하지 못했습니다.", type: 'error' }); }
   };
-
-  // 5. 프론트엔드 필터링 (상태별 보기)
-  // 주의: 서버 페이징을 사용할 경우, 이 필터링은 '현재 페이지에 로드된 데이터'에만 적용됩니다.
-  // 완벽한 필터링을 위해서는 'status'도 API 파라미터로 보내야 하지만, 일단 기존 로직을 유지합니다.
-  const visiblePlans = useMemo(() => {
-    if (!plans) return [];
-    const d = new Date();
-    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    return plans.filter((plan) => {
-      if (viewStatus === 'ALL') return true;
-      if (viewStatus === 'UPCOMING') return plan.planStartDate > today;
-      if (viewStatus === 'PAST') return plan.planEndDate < today;
-      return true;
-    });
-  }, [plans, viewStatus]);
 
   const durationInfo = getDurationInfo(editForm.planStartDate, editForm.planEndDate);
 
@@ -192,7 +195,7 @@ export default function PlanListPage() {
       });
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "계획을 불러오지 못했습니다.");
+      showToast({ message: error instanceof Error ? error.message : "계획을 불러오지 못했습니다.", type: 'error' });
     } finally {
       setImporting(false);
     }
@@ -240,7 +243,7 @@ export default function PlanListPage() {
         <div className="mb-6">
           <PlanFilter
               status={viewStatus}
-              onStatusChange={setViewStatus}
+              onStatusChange={handleStatusChange}
               onSearch={(params) => fetchPlans(params, 0)} // 검색 시 0페이지부터
           />
         </div>
@@ -248,7 +251,7 @@ export default function PlanListPage() {
         {loading ? <div className="text-center p-20 text-gray-400">로딩 중...</div> :
             <>
               {/* 리스트 */}
-              <PlanList plans={visiblePlans} onDelete={handleDelete} onEdit={handleEditClick} />
+              <PlanList plans={plans} onDelete={handleDelete} onEdit={handleEditClick} />
 
               {/* ✅ 페이지네이션 컴포넌트 추가 */}
               <Pagination

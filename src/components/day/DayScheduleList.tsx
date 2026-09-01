@@ -23,6 +23,9 @@ interface Props {
     setPickingTarget?: (target: { dayId: number, scheduleId: number } | null) => void;
     dayId?: number;
     routeDate?: string;
+    focusRequest?: { scheduleId: number; key: number; openEditor: boolean };
+    onItemDirtyChange?: (scheduleId: number, isDirty: boolean) => void;
+    onTransfer?: (schedule: DayScheduleResponse) => void;
 }
 
 export default function DayScheduleList({
@@ -41,7 +44,10 @@ export default function DayScheduleList({
                                             pickingTarget,
                                             setPickingTarget,
                                             dayId,
-                                            routeDate
+                                            routeDate,
+                                            focusRequest,
+                                            onItemDirtyChange,
+                                            onTransfer
                                         }: Props) {
 
     const containerClass = variant === 'page'
@@ -64,13 +70,21 @@ export default function DayScheduleList({
                         </div>
                     )}
                     {schedules.map((schedule) => (
-                        <SimpleScheduleRow
+                        <div
                             key={`${schedule.id}-${schedule.startTime}-${schedule.spotName}-${schedule.memo}`}
-                            schedule={schedule}
-                            onUpdate={onUpdate}
-                            onDelete={onDelete}
-                            onToggleVisit={onToggleVisit}
-                        />
+                            data-schedule-id={schedule.id}
+                            className={`scroll-mt-24 rounded-xl transition ${selectedScheduleId === schedule.id ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
+                            onClick={() => onSelect?.(schedule.id)}
+                        >
+                            <SimpleScheduleRow
+                                schedule={schedule}
+                                onUpdate={onUpdate}
+                                onDelete={onDelete}
+                                onToggleVisit={onToggleVisit}
+                                onDirtyChange={onItemDirtyChange}
+                                onTransfer={onTransfer}
+                            />
+                        </div>
                     ))}
                 </div>
             </div>
@@ -104,7 +118,8 @@ export default function DayScheduleList({
                         return (
                             <div
                                 key={schedule.id}
-                                className={`transition-all duration-200 ${
+                                data-schedule-id={schedule.id}
+                                className={`scroll-mt-24 transition-all duration-200 ${
                                     selectedScheduleId === schedule.id
                                         ? 'ring-2 ring-blue-500 ring-offset-2 rounded-xl bg-blue-50/50'
                                         : ''
@@ -138,6 +153,9 @@ export default function DayScheduleList({
                                         }
                                     }}
                                     isPickingMap={pickingTarget?.scheduleId === schedule.id}
+                                    openEditRequestKey={focusRequest?.scheduleId === schedule.id && focusRequest.openEditor ? focusRequest.key : undefined}
+                                    onDirtyChange={onItemDirtyChange}
+                                    onTransfer={onTransfer}
                                 />
                             </div>
                         );

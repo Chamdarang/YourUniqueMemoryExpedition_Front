@@ -8,6 +8,7 @@ import { detachPlanDay } from "../../api/dayApi";
 // Types & Utils
 import type { PlanDetailResponse } from "../../types/plan";
 import { enforceFourDigitDateYear, getDurationInfo, limitDateYear, shiftDate } from "../../utils/timeUtils";
+import { useFeedback } from '../common/useFeedback';
 
 interface Props {
   plan: PlanDetailResponse;
@@ -16,7 +17,9 @@ interface Props {
 }
 
 export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
+  const { confirm, runUndoable, isUndoablePending, showToast } = useFeedback();
   const navigate = useNavigate();
+  const isPlanDeletePending = isUndoablePending(`plan-delete:${plan.id}`);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -54,10 +57,10 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
   };
 
   const handleSave = async () => {
-    if (!editForm.planName.trim()) return alert("여행 이름을 입력해주세요.");
+    if (!editForm.planName.trim()) return showToast({ message: "여행 이름을 입력해 주세요.", type: 'info' });
 
     const durationInfo = getDurationInfo(editForm.planStartDate, editForm.planEndDate);
-    if (!durationInfo.valid) return alert(durationInfo.msg);
+    if (!durationInfo.valid) return showToast({ message: durationInfo.msg, type: 'info' });
 
     const newPlanDays = durationInfo.days;
 
@@ -67,7 +70,7 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
         if (daysToDetach.length > 0) {
           const dayNames = daysToDetach.map(d => `${d.dayOrder}일차`).join(', ');
           const confirmMsg = `여행 기간이 ${newPlanDays}일로 줄어들었습니다.\n\n범위를 벗어나는 [ ${dayNames} ] 일정은 삭제되지 않고\n'내 계획(보관함)'으로 안전하게 이동됩니다.\n\n저장하시겠습니까?`;
-          if (!confirm(confirmMsg)) return;
+          if (!await confirm({ title: '여행 기간 단축', message: confirmMsg, confirmLabel: '보관함으로 이동' })) return;
           await Promise.all(daysToDetach.map(day => detachPlanDay(day.id)));
         }
       }
@@ -76,19 +79,22 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
 
       setIsEditing(false);
       onRefresh();
-      alert("수정되었습니다.");
+      showToast({ message: "여행 정보를 수정했습니다.", type: 'success' });
     } catch (err) {
       console.error(err);
-      alert("수정 중 오류가 발생했습니다.");
+      showToast({ message: "여행 정보를 수정하지 못했습니다.", type: 'error' });
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm("정말 삭제하시겠습니까? 복구할 수 없습니다.")) return;
-    try {
-      await deletePlan(plan.id);
-      navigate("/plans");
-    } catch { alert("삭제 실패"); }
+    if (isPlanDeletePending) return;
+    if (!await confirm({ title: '여행 계획 삭제', message: `'${plan.planName}'과 포함된 모든 일정을 삭제할까요?`, confirmLabel: '삭제', danger: true })) return;
+    runUndoable({
+      key: `plan-delete:${plan.id}`,
+      message: `'${plan.planName}'을 6초 후 삭제합니다.`,
+      successMessage: '여행 계획을 삭제했습니다.',
+      commit: async () => { await deletePlan(plan.id); navigate("/plans"); },
+    });
   };
 
   const viewDuration = getDurationInfo(plan.planStartDate, plan.planEndDate);
@@ -97,13 +103,13 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
 
   const fitEndDateToSchedules = () => {
     const fittedEndDate = shiftDate(editForm.planStartDate, scheduleDayCount - 1);
-    if (!fittedEndDate) return alert("시작일을 먼저 입력해주세요.");
+    if (!fittedEndDate) return showToast({ message: "시작일을 먼저 입력해 주세요.", type: 'info' });
     setEditForm(current => ({ ...current, planEndDate: fittedEndDate }));
   };
 
   const fitStartDateToSchedules = () => {
     const fittedStartDate = shiftDate(editForm.planEndDate, -(scheduleDayCount - 1));
-    if (!fittedStartDate) return alert("종료일을 먼저 입력해주세요.");
+    if (!fittedStartDate) return showToast({ message: "종료일을 먼저 입력해 주세요.", type: 'info' });
     setEditForm(current => ({ ...current, planStartDate: fittedStartDate }));
   };
 
@@ -151,7 +157,7 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                     <span className="text-sm font-bold text-blue-600">수정 모드 ✨</span>
                     <div className="flex gap-2">
                       <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-sm font-bold text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition">취소</button>
-                      <button onClick={handleSave} className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md transition">저장 완료</button>
+                      <button onClick={handleSave} className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md transition">저장</button>
                     </div>
                   </div>
                   <div>
@@ -189,7 +195,7 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                     <textarea className="w-full bg-white border border-gray-300 rounded-xl p-4 text-sm text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none resize-none transition shadow-sm" rows={5} value={editForm.planMemo} onChange={(e) => setEditForm({ ...editForm, planMemo: e.target.value })} placeholder="여행에 대한 메모를 자유롭게 남겨보세요." />
                   </div>
                   <div className="pt-4 border-t border-gray-100 flex justify-center">
-                    <button onClick={handleDelete} className="text-xs font-bold text-red-400 hover:text-red-600 hover:bg-red-50 px-3 py-1.5 rounded transition">🗑️ 이 여행 계획 삭제하기</button>
+                    <button disabled={isPlanDeletePending} onClick={handleDelete} className="rounded px-3 py-1.5 text-xs font-bold text-red-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:bg-amber-50 disabled:text-amber-600">{isPlanDeletePending ? '⏳ 삭제 대기 중…' : '🗑️ 이 여행 계획 삭제하기'}</button>
                   </div>
                 </div>
             )}

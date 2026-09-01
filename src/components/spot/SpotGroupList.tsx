@@ -9,12 +9,14 @@ import type { SpotGroupResponse } from "../../types/groups";
 
 // Components
 import SpotList from "./SpotList";
+import { useFeedback } from '../common/useFeedback';
 
 interface Props {
   initialGroupName?: string; // URL 타고 들어왔을 때 자동 진입용
 }
 
 export default function SpotGroupList({ initialGroupName }: Props) {
+  const { confirm, showToast } = useFeedback();
   // ----------------------------------------------------------------
   // 🧠 State
   // ----------------------------------------------------------------
@@ -74,7 +76,7 @@ export default function SpotGroupList({ initialGroupName }: Props) {
       setSelectedGroupId(groupId);
       setIsEditing(false);
     } catch {
-      alert("그룹 정보를 불러오지 못했습니다.");
+      showToast({ message: "그룹 정보를 불러오지 못했습니다.", type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -101,38 +103,39 @@ export default function SpotGroupList({ initialGroupName }: Props) {
       await updateGroup(selectedGroupId, { groupName: editName });
       setSelectedGroupName(editName);
       setIsEditing(false);
-      alert("그룹 이름이 변경되었습니다.");
+      showToast({ message: "그룹 이름을 변경했습니다.", type: 'success' });
       fetchGroups(); // 목록 갱신
     } catch {
-      alert("이미 존재하는 그룹 이름이거나 수정에 실패했습니다.");
+      showToast({ message: "이미 존재하는 그룹 이름이거나 수정하지 못했습니다.", type: 'error' });
     }
   };
 
   // 그룹 삭제
   const handleDeleteGroup = async () => {
     if (!selectedGroupId) return;
-    if (!window.confirm(`'${selectedGroupName}' 그룹을 정말 삭제하시겠습니까?\n(포함된 장소들은 삭제되지 않고 그룹만 해제됩니다.)`)) return;
+    if (!await confirm({ title: '장소 그룹 삭제', message: `'${selectedGroupName}' 그룹을 삭제할까요?\n포함된 장소는 삭제되지 않고 그룹만 해제됩니다.`, confirmLabel: '그룹 삭제', danger: true })) return;
 
     try {
       await deleteGroup(selectedGroupId);
-      alert("그룹이 삭제되었습니다.");
+      showToast({ message: "그룹을 삭제했습니다.", type: 'success' });
       handleBack();
     } catch {
-      alert("그룹 삭제 실패");
+      showToast({ message: "그룹을 삭제하지 못했습니다.", type: 'error' });
     }
   };
 
   // 그룹에서 장소 제외
   const handleRemoveSpotFromGroup = async (spotId: number) => {
     if (!selectedGroupId) return;
-    if (!window.confirm("이 장소를 그룹에서 제외하시겠습니까?")) return;
+    if (!await confirm({ title: '그룹에서 제외', message: '이 장소를 그룹에서 제외할까요?', confirmLabel: '제외' })) return;
 
     try {
       await removeSpotFromGroup(selectedGroupId, spotId);
       setGroupSpots(prev => prev.filter(s => s.id !== spotId)); // UI 낙관적 업데이트
       fetchGroups(); // 백그라운드 데이터 갱신
+      showToast({ message: '장소를 그룹에서 제외했습니다.', type: 'success' });
     } catch {
-      alert("제외 실패");
+      showToast({ message: "장소를 그룹에서 제외하지 못했습니다.", type: 'error' });
     }
   };
 

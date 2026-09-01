@@ -18,12 +18,14 @@ import PurchaseList from "../components/purchase/PurchaseList";
 import SpotGroupList from "../components/spot/SpotGroupList";
 import Pagination from "../components/common/Pagination";
 import SpotInUseModal from "../components/spot/SpotInUseModal.tsx";
+import { useFeedback } from "../components/common/useFeedback";
 
 // ❌ PURCHASE_KIND_KEYS 등 기념품 유틸 임포트는 PurchaseFilter 내부로 이동했으므로 여기서 삭제했습니다.
 
 type AdminMode = 'SPOT' | 'GROUP' | 'PURCHASE';
 
 export default function SpotListPage() {
+    const { confirm, showToast } = useFeedback();
     const [searchParams, setSearchParams] = useSearchParams();
     const modeFromUrl = (searchParams.get('mode') as AdminMode) || 'SPOT';
 
@@ -103,10 +105,10 @@ export default function SpotListPage() {
     };
 
     const handleDeleteSpot = async (id: number, force = false) => {
-        if (!force && !confirm("이 장소를 삭제하시겠습니까?")) return;
+        if (!force && !await confirm({ title: '장소 삭제', message: '이 장소를 삭제할까요?', confirmLabel: '삭제', danger: true })) return;
         try {
             await deleteSpot(id);
-            alert("삭제되었습니다.");
+            showToast({ message: "장소를 삭제했습니다.", type: 'success' });
             setIsInUseModalOpen(false);
             fetchSpotsData(page);
         } catch (error) {
@@ -118,7 +120,7 @@ export default function SpotListPage() {
                 setConflictUsage(errorData || []);
                 setIsInUseModalOpen(true);
             } else {
-                alert(err.message || "삭제 실패");
+                showToast({ message: err.message || "장소를 삭제하지 못했습니다.", type: 'error' });
             }
         }
     };
@@ -130,20 +132,20 @@ export default function SpotListPage() {
                 isVisit: !spot.isVisit
             });
             fetchSpotsData(page);
-        } catch { alert("업데이트 실패"); }
+        } catch { showToast({ message: "방문 상태를 바꾸지 못했습니다.", type: 'error' }); }
     };
 
     const handleSavePurchase = async () => {
-        if (!formPurchase.itemName) return alert("아이템 이름을 입력해 주세요.");
-        if (formPurchase.spotUserId === 0) return alert("장소를 선택해 주세요.");
+        if (!formPurchase.itemName) return showToast({ message: "아이템 이름을 입력해 주세요.", type: 'info' });
+        if (formPurchase.spotUserId === 0) return showToast({ message: "장소를 선택해 주세요.", type: 'info' });
         try {
             const { spotUserId, ...requestBody } = formPurchase;
             if (editingId) {
                 await updatePurchase(editingId, { ...requestBody, spotUserId });
-                alert("수정되었습니다! ✨");
+                showToast({ message: "기념품 정보를 수정했습니다. ✨", type: 'success' });
             } else {
                 await createPurchase(spotUserId, requestBody);
-                alert("추가되었습니다! 🎁");
+                showToast({ message: "기념품을 추가했습니다. 🎁", type: 'success' });
             }
             setIsAdding(false);
             setEditingId(null);
@@ -155,7 +157,7 @@ export default function SpotListPage() {
             fetchPurchasesData(0);
         } catch (error) {
             console.error(error);
-            alert("처리에 실패했습니다.");
+            showToast({ message: "기념품 정보를 처리하지 못했습니다.", type: 'error' });
         }
     };
 
@@ -178,9 +180,32 @@ export default function SpotListPage() {
             setLoading(true);
             setDuplicateCandidates(await getSpotDuplicateCandidates());
         } catch (error) {
-            alert(error instanceof Error ? error.message : "중복 장소를 확인하지 못했습니다.");
+            showToast({ message: error instanceof Error ? error.message : "중복 장소를 확인하지 못했습니다.", type: 'error' });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleTogglePurchaseStatus = async (purchase: SpotPurchaseResponse) => {
+        try {
+            const nextStatus = purchase.status === 'ACQUIRED' ? 'WANT' : 'ACQUIRED';
+            await updatePurchase(purchase.id, { ...purchase, status: nextStatus });
+            await fetchPurchasesData(page);
+            showToast({ message: '기념품 상태를 변경했습니다.', type: 'success' });
+        } catch {
+            showToast({ message: '기념품 상태를 변경하지 못했습니다.', type: 'error' });
+        }
+    };
+
+    const handleDeletePurchase = async (purchaseId: number) => {
+        const target = purchases.find(purchase => purchase.id === purchaseId);
+        if (!await confirm({ title: '기념품 삭제', message: `'${target?.itemName || '기념품'}'을 삭제할까요?`, confirmLabel: '삭제', danger: true })) return;
+        try {
+            await deletePurchase(purchaseId);
+            await fetchPurchasesData(page);
+            showToast({ message: '기념품을 삭제했습니다.', type: 'success' });
+        } catch {
+            showToast({ message: '기념품을 삭제하지 못했습니다.', type: 'error' });
         }
     };
 
@@ -190,7 +215,12 @@ export default function SpotListPage() {
     ) => {
         const targetName = target.displayName || target.spotName;
         const sourceName = source.displayName || source.spotName;
-        if (!confirm(`'${targetName}'을(를) 남기고 '${sourceName}'을(를) 병합할까요?\n일정·기념품·방문 기록은 남길 장소로 이동됩니다.`)) return;
+        if (!await confirm({
+            title: '중복 장소 병합',
+            message: `'${targetName}'을(를) 남기고 '${sourceName}'을(를) 병합할까요?\n일정·기념품·방문 기록은 남길 장소로 이동됩니다.`,
+            confirmLabel: '병합',
+            danger: true,
+        })) return;
 
         try {
             setMergingSpots(true);
@@ -198,8 +228,9 @@ export default function SpotListPage() {
             const refreshed = await getSpotDuplicateCandidates();
             setDuplicateCandidates(refreshed);
             await fetchSpotsData(page, spotFilter);
+            showToast({ message: '장소를 병합했습니다.', type: 'success' });
         } catch (error) {
-            alert(error instanceof Error ? error.message : "장소를 병합하지 못했습니다.");
+            showToast({ message: error instanceof Error ? error.message : "장소를 병합하지 못했습니다.", type: 'error' });
         } finally {
             setMergingSpots(false);
         }
@@ -263,8 +294,8 @@ export default function SpotListPage() {
                     <PurchaseList
                         purchases={purchases}
                         onEdit={handleEditStart}
-                        onToggleStatus={(p) => updatePurchase(p.id, { ...p, status: p.status === 'ACQUIRED' ? 'WANT' : 'ACQUIRED' }).then(() => fetchPurchasesData(page))}
-                        onDelete={(id) => deletePurchase(id).then(() => fetchPurchasesData(page))}
+                        onToggleStatus={(purchase) => void handleTogglePurchaseStatus(purchase)}
+                        onDelete={(purchaseId) => void handleDeletePurchase(purchaseId)}
                     />
 
                     <Pagination currentPage={page} totalPages={totalPages} onPageChange={fetchPurchasesData} />

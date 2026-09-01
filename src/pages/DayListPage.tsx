@@ -5,8 +5,10 @@ import type { PlanDayResponse, ScheduleMode } from "../types/planDay.ts";
 // Components
 import DayList from "../components/day/DayList";
 import Pagination from "../components/common/Pagination";
+import { useFeedback } from '../components/common/useFeedback';
 
 export default function DayListPage() {
+    const { confirm, runUndoable, showToast } = useFeedback();
     const [days, setDays] = useState<PlanDayResponse[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -56,14 +58,14 @@ export default function DayListPage() {
 
     // 3. 삭제 핸들러
     const handleDelete = async (id: number) => {
-        if (!window.confirm("정말 이 하루 계획을 삭제하시겠습니까?")) return;
-        try {
-            await deleteDay(id);
-            fetchDays(page, searchKeyword);
-            alert("삭제되었습니다.");
-        } catch {
-            alert("삭제 실패");
-        }
+        const target = days.find(day => day.id === id);
+        if (!await confirm({ title: '하루 일정 삭제', message: `'${target?.dayName || '하루 일정'}'을 삭제할까요?`, confirmLabel: '삭제', danger: true })) return;
+        runUndoable({
+            key: `day-delete:${id}`,
+            message: `'${target?.dayName || '하루 일정'}'을 6초 후 삭제합니다.`,
+            successMessage: '하루 일정을 삭제했습니다.',
+            commit: async () => { await deleteDay(id); await fetchDays(page, searchKeyword); },
+        });
     };
 
     // 4. 생성 핸들러
@@ -78,9 +80,9 @@ export default function DayListPage() {
             setSearchKeyword('');
             setKeyword('');
             fetchDays(0, '');
-            alert('새로운 하루 계획이 생성되었습니다!');
+            showToast({ message: '새로운 하루 일정을 만들었습니다.', type: 'success' });
         } catch {
-            alert('생성 실패');
+            showToast({ message: '하루 일정을 만들지 못했습니다.', type: 'error' });
         }
     };
 

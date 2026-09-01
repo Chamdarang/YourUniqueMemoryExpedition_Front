@@ -49,3 +49,9 @@ export interface PlanDaySwapRequest {
   targetDayOrder: number;
   swapMode: SwapMode;
 }
+
+export interface PlanDayCopyRequest {
+  targetPlanId: number | null;
+  targetDayOrder: number | null;
+  dayName?: string;
+}

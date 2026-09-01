@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary
@@ -7,7 +7,7 @@ import {
 // API
 import { getUpcomingPlan } from "../api/planApi";
 import { getPlanDays } from "../api/dayApi";
-import { getSchedulesByDay } from "../api/scheduleApi";
+import { getSchedulesByDay, toggleScheduleSkip, toggleScheduleVisit } from "../api/scheduleApi";
 
 // Utils
 import { getSpotTypeInfo } from "../utils/spotUtils";
@@ -16,47 +16,36 @@ import { getSpotTypeInfo } from "../utils/spotUtils";
 import type { PlanResponse } from "../types/plan";
 import type { DayScheduleResponse } from "../types/schedule";
 import type { Transportation } from "../types/enums";
+import { useFeedback } from "../components/common/useFeedback";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
 // 🛠️ [유틸] 헬퍼 함수들
-const cleanMemoTags = (memo: string) => {
+const cleanMemoTags = (memo: string | null | undefined) => {
   if (!memo) return '';
   return memo.replace(/#si:\s*\d+/g, '').replace(/#mi:\s*\d+/g, '').replace(/#visited/g, '').trim();
 };
 
-const parseInjuryFromMemo = (memo: string, tag: string) => {
+const parseInjuryFromMemo = (memo: string | null | undefined, tag: string) => {
   const regex = new RegExp(`${tag}\\s*(\\d+)`);
   const match = memo?.match(regex);
   return match ? parseInt(match[1]) : 0;
 };
 
-const timeToMinutes = (time: string) => {
+const timeToMinutes = (time?: string | null) => {
   if (!time) return 0;
   const [h, m] = time.split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
 };
 
-const minutesToTime = (minutes: number) => {
-  let h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h >= 24) h = h % 24;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-};
-
-const addTime = (baseTime: string, duration: number) => {
-  const totalMinutes = timeToMinutes(baseTime) + duration;
-  return minutesToTime(totalMinutes);
-};
-
-const getTransIcon = (type: Transportation) => {
+const getTransIcon = (type?: Transportation | null) => {
   const icons: Record<string, string> = { WALK: '🚶', BUS: '🚌', TRAIN: '🚃', TAXI: '🚕', CAR: '🚗', SHIP: '🚢', AIRPLANE: '✈️' };
-  return icons[type] || '➡️';
+  return type ? icons[type] || '➡️' : '➡️';
 };
 
-const getTransLabel = (type: Transportation) => {
+const getTransLabel = (type?: Transportation | null) => {
   const labels: Record<string, string> = { WALK: '도보', BUS: '버스', TRAIN: '열차', TAXI: '택시', CAR: '자동차', SHIP: '배', AIRPLANE: '비행기' };
-  return labels[type] || '이동';
+  return type ? labels[type] || '이동' : '이동';
 };
 
 const getCurrentMinutes = () => {
@@ -64,25 +53,17 @@ const getCurrentMinutes = () => {
   return now.getHours() * 60 + now.getMinutes();
 };
 
-const recalculateSchedules = (items: DayScheduleResponse[]): DayScheduleResponse[] => {
-  if (items.length === 0) return [];
-  const newItems = items.map(item => ({ ...item }));
+const shiftTime = (time: string | null, minutes: number) => {
+  if (!time) return null;
+  const shifted = (timeToMinutes(time) + minutes + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(shifted / 60)).padStart(2, '0')}:${String(shifted % 60).padStart(2, '0')}`;
+};
 
-  if (!newItems[0].startTime) newItems[0].startTime = "10:00";
-  newItems[0].startTime = newItems[0].startTime.substring(0, 5);
-
-  newItems[0].endTime = addTime(newItems[0].startTime, newItems[0].duration);
-
-  for (let i = 1; i < newItems.length; i++) {
-    const prevItem = newItems[i - 1];
-    const currentItem = newItems[i];
-    const calculatedStartTime = timeToMinutes(prevItem.endTime) + currentItem.movingDuration;
-    currentItem.startTime = currentItem.fixedStartTime && currentItem.startTime
-        ? currentItem.startTime.substring(0, 5)
-        : minutesToTime(calculatedStartTime);
-    currentItem.endTime = addTime(currentItem.startTime, currentItem.duration);
-  }
-  return newItems;
+const getTravelMode = (transportation?: Transportation | null) => {
+  if (transportation === 'WALK') return 'walking';
+  if (transportation === 'CAR' || transportation === 'TAXI' || transportation === 'MOTORCYCLE') return 'driving';
+  if (transportation === 'BICYCLE') return 'bicycling';
+  return 'transit';
 };
 
 function MapUpdater({ schedules, activeId, activeMoveIndex }: { schedules: DayScheduleResponse[], activeId: number | undefined, activeMoveIndex: number }) {
@@ -141,6 +122,7 @@ function NumberedMarker({ number, color = "#3B82F6", active = false }: { number:
 }
 
 export default function HomePage() {
+  const { showToast } = useFeedback();
   const username = localStorage.getItem('username') || '여행자';
   const [upcomingPlan, setUpcomingPlan] = useState<PlanResponse | null>(null);
   const [todaySchedules, setTodaySchedules] = useState<DayScheduleResponse[]>([]);
@@ -150,6 +132,8 @@ export default function HomePage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const activeItemRef = useRef<HTMLDivElement>(null);
   const [hasUserScrolled, setHasUserScrolled] = useState(false);
+  const [todayDayId, setTodayDayId] = useState<number | null>(null);
+  const [delayMinutes, setDelayMinutes] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => { setNowMinutes(getCurrentMinutes()); }, 60000);
@@ -175,8 +159,10 @@ export default function HomePage() {
             const days = await getPlanDays(plan.id);
             const targetDay = days.find(d => d.dayOrder === Math.abs(dDay) + 1);
             if (targetDay) {
+              setTodayDayId(targetDay.id);
+              setDelayMinutes(Number(localStorage.getItem(`yume-delay-${targetDay.id}`) || 0));
               const res = await getSchedulesByDay(targetDay.id);
-              setTodaySchedules(recalculateSchedules(res));
+              setTodaySchedules(res);
             }
             setScheduleLoading(false);
           }
@@ -200,29 +186,73 @@ export default function HomePage() {
 
   const handleManualScroll = () => { if (!hasUserScrolled) setHasUserScrolled(true); };
 
-  if (loading) return <div className="p-10 text-center text-gray-500 font-bold">로딩 중... ⏳</div>;
-
   const status = upcomingPlan ? (calculateDaysDiff(upcomingPlan.planStartDate) > 0 ? 'UPCOMING' : (calculateDaysDiff(upcomingPlan.planEndDate) < 0 ? 'PAST' : 'ONGOING')) : null;
   const dDay = upcomingPlan ? calculateDaysDiff(upcomingPlan.planStartDate) : 0;
   const currentDayN = Math.abs(dDay) + 1;
 
-  const activeSchedule = todaySchedules.find(item => {
+  const displaySchedules = useMemo(() => todaySchedules.map(item => ({
+    ...item,
+    startTime: shiftTime(item.startTime, delayMinutes),
+    endTime: shiftTime(item.endTime, delayMinutes),
+  })), [todaySchedules, delayMinutes]);
+
+  if (loading) return <div className="p-10 text-center text-gray-500 font-bold">로딩 중... ⏳</div>;
+
+  const activeSchedule = displaySchedules.find(item => {
+    if (item.isChecked || item.isSkipped || !item.startTime) return false;
     const start = timeToMinutes(item.startTime);
     return nowMinutes >= start && nowMinutes < (start + item.duration);
   });
   const activeScheduleId = activeSchedule?.id;
 
-  const activeMovingIndex = todaySchedules.findIndex((item, index) => {
-    if (index === 0 || !todaySchedules[index - 1].endTime) return false;
-    const moveStart = timeToMinutes(todaySchedules[index - 1].endTime);
+  const activeMovingIndex = displaySchedules.findIndex((item, index) => {
+    if (item.isChecked || item.isSkipped || index === 0 || !displaySchedules[index - 1].endTime) return false;
+    const moveStart = timeToMinutes(displaySchedules[index - 1].endTime);
     return nowMinutes >= moveStart && nowMinutes < (moveStart + item.movingDuration);
   });
+
+  const activeIndex = activeSchedule
+      ? displaySchedules.findIndex(item => item.id === activeSchedule.id)
+      : activeMovingIndex;
+  const nextSchedule = displaySchedules.find((item, index) =>
+      !item.isChecked && !item.isSkipped && index > activeIndex
+  ) || displaySchedules.find(item => !item.isChecked && !item.isSkipped);
 
   const currentStatusText = activeSchedule
       ? `현재: ${activeSchedule.spotName}`
       : (activeMovingIndex !== -1
-          ? `이동 중: ${getTransLabel(todaySchedules[activeMovingIndex].transportation)}`
-          : null);
+          ? `이동 중: ${getTransLabel(displaySchedules[activeMovingIndex].transportation)}`
+          : nextSchedule ? `다음: ${nextSchedule.spotName || '장소 미정'}` : '오늘 일정 완료');
+
+  const changeDelay = (nextDelay: number) => {
+    const bounded = Math.max(-120, Math.min(360, nextDelay));
+    setDelayMinutes(bounded);
+    if (todayDayId) localStorage.setItem(`yume-delay-${todayDayId}`, String(bounded));
+  };
+
+  const handleComplete = async (schedule: DayScheduleResponse) => {
+    try {
+      await toggleScheduleVisit(schedule.id);
+      setTodaySchedules(items => items.map(item => item.id === schedule.id
+          ? { ...item, isChecked: !item.isChecked, isSkipped: false }
+          : item));
+      showToast({ message: schedule.isChecked ? '완료 상태를 취소했습니다.' : '도착 완료로 표시했습니다.', type: 'success' });
+    } catch (error) {
+      showToast({ message: error instanceof Error ? error.message : '완료 상태를 바꾸지 못했습니다.', type: 'error' });
+    }
+  };
+
+  const handleSkip = async (schedule: DayScheduleResponse) => {
+    try {
+      await toggleScheduleSkip(schedule.id);
+      setTodaySchedules(items => items.map(item => item.id === schedule.id
+          ? { ...item, isSkipped: !item.isSkipped, isChecked: false }
+          : item));
+      showToast({ message: schedule.isSkipped ? '일정을 다시 진행 목록에 넣었습니다.' : '이번 일정은 건너뜁니다.', type: 'info' });
+    } catch (error) {
+      showToast({ message: error instanceof Error ? error.message : '건너뛰기 상태를 바꾸지 못했습니다.', type: 'error' });
+    }
+  };
 
   return (
       <div className="flex flex-col h-screen max-w-3xl mx-auto bg-white overflow-hidden px-4 md:px-0 font-sans">
@@ -251,7 +281,7 @@ export default function HomePage() {
                   <Link to={`/plans/${upcomingPlan.id}`} className="text-sm text-blue-600 font-bold hover:underline">전체 일정</Link>
                 </div>
 
-                {todaySchedules.length === 0 ? (
+                {displaySchedules.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 p-10 text-center">
                     <div className="text-4xl mb-4">🗓️</div>
                     <h3 className="text-gray-800 font-bold text-lg">오늘은 등록된 일정이 없습니다.</h3>
@@ -269,9 +299,9 @@ export default function HomePage() {
                         <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'geocoding', 'marker']} language="ko" region="KR" version="beta">
 
                           <Map defaultCenter={{ lat: 34.9858, lng: 135.7588 }} defaultZoom={13} mapId="HOME_MAP_ID" disableDefaultUI={true} className="w-full h-full">
-                            <MapDirections schedules={todaySchedules} />
-                            <MapUpdater schedules={todaySchedules} activeId={activeScheduleId} activeMoveIndex={activeMovingIndex} />
-                            {todaySchedules.map((schedule, index) => {
+                            <MapDirections schedules={displaySchedules} />
+                            <MapUpdater schedules={displaySchedules} activeId={activeScheduleId} activeMoveIndex={activeMovingIndex} />
+                            {displaySchedules.flatMap((schedule, index) => schedule.lat != null && schedule.lng != null ? [{ schedule, index }] : []).map(({ schedule, index }) => {
                               const isActive = (schedule.id === activeScheduleId || index === activeMovingIndex);
                               return <AdvancedMarker key={schedule.id} position={{ lat: Number(schedule.lat), lng: Number(schedule.lng) }} zIndex={isActive ? 100 : 1}>
                                 <NumberedMarker number={index + 1} color={isActive ? "#EF4444" : "#3B82F6"} active={isActive} />
@@ -307,11 +337,24 @@ export default function HomePage() {
                                 {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                               </span>
                             </div>
+                            <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-blue-100 bg-white px-3 py-2">
+                              <div>
+                                <div className="text-[10px] font-bold text-gray-400">당일 지연 보정</div>
+                                <div className={`text-sm font-black ${delayMinutes === 0 ? 'text-gray-500' : 'text-orange-600'}`}>
+                                  {delayMinutes === 0 ? '원래 시간' : `${delayMinutes > 0 ? '+' : ''}${delayMinutes}분`}
+                                </div>
+                              </div>
+                              <div className="flex gap-1">
+                                <button type="button" onClick={() => changeDelay(delayMinutes - 5)} className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-bold text-gray-600 hover:bg-gray-50">-5</button>
+                                <button type="button" onClick={() => changeDelay(delayMinutes + 5)} className="rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-bold text-orange-600 hover:bg-orange-100">+5</button>
+                                <button type="button" onClick={() => changeDelay(0)} disabled={delayMinutes === 0} className="rounded-lg px-2.5 py-1 text-xs font-bold text-gray-400 hover:bg-gray-100 disabled:opacity-30">초기화</button>
+                              </div>
+                            </div>
                             <p className="text-[8px] text-orange-400 font-medium leading-none mt-0.5">※ 주황색 시간은 인저리 타임 포함</p>
                           </div>
 
                           <div className="space-y-0 mt-2 pb-10 relative z-10">
-                            {todaySchedules.map((item, index) => {
+                            {displaySchedules.map((item, index) => {
                               const isActive = (item.id === activeScheduleId);
                               const isMovingActive = (index === activeMovingIndex);
                               const typeInfo = getSpotTypeInfo(item.spotType || 'OTHER');
@@ -323,7 +366,7 @@ export default function HomePage() {
                                   <div key={item.id} ref={isActive || isMovingActive ? activeItemRef : null}>
                                     {index > 0 && (item.movingDuration) > 0 && (
                                         <div className="flex h-12">
-                                          <div className="w-14 shrink-0 text-right pt-3 pr-1"><span className="text-xs text-gray-400 font-mono">{todaySchedules[index - 1].endTime}</span></div>
+                                          <div className="w-14 shrink-0 text-right pt-3 pr-1"><span className="text-xs text-gray-400 font-mono">{displaySchedules[index - 1].endTime}</span></div>
                                           <div className="w-10 shrink-0 flex flex-col items-center relative"><div className="w-0.5 bg-gray-200 h-full absolute"></div><div className={`relative z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs border shadow-sm mt-3 ${isMovingActive ? 'bg-blue-600 border-blue-600 text-white animate-pulse' : 'bg-white text-blue-500 border-blue-200'}`}>{getTransIcon(item.transportation)}</div></div>
                                           <div className="flex-1 min-w-0 py-1 pl-2">
                                             <div className={`flex items-center gap-2 rounded-lg px-3 py-1.5 border transition-all ${isMovingActive ? 'bg-blue-100 border-blue-300 ring-1 ring-blue-300' : 'bg-white border-blue-50/50'}`}>
@@ -343,7 +386,7 @@ export default function HomePage() {
                                       </div>
                                       <div className="w-10 shrink-0 flex flex-col items-center relative"><div className="w-0.5 bg-gray-200 h-full absolute"></div><div className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center text-lg border shadow-sm ${isActive ? 'bg-orange-500 border-orange-600 text-white scale-110' : 'bg-white border-gray-200'}`}>{typeInfo.icon}</div></div>
                                       <div className="flex-1 min-w-0 pb-6 pl-2">
-                                        <div className={`rounded-xl p-3 border shadow-sm transition relative overflow-hidden ${isActive ? 'bg-white border-orange-300 ring-2 ring-orange-100' : 'bg-white border-gray-200'}`}>
+                                        <div className={`rounded-xl p-3 border shadow-sm transition relative overflow-hidden ${item.isChecked ? 'border-green-200 bg-green-50/70 opacity-75' : item.isSkipped ? 'border-gray-200 bg-gray-100 opacity-60' : isActive ? 'bg-white border-orange-300 ring-2 ring-orange-100' : 'bg-white border-gray-200'}`}>
                                           <div className="flex justify-between items-start gap-2">
                                             <h4 className={`text-sm font-bold truncate flex-1 ${isActive ? 'text-gray-900' : 'text-gray-600'}`}>{item.spotName || "장소 미정"}</h4>
                                             <span className="text-[10px] text-gray-400 whitespace-nowrap">
@@ -351,6 +394,24 @@ export default function HomePage() {
                                             </span>
                                           </div>
                                           {cleanMemoTags(item.memo) && <p className="text-xs text-gray-500 mt-1 line-clamp-1 italic opacity-80">{cleanMemoTags(item.memo)}</p>}
+                                          <div className="mt-2 flex flex-wrap gap-1.5">
+                                            {item.lat != null && item.lng != null && (
+                                              <a
+                                                href={`https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lng}&travelmode=${getTravelMode(item.transportation)}`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
+                                              >
+                                                길찾기 시작
+                                              </a>
+                                            )}
+                                            <button type="button" onClick={() => void handleComplete(item)} className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold ${item.isChecked ? 'border-green-300 bg-green-600 text-white' : 'border-green-200 bg-white text-green-700'}`}>
+                                              {item.isChecked ? '완료 취소' : '도착 완료'}
+                                            </button>
+                                            <button type="button" onClick={() => void handleSkip(item)} className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold ${item.isSkipped ? 'border-gray-400 bg-gray-600 text-white' : 'border-gray-200 bg-white text-gray-500'}`}>
+                                              {item.isSkipped ? '건너뛰기 취소' : '건너뛰기'}
+                                            </button>
+                                          </div>
                                         </div>
                                       </div>
                                     </div>

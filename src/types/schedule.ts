@@ -10,6 +10,7 @@ export interface ScheduleItemRequest {
   lng: number | null;
   spotType: SpotType | null;
   isChecked: boolean;
+  isSkipped: boolean;
   startTime: string | null;
   fixedStartTime: boolean;
   duration: number;
@@ -63,26 +64,41 @@ export interface ScheduleReorderRequest {
   scheduleOrder: number;
 }
 
+export interface ScheduleTransferRequest {
+  targetDayId: number;
+  targetOrder?: number;
+  copy: boolean;
+}
+
+export interface ScheduleTransferResponse {
+  scheduleId: number;
+  sourceDayId: number;
+  targetDayId: number;
+  sourceSchedules: DayScheduleResponse[];
+  targetSchedules: DayScheduleResponse[];
+}
+
 export interface DayScheduleResponse {
   id: number;
   dayId: number;
   scheduleOrder: number;
-  spotUserId: number;
-  spotName: string;
-  spotType: SpotType;
+  spotUserId: number | null;
+  spotName: string | null;
+  spotType: SpotType | null;
   isChecked: boolean;
-  lat: number;
-  lng: number;
-  startTime: string; // LocalTime -> "HH:mm:ss"
+  isSkipped: boolean;
+  lat: number | null;
+  lng: number | null;
+  startTime: string | null; // LocalTime -> "HH:mm:ss"
   fixedStartTime: boolean;
   duration: number;  // 분 단위 예상
-  endTime: string;   // LocalTime -> "HH:mm:ss"
+  endTime: string | null;   // LocalTime -> "HH:mm:ss"
   movingDuration: number; // 이동 시간 (분)
   extraDuration: number;
   extraMovingDuration: number;
-  transportation: Transportation;
-  memo: string;
-  movingMemo: string;
+  transportation: Transportation | null;
+  memo: string | null;
+  movingMemo: string | null;
 }
 
 

@@ -56,10 +56,11 @@ export interface PlanTransferSchedule {
     lat: number | null;
     lng: number | null;
     isChecked: boolean;
-    startTime: string;
+    isSkipped?: boolean;
+    startTime: string | null;
     fixedStartTime: boolean;
     duration: number;
-    endTime: string;
+    endTime: string | null;
     movingDuration: number;
     extraDuration: number;
     extraMovingDuration: number;

@@ -6,6 +6,7 @@ import { getPlans } from "../../api/planApi";
 // Types
 import type { PlanResponse } from "../../types/plan";
 import type { SwapMode } from "../../types/enums";
+import { useFeedback } from '../common/useFeedback';
 
 interface Props {
   isOpen: boolean;
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDayName }: Props) {
+  const { showToast } = useFeedback();
   const [plans, setPlans] = useState<PlanResponse[]>([]);
 
   // 상태 관리
@@ -37,7 +39,7 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
   const selectedPlan = plans.find(p => p.id === selectedPlanId);
 
   const handleSubmit = () => {
-    if (!selectedPlanId) return alert("여행을 선택해주세요.");
+    if (!selectedPlanId) return showToast({ message: "여행을 선택해 주세요.", type: 'info' });
     onSubmit(selectedPlanId, targetDayOrder, swapMode);
   };
 

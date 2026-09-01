@@ -8,6 +8,7 @@ import { mapGoogleTypeToSpotType } from "../utils/mapUtils";
 import type { SpotResponse, SpotCreateRequest } from "../types/spot";
 import type { SpotType } from "../types/enums";
 import { getSpotDisplayName } from "../utils/spotUtils";
+import { useFeedback } from '../components/common/useFeedback';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const DEFAULT_CENTER = { lat: 34.9858, lng: 135.7588 };
@@ -66,6 +67,7 @@ export default function ExplorePage() {
 }
 
 function ExploreMapContent() {
+    const { confirm, showToast } = useFeedback();
     const navigate = useNavigate();
     const map = useMap();
 
@@ -236,7 +238,11 @@ function ExploreMapContent() {
     const handleRegisterSpot = async (placeId: string) => {
         const placeDetails = await fetchPlaceDetails(placeId);
         if (placeDetails) {
-            if (!confirm(`'${placeDetails.displayName}'을(를) [${SPOT_TYPE_LABELS[draftType]}]로 등록하시겠습니까?`)) return;
+            if (!await confirm({
+                title: '내 장소 등록',
+                message: `'${placeDetails.displayName}'을(를) [${SPOT_TYPE_LABELS[draftType]}]로 등록할까요?`,
+                confirmLabel: '등록',
+            })) return;
             try {
                 // 1. shortAddress 생성 (국가명 제외)
                 const addrParts = placeDetails.formattedAddress?.split(' ') || [];
@@ -273,22 +279,23 @@ function ExploreMapContent() {
                 const newSpot = await createSpot(req);
                 setMySpots(prev => [...prev, newSpot]);
                 handleSelectSpot(newSpot);
-                alert("등록되었습니다! 🎉");
+                showToast({ message: "내 장소에 등록했습니다! 🎉", type: 'success' });
             } catch (err) {
                 console.error(err);
-                alert("장소 등록 실패");
+                showToast({ message: "장소를 등록하지 못했습니다.", type: 'error' });
             }
         }
     };
 
     const handleDeleteSpot = async (id: number) => {
-        if (!confirm("정말 이 장소를 삭제하시겠습니까?")) return;
+        const target = mySpots.find(spot => spot.id === id);
+        if (!await confirm({ title: '장소 삭제', message: `'${target ? getSpotDisplayName(target) : '이 장소'}'을 삭제할까요?`, confirmLabel: '삭제', danger: true })) return;
         try {
             await deleteSpot(id);
             setMySpots(prev => prev.filter(s => s.id !== id));
             handleBackToList();
-            alert("삭제되었습니다.");
-        } catch (err) { console.error(err); alert("삭제 실패"); }
+            showToast({ message: "장소를 삭제했습니다.", type: 'success' });
+        } catch (err) { console.error(err); showToast({ message: "장소를 삭제하지 못했습니다.", type: 'error' }); }
     };
 
     const handleToggleVisit = async (spot: SpotResponse) => {
@@ -296,7 +303,7 @@ function ExploreMapContent() {
             const updated = await updateSpot(spot.id, { isVisit: !spot.isVisit });
             setMySpots(prev => prev.map(s => s.id === spot.id ? updated : s));
             setSelectedMySpot(updated);
-        } catch { alert("상태 변경 실패"); }
+        } catch { showToast({ message: "방문 상태를 바꾸지 못했습니다.", type: 'error' }); }
     };
 
     const getSpotTypeInfo = (type: SpotType) => {
@@ -413,6 +420,7 @@ function MapController({ mode, onModeChange, onSearchStart, onSpotsFound, onGoog
 
 interface SearchBoxProps { mode: SearchMode; onModeChange: (mode: SearchMode) => void; onSearchStart: () => void; map: google.maps.Map | null; onGoogleSearch: (results: GooglePlaceResult[]) => void; onMySpotSearch: (spots: SpotResponse[]) => void; showList: boolean; }
 function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onMySpotSearch, showList }: SearchBoxProps) {
+    const { showToast } = useFeedback();
     const [keyword, setKeyword] = useState("");
     const [suggestions, setSuggestions] = useState<google.maps.places.AutocompleteSuggestion[]>([]);
     const placesLibrary = useMapsLibrary("places");
@@ -467,7 +475,7 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
                 }));
                 onGoogleSearch(mappedResults);
             } else { onGoogleSearch([]); }
-        } catch (error) { console.error("Text Search Error:", error); alert("검색 중 오류가 발생했습니다."); }
+        } catch (error) { console.error("Text Search Error:", error); showToast({ message: "Google 장소 검색 중 오류가 발생했습니다.", type: 'error' }); }
     };
 
     const handleGoogleSelectSuggestion = async (suggestion: google.maps.places.AutocompleteSuggestion) => {
@@ -499,7 +507,7 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
         try {
             const res = await getMySpots({ keyword: keyword, page: 0, size: 50 });
             onMySpotSearch(res.content);
-        } catch { alert("검색 실패"); }
+        } catch { showToast({ message: "내 장소를 검색하지 못했습니다.", type: 'error' }); }
     };
 
     return (
