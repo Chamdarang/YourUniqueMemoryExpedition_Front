@@ -31,10 +31,7 @@ interface Props {
     onQuickMapPickStart: () => void;
     isVisibleOnMap: boolean;
     onToggleMapVisibility: (dayId: number) => void;
-    onExportDay: () => void;
     onCopyDay: (day: PlanDayResponse) => void;
-    onAuditDay: (day: PlanDayResponse) => void;
-    isRouteAuditLoading: boolean;
     openRequestKey?: number;
     allOpenRequest?: { key: number; expanded: boolean };
     expanded?: boolean;
@@ -49,8 +46,7 @@ const getDayColor = (dayOrder: number) => DAY_COLORS[(dayOrder - 1) % DAY_COLORS
 export default function PlanDayItem({
                                         id, dayOrder, routeDate, data, showInjury, onUpdateDayInfo,
                                         onSchedulesChange, refreshVersion, onRefresh, onToggle, pickingTarget, setPickingTarget,
-                                        onQuickMapPickStart, isVisibleOnMap, onToggleMapVisibility, onExportDay, onCopyDay,
-                                        onAuditDay, isRouteAuditLoading, setDirty,
+                                        onQuickMapPickStart, isVisibleOnMap, onToggleMapVisibility, onCopyDay, setDirty,
                                         openRequestKey, allOpenRequest, expanded, selectedScheduleId, focusRequest, onTransferSchedule
                                     }: Props) {
     const { confirm, runUndoable, isUndoablePending, showToast } = useFeedback();
@@ -322,30 +318,19 @@ export default function PlanDayItem({
                         </div>
 
                         {!isEditingInfo && (
-                            <div className="flex items-center gap-2 self-start md:self-center">
+                            <div className="flex shrink-0 items-center gap-1.5 self-start md:self-center">
                                 <button
                                     type="button"
-                                    disabled={isRouteAuditLoading}
-                                    onClick={(event) => { event.stopPropagation(); onAuditDay(data); }}
-                                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-blue-100 bg-emerald-50 text-sm shadow-sm transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-50"
-                                    title="이 일차의 전체 경로 점검"
-                                    aria-label={`${data.dayName} 경로 점검`}
+                                    onClick={(e) => { e.stopPropagation(); onToggleMapVisibility(data.id); }}
+                                    className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-2.5 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 xl:px-3 ${isVisibleOnMap ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+                                    title={isVisibleOnMap ? '지도에서 이 일차 숨기기' : '지도에 이 일차 표시'}
+                                    aria-label={isVisibleOnMap ? `${data.dayName} 지도에서 숨기기` : `${data.dayName} 지도에 표시`}
+                                    aria-pressed={isVisibleOnMap}
                                 >
-                                    {isRouteAuditLoading ? '…' : '🩺'}
-                                </button>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); onExportDay(); }}
-                                    className="w-9 h-9 flex items-center justify-center rounded-xl transition border bg-white text-gray-400 border-gray-100 hover:bg-gray-50 hover:text-gray-600 shadow-sm"
-                                    title="이 일정만 이미지로 저장"
-                                >
-                                    📸
-                                </button>
-
-                                <button onClick={(e) => { e.stopPropagation(); onToggleMapVisibility(data.id); }} className={`w-9 h-9 flex items-center justify-center rounded-xl transition border ${isVisibleOnMap ? 'bg-blue-50 text-blue-600 border-blue-200 shadow-sm' : 'bg-white text-gray-300 border-gray-100 hover:bg-gray-50 hover:text-gray-400'}`}>
                                     {isVisibleOnMap ? (
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" /><path fillRule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z" clipRule="evenodd" /></svg>
+                                        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" /><path fillRule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z" clipRule="evenodd" /></svg>
                                     ) : (
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.676 12.553a11.249 11.249 0 01-2.631 4.31l-3.099-3.099a5.25 5.25 0 00-6.71-6.71L7.759 4.577a11.217 11.217 0 014.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113z" /><path d="M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0115.75 12zM12.53 15.713l-4.243-4.244a3.75 3.75 0 004.243 4.243z" /><path d="M6.75 12c0-.619.107-1.213.304-1.764l-3.1-3.1a11.25 11.25 0 00-2.63 4.31c-.12.362-.12.752 0 1.114 1.489 4.467 5.704 7.69 10.675 7.69 1.5 0 2.933-.294 4.242-.827l-2.477-2.477A5.25 5.25 0 016.75 12z" /></svg>
+                                        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.676 12.553a11.249 11.249 0 01-2.631 4.31l-3.099-3.099a5.25 5.25 0 00-6.71-6.71L7.759 4.577a11.217 11.217 0 014.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113z" /><path d="M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0115.75 12zM12.53 15.713l-4.243-4.244a3.75 3.75 0 004.243 4.243z" /><path d="M6.75 12c0-.619.107-1.213.304-1.764l-3.1-3.1a11.25 11.25 0 00-2.63 4.31c-.12.362-.12.752 0 1.114 1.489 4.467 5.704 7.69 10.675 7.69 1.5 0 2.933-.294 4.242-.827l-2.477-2.477A5.25 5.25 0 016.75 12z" /></svg>
                                     )}
                                 </button>
                                 <div ref={actionMenuRef} className="relative" onClick={(event) => event.stopPropagation()}>
@@ -353,8 +338,9 @@ export default function PlanDayItem({
                                         type="button"
                                         disabled={isDayActionPending}
                                         onClick={() => setIsActionMenuOpen((open) => !open)}
-                                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-100 bg-white font-black text-gray-400 shadow-sm transition hover:bg-gray-50 hover:text-gray-700 disabled:cursor-wait disabled:opacity-50"
+                                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-wait disabled:opacity-50"
                                         aria-label="하루 일정 관리"
+                                        title="하루 일정 관리"
                                     >
                                         ⋯
                                     </button>
@@ -374,7 +360,18 @@ export default function PlanDayItem({
                                         </div>
                                     )}
                                 </div>
-                                <span className="text-gray-400 text-xs ml-1">{isExpanded ? '▲' : '▼'}</span>
+                                <button
+                                    type="button"
+                                    aria-expanded={isExpanded}
+                                    aria-label={isExpanded ? `${data.dayName} 접기` : `${data.dayName} 펼치기`}
+                                    title={isExpanded ? '일정 접기' : '일정 펼치기'}
+                                    onClick={(event) => { event.stopPropagation(); handleToggle(); }}
+                                    className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                >
+                                    <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                                        <path fillRule="evenodd" d="M5.22 7.47a.75.75 0 011.06 0L10 11.19l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 8.53a.75.75 0 010-1.06z" clipRule="evenodd" />
+                                    </svg>
+                                </button>
                             </div>
                         )}
                     </div>

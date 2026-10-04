@@ -34,8 +34,7 @@ import type { DayRouteAuditLeg, DayRouteAuditResponse } from "../types/route";
 // ✅ Export 관련 컴포넌트
 import {
     ImageExportModal,
-    PlanScheduleExportView,
-    DayScheduleExportView
+    PlanScheduleExportView
 } from "../components/common/ScheduleExport";
 import { useScheduleExport } from "../components/common/useScheduleExport";
 import { getStaticMapQuery, type ExportSection } from "../components/common/scheduleExportUtils";
@@ -44,6 +43,7 @@ import { saveOfflineTripSnapshot } from "../utils/offlineHomeStorage";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const scrollbarHideStyle = `.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`;
+const planToolbarButtonClass = "inline-flex h-9 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-wait disabled:opacity-50 sm:w-auto";
 
 type PlanWorkspacePreferences = {
     mapViewMode: 'ALL' | 'PINS' | 'NONE';
@@ -158,11 +158,10 @@ function PlanDetailContent() {
     const { isExportModalOpen, openExportModal, closeExportModal, exportOptions, setExportOptions, handleSaveImage } = useScheduleExport();
     const exportRef = useRef<HTMLDivElement>(null);
     const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+    const planToolsMenuRef = useRef<HTMLDetailsElement>(null);
     const [generatedMapUrl, setGeneratedMapUrl] = useState<string | null>(null);
     const [mapVersion, setMapVersion] = useState(0);
-    const [exportMode, setExportMode] = useState<'PLAN' | 'DAY'>('PLAN');
     const [exportSections, setExportSections] = useState<ExportSection[]>([]);
-    const [dayExportData, setDayExportData] = useState<{ title: string; subTitle: string; memo: string; schedules: DayScheduleResponse[] } | null>(null);
     const [copySourceDay, setCopySourceDay] = useState<PlanDayResponse | null>(null);
     const [copyTarget, setCopyTarget] = useState<string>('INDEPENDENT');
     const [copyName, setCopyName] = useState('');
@@ -200,6 +199,27 @@ function PlanDetailContent() {
     const blockerPromptActiveRef = useRef(false);
 
     const blocker = useBlocker(({ currentLocation, nextLocation }) => isAnyDirty && currentLocation.pathname !== nextLocation.pathname);
+    useEffect(() => {
+        const closeToolsMenu = (event: PointerEvent) => {
+            const menu = planToolsMenuRef.current;
+            if (menu?.open && !menu.contains(event.target as Node)) menu.open = false;
+        };
+        const closeToolsMenuOnEscape = (event: KeyboardEvent) => {
+            const menu = planToolsMenuRef.current;
+            if (event.key !== 'Escape' || !menu?.open) return;
+            event.preventDefault();
+            event.stopPropagation();
+            menu.open = false;
+            menu.querySelector('summary')?.focus();
+        };
+        document.addEventListener('pointerdown', closeToolsMenu);
+        window.addEventListener('keydown', closeToolsMenuOnEscape, true);
+        return () => {
+            document.removeEventListener('pointerdown', closeToolsMenu);
+            window.removeEventListener('keydown', closeToolsMenuOnEscape, true);
+        };
+    }, []);
+
     useEffect(() => {
         if (!isAnyDirty) return;
 
@@ -241,6 +261,7 @@ function PlanDetailContent() {
         setExpandedDayIds(new Set(preferences.expandedDayIds));
         setGeneratedMapUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
         setIsExportMenuOpen(false);
+        planToolsMenuRef.current?.removeAttribute('open');
         setDirtyMap({});
         setMobileViewMode('LIST');
         setIsHeaderExpanded(false);
@@ -378,7 +399,6 @@ function PlanDetailContent() {
                 return;
             }
 
-            setExportMode('PLAN');
             setExportSections(sections);
             openExportModal();
 
@@ -406,32 +426,8 @@ function PlanDetailContent() {
         }
     };
 
-    const handleDayExportClick = async (dayId: number) => {
-        const dayItem = plan?.days.find(d => d.id === dayId);
-        if (!dayItem) return;
-
-        try {
-            let schedules = mapSchedulesMap[dayId];
-            if (!schedules) {
-                const raw = await getSchedulesByDay(dayId);
-                schedules = raw;
-                setMapSchedulesMap(prev => ({...prev, [dayId]: schedules}));
-            }
-
-            setExportMode('DAY');
-            setDayExportData({
-                title: dayItem.dayName || `Day ${dayItem.dayOrder}`,
-                subTitle: `${plan?.planName || '여행'} • ${dayItem.dayOrder}일차`,
-                memo: dayItem.memo || "",
-                schedules: schedules
-            });
-            openExportModal();
-
-        } catch (e) { console.error(e); showToast({ message: "일정을 불러오지 못했습니다.", type: 'error' }); }
-    };
-
     const onModalConfirm = async (mapState?: { center: { lat: number, lng: number }, zoom: number }) => {
-        const targetSchedules = exportMode === 'PLAN' ? exportSections.flatMap(s => s.schedules) : dayExportData?.schedules || [];
+        const targetSchedules = exportSections.flatMap(section => section.schedules);
         const query = exportOptions.map ? getStaticMapQuery(targetSchedules, mapState) : null;
 
         if (exportOptions.map && !query) {
@@ -451,7 +447,7 @@ function PlanDetailContent() {
             }
         }
 
-        const filename = exportMode === 'PLAN' ? plan?.planName || "여행_전체일정" : dayExportData?.title || "여행_일정";
+        const filename = plan?.planName || "여행_전체일정";
         requestAnimationFrame(() => handleSaveImage(filename, exportRef.current));
     };
 
@@ -893,28 +889,14 @@ function PlanDetailContent() {
 
             <div style={{ position: "fixed", top: 0, left: "-9999px" }}>
                 <div ref={exportRef}>
-                    {exportMode === 'PLAN' ? (
-                        <PlanScheduleExportView
-                            key={`plan-export-${planId}-${mapVersion}`}
-                            planTitle={plan.planName}
-                            planMemo={plan.planMemo || ""}
-                            sections={exportSections}
-                            options={exportOptions}
-                            mapUrl={generatedMapUrl}
-                        />
-                    ) : (
-                        dayExportData && (
-                            <DayScheduleExportView
-                                key={`day-export-${dayExportData.title}-${mapVersion}`}
-                                dayName={dayExportData.title}
-                                subTitle={dayExportData.subTitle}
-                                memo={dayExportData.memo}
-                                schedules={dayExportData.schedules}
-                                options={exportOptions}
-                                mapUrl={generatedMapUrl}
-                            />
-                        )
-                    )}
+                    <PlanScheduleExportView
+                        key={`plan-export-${planId}-${mapVersion}`}
+                        planTitle={plan.planName}
+                        planMemo={plan.planMemo || ""}
+                        sections={exportSections}
+                        options={exportOptions}
+                        mapUrl={generatedMapUrl}
+                    />
                 </div>
             </div>
 
@@ -924,7 +906,7 @@ function PlanDetailContent() {
                 onConfirm={onModalConfirm}
                 options={exportOptions}
                 setOptions={setExportOptions}
-                schedules={exportMode === 'PLAN' ? exportSections.flatMap(s => s.schedules) : dayExportData?.schedules || []}
+                schedules={exportSections.flatMap(section => section.schedules)}
             />
 
             {isShareModalOpen && (
@@ -975,67 +957,143 @@ function PlanDetailContent() {
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-4 pb-24 bg-white scrollbar-hide">
-                            <div className="relative mb-4 px-1 md:flex md:items-center md:justify-between">
-                                <div className="mb-2 flex items-center gap-2 md:mb-0">
+                            <div className="relative mb-4 flex flex-col gap-3 px-1 md:flex-row md:items-center md:justify-between">
+                                <div className="flex items-center gap-2 md:shrink-0">
                                     <h2 className="text-xl font-bold text-gray-800">상세 일정</h2>
                                     <span className={`rounded-full px-2 py-1 text-[10px] font-black transition ${isAnyDirty ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-600'}`}>
                                         {isAnyDirty ? '● 저장되지 않은 변경사항' : '✓ 저장 완료'}
                                     </span>
                                 </div>
-                                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide [&>button]:shrink-0 [&>button]:whitespace-nowrap">
+                                <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center md:justify-end">
                                     <button
                                         type="button"
                                         onClick={() => setIsShareModalOpen(true)}
-                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100"
+                                        className={planToolbarButtonClass}
+                                        title="읽기 전용 일정 공유 링크 관리"
                                     >
-                                        🔗 일정 공유
+                                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-violet-600">
+                                            <path d="M10 13a5 5 0 0 0 7.07 0l3-3A5 5 0 0 0 13 2.93l-1.72 1.72" />
+                                            <path d="M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21.07l1.72-1.72" />
+                                        </svg>
+                                        일정 공유
                                     </button>
                                     <button
                                         type="button"
                                         disabled={offlineSaveLoading}
                                         onClick={() => void savePlanForOffline()}
-                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 disabled:opacity-50"
                                         title="여행 날짜와 모든 일정을 이 기기에 저장해 오프라인에서 확인"
+                                        className={planToolbarButtonClass}
                                     >
-                                        {offlineSaveLoading ? '저장 중...' : '⬇ 오프라인 저장'}
+                                        {offlineSaveLoading ? (
+                                            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-amber-200 border-t-amber-600" aria-hidden="true" />
+                                        ) : (
+                                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-amber-600">
+                                                <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
+                                                <path d="M5 16v4h14v-4" />
+                                            </svg>
+                                        )}
+                                        {offlineSaveLoading ? '저장 중' : '오프라인 저장'}
                                     </button>
                                     <button
+                                        type="button"
                                         onClick={() => setShowInjury(!showInjury)}
-                                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm ${showInjury ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                                        className={`${planToolbarButtonClass} ${showInjury ? 'border-orange-200 bg-orange-50' : ''}`}
+                                        title="일정에 기록된 인저리 정보 표시 여부"
+                                        aria-pressed={showInjury}
                                     >
-                                        ⚽ {showInjury ? '인저리 ON' : 'OFF'}
+                                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={`h-3.5 w-3.5 ${showInjury ? 'text-orange-600' : 'text-slate-400'}`}>
+                                            {showInjury ? <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></> : <><path d="m3 3 18 18M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.1 3.9M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 0 0 4-.8" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></>}
+                                        </svg>
+                                        인저리 표시
+                                        <span className={`rounded px-1 py-0.5 text-[9px] font-bold ${showInjury ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>{showInjury ? 'ON' : 'OFF'}</span>
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsExportMenuOpen(true)}
-                                        className="shrink-0 whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 shadow-sm transition hover:bg-blue-100"
+                                    <details
+                                        ref={planToolsMenuRef}
+                                        className="relative flex items-center"
+                                        onKeyDownCapture={(event) => {
+                                            if (event.key !== 'Escape') return;
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            event.currentTarget.open = false;
+                                            event.currentTarget.querySelector('summary')?.focus();
+                                        }}
                                     >
-                                        📤 내보내기
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={spotLinksLoading}
-                                        onClick={() => void openSpotLinks()}
-                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 disabled:opacity-50"
-                                        title="가져온 문자열 장소를 내 장소 또는 Google 장소에 연결"
-                                    >
-                                        {spotLinksLoading ? '확인 중...' : '🔗 장소 연결'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={planAuditLoading && !planAuditResult}
-                                        onClick={() => void runPlanAudit()}
-                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 disabled:opacity-50"
-                                        title="여행 전체의 빈 일정, 위치, 시간, 이동수단과 경로를 점검"
-                                    >
-                                        {planAuditLoading && planAuditResult
-                                            ? '🩺 점검 중 · 결과 보기'
-                                            : planAuditLoading
-                                            ? '점검 중...'
-                                            : planAuditResult
-                                            ? `🩺 점검 결과${planAuditStale ? ' · 변경됨' : ''}`
-                                            : '🩺 전체 점검'}
-                                    </button>
+                                        <summary
+                                            aria-label="더 많은 일정 도구"
+                                            title="더 많은 일정 도구"
+                                            className="inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 [&::-webkit-details-marker]:hidden"
+                                        >
+                                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5 text-slate-500">
+                                                <circle cx="5" cy="12" r="1.7" />
+                                                <circle cx="12" cy="12" r="1.7" />
+                                                <circle cx="19" cy="12" r="1.7" />
+                                            </svg>
+                                        </summary>
+                                        <div className="absolute right-0 top-12 z-50 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                                            <button
+                                                type="button"
+                                                onClick={(event) => {
+                                                    event.currentTarget.closest('details')?.removeAttribute('open');
+                                                    setIsExportMenuOpen(true);
+                                                }}
+                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                                                title="계획 전체 일정 이미지 또는 파일 내보내기"
+                                            >
+                                                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-blue-600">
+                                                    <path d="M12 15V3m0 0L8 7m4-4 4 4" />
+                                                    <path d="M5 13v7h14v-7" />
+                                                </svg>
+                                                내보내기
+                                            </button>
+                                            <div className="my-1 border-t border-slate-100" />
+                                            <button
+                                                type="button"
+                                                disabled={spotLinksLoading}
+                                                onClick={(event) => {
+                                                    event.currentTarget.closest('details')?.removeAttribute('open');
+                                                    void openSpotLinks();
+                                                }}
+                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-50"
+                                                title="가져온 문자열 장소를 내 장소 또는 Google 장소에 연결"
+                                            >
+                                                {spotLinksLoading ? (
+                                                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-200 border-t-violet-600" aria-hidden="true" />
+                                                ) : (
+                                                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-violet-600">
+                                                        <path d="M10 13a5 5 0 0 0 7.07 0l3-3A5 5 0 0 0 13 2.93l-1.72 1.72" />
+                                                        <path d="M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21.07l1.72-1.72" />
+                                                    </svg>
+                                                )}
+                                                {spotLinksLoading ? '장소 확인 중…' : '장소 연결'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={planAuditLoading && !planAuditResult}
+                                                onClick={(event) => {
+                                                    event.currentTarget.closest('details')?.removeAttribute('open');
+                                                    void runPlanAudit();
+                                                }}
+                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-50"
+                                                title="여행 전체의 빈 일정, 위치, 시간, 이동수단과 경로를 점검"
+                                            >
+                                                {planAuditLoading && !planAuditResult ? (
+                                                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-emerald-200 border-t-emerald-600" aria-hidden="true" />
+                                                ) : (
+                                                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-emerald-600">
+                                                        <path d="M4 19V5m0 14h16M7 15l4-4 3 2 5-6" />
+                                                        <path d="M16 7h3v3" />
+                                                    </svg>
+                                                )}
+                                                {planAuditLoading && planAuditResult
+                                                    ? '점검 중 · 결과 보기'
+                                                    : planAuditLoading
+                                                    ? '전체 점검 중…'
+                                                    : planAuditResult
+                                                    ? `점검 결과${planAuditStale ? ' · 변경됨' : ''}`
+                                                    : '전체 점검'}
+                                            </button>
+                                        </div>
+                                    </details>
                                 </div>
                             </div>
 
@@ -1065,10 +1123,7 @@ function PlanDetailContent() {
                                                     }}
                                                     isVisibleOnMap={visibleDays.has(item.data.id)}
                                                     onToggleMapVisibility={handleToggleMapVisibility}
-                                                    onExportDay={() => handleDayExportClick(item.data!.id)}
                                                     onCopyDay={openCopyDay}
-                                                    onAuditDay={(day) => void runDayRouteAudit(day)}
-                                                    isRouteAuditLoading={dayRouteAuditLoadingId === item.data.id}
                                                     openRequestKey={dayOpenRequest?.dayId === item.data.id ? dayOpenRequest.key : undefined}
                                                     expanded={expandedDayIds.has(item.data.id)}
                                                     selectedScheduleId={selectedScheduleId}

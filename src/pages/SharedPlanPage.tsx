@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { APIProvider } from '@vis.gl/react-google-maps';
 import { getPublicPlanShare } from '../api/planShareApi';
+import SharedPlanDayMap from '../components/plan/SharedPlanDayMap';
 import type { PublicPlanShare } from '../types/planShare';
+
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const transportationLabels: Record<string, string> = {
   WALK: '도보', BUS: '버스', TRAIN: '열차', SHIP: '배', AIRPLANE: '비행기',
@@ -45,12 +49,12 @@ export default function SharedPlanPage() {
   }, [token]);
 
   if (loading) {
-    return <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 text-sm font-bold text-slate-500">공유 일정을 불러오는 중…</main>;
+    return <main className="flex h-dvh items-center justify-center overflow-y-auto overscroll-y-contain bg-slate-50 px-4 text-sm font-bold text-slate-500">공유 일정을 불러오는 중…</main>;
   }
 
   if (!plan) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <main className="flex h-dvh items-center justify-center overflow-y-auto overscroll-y-contain bg-slate-50 px-4">
         <section className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-sm">
           <div className="text-4xl">🔒</div>
           <h1 className="mt-4 text-xl font-black text-slate-900">공유 일정을 열 수 없습니다</h1>
@@ -61,8 +65,8 @@ export default function SharedPlanPage() {
     );
   }
 
-  return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-800 md:py-12">
+  const sharedPlan = (
+    <main className="h-dvh overflow-y-auto overscroll-y-contain bg-slate-50 px-4 py-8 text-slate-800 md:py-12">
       <div className="mx-auto max-w-3xl">
         <header className="mb-8 rounded-3xl bg-gradient-to-br from-blue-700 to-indigo-800 p-6 text-white shadow-lg md:p-9">
           <div className="text-xs font-black uppercase tracking-[0.25em] text-blue-100">YUME · Shared trip</div>
@@ -83,6 +87,7 @@ export default function SharedPlanPage() {
                 </div>
                 {day.memo && <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{day.memo}</p>}
               </header>
+              <SharedPlanDayMap schedules={day.schedules} mapsEnabled={Boolean(GOOGLE_MAPS_API_KEY)} />
               <ol className="divide-y divide-slate-100">
                 {day.schedules.map((schedule, index) => (
                   <li key={`${day.dayOrder}-${schedule.scheduleOrder}-${index}`} className="px-5 py-4 md:px-7">
@@ -120,4 +125,10 @@ export default function SharedPlanPage() {
       </div>
     </main>
   );
+
+  return GOOGLE_MAPS_API_KEY ? (
+    <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['maps', 'marker']} language="ko" region="KR">
+      {sharedPlan}
+    </APIProvider>
+  ) : sharedPlan;
 }
