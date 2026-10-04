@@ -9,8 +9,12 @@ export async function getPlanShareStatus(planId: number): Promise<PlanShareStatu
   return json.data;
 }
 
-export async function createPlanShareLink(planId: number): Promise<PlanShareLink> {
-  const response = await fetchWithAuth(`/api/plans/${planId}/share`, { method: 'POST' });
+export async function createPlanShareLink(planId: number, expiresInDays: number | null): Promise<PlanShareLink> {
+  const response = await fetchWithAuth(`/api/plans/${planId}/share`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expiresInDays }),
+  });
   const json: ApiResponse<PlanShareLink> = await response.json();
   if (!json.success) throw new Error(json.message);
   return json.data;

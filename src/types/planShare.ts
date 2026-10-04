@@ -4,11 +4,14 @@ import type { SpotType, Transportation } from './enums';
 export interface PlanShareStatus {
   active: boolean;
   updatedAt: string | null;
+  expiresAt: string | null;
+  token: string | null;
 }
 
 export interface PlanShareLink {
   token: string;
   createdAt: string;
+  expiresAt: string | null;
 }
 
 export interface PublicPlanShare {

@@ -9,6 +9,18 @@ interface Props {
   onClose: () => void;
 }
 
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function clearCachedShareToken(planId: number) {
+  try {
+    window.localStorage.removeItem(`yume:plan-share-token:${planId}`);
+  } catch {
+    // Ignore storage cleanup failures; active tokens are now recovered from the server.
+  }
+}
+
 export default function PlanShareModal({ planId, planName, onClose }: Props) {
   const { confirm, showToast } = useFeedback();
   const [status, setStatus] = useState<PlanShareStatus | null>(null);
@@ -16,6 +28,7 @@ export default function PlanShareModal({ planId, planName, onClose }: Props) {
   const [busy, setBusy] = useState(true);
   const [statusReady, setStatusReady] = useState(false);
   const [error, setError] = useState('');
+  const [expiresInDays, setExpiresInDays] = useState('never');
 
   useEffect(() => {
     let active = true;
@@ -23,6 +36,8 @@ export default function PlanShareModal({ planId, planName, onClose }: Props) {
       .then(value => {
         if (!active) return;
         setStatus(value);
+        clearCachedShareToken(planId);
+        setShareUrl(value.active && value.token ? `${window.location.origin}/shared#${value.token}` : '');
         setStatusReady(true);
       })
       .catch(reason => { if (active) setError(reason instanceof Error ? reason.message : '공유 상태를 불러오지 못했습니다.'); })
@@ -34,7 +49,10 @@ export default function PlanShareModal({ planId, planName, onClose }: Props) {
     setBusy(true);
     setError('');
     try {
-      setStatus(await getPlanShareStatus(planId));
+      const value = await getPlanShareStatus(planId);
+      setStatus(value);
+      clearCachedShareToken(planId);
+      setShareUrl(value.active && value.token ? `${window.location.origin}/shared#${value.token}` : '');
       setStatusReady(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '공유 상태를 불러오지 못했습니다.');
@@ -53,9 +71,10 @@ export default function PlanShareModal({ planId, planName, onClose }: Props) {
     setBusy(true);
     setError('');
     try {
-      const result = await createPlanShareLink(planId);
+      const result = await createPlanShareLink(planId, expiresInDays === 'never' ? null : Number(expiresInDays));
       setShareUrl(`${window.location.origin}/shared#${result.token}`);
-      setStatus({ active: true, updatedAt: result.createdAt });
+      clearCachedShareToken(planId);
+      setStatus({ active: true, updatedAt: result.createdAt, expiresAt: result.expiresAt, token: result.token });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '공유 링크를 만들지 못했습니다.');
     } finally {
@@ -84,7 +103,8 @@ export default function PlanShareModal({ planId, planName, onClose }: Props) {
     setError('');
     try {
       await revokePlanShareLink(planId);
-      setStatus({ active: false, updatedAt: status?.updatedAt ?? null });
+      clearCachedShareToken(planId);
+      setStatus({ active: false, updatedAt: status?.updatedAt ?? null, expiresAt: status?.expiresAt ?? null, token: null });
       setShareUrl('');
       showToast({ message: '공유를 중지했습니다.', type: 'success' });
     } catch (reason) {
@@ -109,15 +129,38 @@ export default function PlanShareModal({ planId, planName, onClose }: Props) {
           링크를 가진 사람은 로그인 없이 여행 날짜, 장소, 일정과 메모를 볼 수 있습니다. 개인적인 내용이 없는지 확인한 뒤 공유하세요.
         </div>
 
+        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <label htmlFor="share-expiry" className="block text-sm font-bold text-gray-800">새 링크 만료 기간</label>
+          <select
+            id="share-expiry"
+            value={expiresInDays}
+            onChange={event => setExpiresInDays(event.target.value)}
+            disabled={busy || !statusReady}
+            className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:opacity-60"
+          >
+            <option value="never">만료 없음</option>
+            <option value="1">1일 후</option>
+            <option value="7">7일 후</option>
+            <option value="30">30일 후</option>
+          </select>
+          <p className="mt-2 text-xs leading-relaxed text-gray-500">새 링크를 만들 때부터 선택한 기간이 적용됩니다. 활성 링크는 로그인 후 공유 창을 열면 다시 확인할 수 있습니다. 새 링크를 발급하면 기존 링크는 사용할 수 없게 됩니다.</p>
+        </div>
+
         {status?.active && (
           <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-bold text-green-800">
-            공유 링크가 활성화되어 있습니다{status.updatedAt ? ` · ${new Date(status.updatedAt).toLocaleString()}` : ''}.
+            공유 링크가 활성화되어 있습니다{status.updatedAt ? ` · ${formatDateTime(status.updatedAt)}` : ''} · {status.expiresAt ? `${formatDateTime(status.expiresAt)} 만료` : '만료 없음'}.
+          </div>
+        )}
+
+        {status?.active && !status.token && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900">
+            이 링크는 복구 가능한 토큰을 저장하기 전에 만들어져 다시 표시할 수 없습니다. 새 링크를 만들면 새 주소를 확인할 수 있고, 이전 링크는 사용할 수 없게 됩니다.
           </div>
         )}
 
         {shareUrl && (
           <div className="mt-4">
-            <label htmlFor="share-link" className="mb-2 block text-xs font-bold text-gray-500">새 공유 링크</label>
+            <label htmlFor="share-link" className="mb-2 block text-xs font-bold text-gray-500">공유 링크</label>
             <div className="flex gap-2">
               <input id="share-link" readOnly value={shareUrl} onFocus={event => event.currentTarget.select()} className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700" />
               <button type="button" onClick={() => void copyLink()} className="rounded-xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700">복사</button>
