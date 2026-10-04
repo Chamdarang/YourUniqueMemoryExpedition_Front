@@ -18,6 +18,7 @@ import type { PlanResponse } from "../types/plan";
 import type { DayScheduleResponse } from "../types/schedule";
 import type { Transportation } from "../types/enums";
 import { useFeedback } from "../components/common/useFeedback";
+import { getOfflineHomeSnapshot } from "../utils/offlineHomeStorage";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
@@ -138,6 +139,20 @@ export default function HomePage() {
   const [delayMinutes, setDelayMinutes] = useState(0);
   const [currentLocation, setCurrentLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [locationError, setLocationError] = useState('');
+  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
+  const [isUsingCachedData, setIsUsingCachedData] = useState(false);
+  const [offlineDataSavedAt, setOfflineDataSavedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => { setNowMinutes(getCurrentMinutes()); }, 60000);
@@ -153,8 +168,9 @@ export default function HomePage() {
 
   useEffect(() => {
     const loadHomeData = async () => {
+      let plan: PlanResponse | null = null;
       try {
-        const plan = await getUpcomingPlan(); setUpcomingPlan(plan);
+        plan = await getUpcomingPlan(); setUpcomingPlan(plan);
         if (plan) {
           const dDay = calculateDaysDiff(plan.planStartDate);
           const endDiff = calculateDaysDiff(plan.planEndDate);
@@ -172,7 +188,31 @@ export default function HomePage() {
             setScheduleLoading(false);
           }
         }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
+      } catch (err) {
+        console.error(err);
+        const owner = localStorage.getItem('username');
+        const snapshot = owner ? await getOfflineHomeSnapshot(owner) : null;
+        if (snapshot) {
+          setUpcomingPlan(snapshot.plan);
+          setIsUsingCachedData(true);
+          setOfflineDataSavedAt(snapshot.savedAt);
+          if (snapshot.plan) {
+            const dayNumber = calculateDaysDiff(snapshot.plan.planStartDate);
+            if (dayNumber <= 0 && calculateDaysDiff(snapshot.plan.planEndDate) >= 0) {
+              const cachedDay = snapshot.days.find(day => day.dayOrder === Math.abs(dayNumber) + 1);
+              if (cachedDay) {
+                setTodayDayId(cachedDay.id);
+                setIsSimpleDay(cachedDay.scheduleMode === 'SIMPLE');
+                setTodaySchedules(cachedDay.schedules);
+                setDelayMinutes(Number(localStorage.getItem(`yume-delay-${cachedDay.id}`) || 0));
+              }
+            }
+          }
+        }
+      } finally {
+        setScheduleLoading(false);
+        setLoading(false);
+      }
     };
     loadHomeData();
   }, []);
@@ -207,7 +247,7 @@ export default function HomePage() {
       && !activeSchedule && !nextSchedule && activeMovingIndex === -1;
 
   useEffect(() => {
-    if (!showCurrentLocation || !navigator.geolocation) return;
+    if (!showCurrentLocation || isOffline || isUsingCachedData || !navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
       position => {
         setCurrentLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
@@ -219,7 +259,7 @@ export default function HomePage() {
       { enableHighAccuracy: true, maximumAge: 60000, timeout: 15000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [showCurrentLocation]);
+  }, [showCurrentLocation, isOffline, isUsingCachedData]);
 
   if (loading) return <div className="p-10 text-center text-gray-500 font-bold">로딩 중... ⏳</div>;
 
@@ -236,6 +276,7 @@ export default function HomePage() {
   };
 
   const handleComplete = async (schedule: DayScheduleResponse) => {
+    if (isOffline || isUsingCachedData) return;
     try {
       await toggleScheduleVisit(schedule.id);
       setTodaySchedules(items => items.map(item => item.id === schedule.id
@@ -248,6 +289,7 @@ export default function HomePage() {
   };
 
   const handleSkip = async (schedule: DayScheduleResponse) => {
+    if (isOffline || isUsingCachedData) return;
     try {
       await toggleScheduleSkip(schedule.id);
       setTodaySchedules(items => items.map(item => item.id === schedule.id
@@ -261,6 +303,15 @@ export default function HomePage() {
 
   return (
       <div className="flex flex-col h-screen max-w-3xl mx-auto bg-white overflow-hidden px-4 md:px-0 font-sans">
+        {(isOffline || isUsingCachedData) && (
+          <div role="status" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+            {isOffline
+              ? isUsingCachedData
+                ? `오프라인 · 저장된 일정으로 표시 중${offlineDataSavedAt ? ` (${new Date(offlineDataSavedAt).toLocaleString()})` : ''}. 지도와 일정 상태 변경은 연결 후 이용할 수 있어요.`
+                : '오프라인 상태예요. 저장된 여행 일정이 없으면 인터넷 연결 후 홈을 열어 미리 저장해 주세요.'
+              : '저장된 일정 사본을 표시 중이에요. 서버에 연결되지 않아 최신 내용이 아닐 수 있습니다.'}
+          </div>
+        )}
         <section className="pt-6 shrink-0 bg-white z-20">
           <h1 className="text-2xl font-bold text-gray-900">안녕하세요, {username}님.</h1>
           <p className="text-gray-500 text-sm mt-1">{upcomingPlan ? '여행 일정과 현재 상황을 확인하세요.' : '새로운 여행을 떠나보세요!'}</p>
@@ -288,7 +339,11 @@ export default function HomePage() {
 
                     <>
                       <div className="h-64 md:h-72 w-full relative border-b border-gray-100 shrink-0">
-                        <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'geocoding', 'marker']} language="ko" region="KR" version="beta">
+                        {isOffline || isUsingCachedData ? (
+                          <div className="flex h-full items-center justify-center bg-slate-50 px-6 text-center text-sm font-semibold text-slate-500">
+                            지도는 연결 후 표시됩니다. 아래 일정 목록과 저장된 장소 정보는 볼 수 있어요.
+                          </div>
+                        ) : <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'geocoding', 'marker']} language="ko" region="KR" version="beta">
 
                           <Map defaultCenter={{ lat: 34.9858, lng: 135.7588 }} defaultZoom={13} mapId="HOME_MAP_ID" disableDefaultUI={true} className="w-full h-full">
                             {!isSimpleDay && <MapDirections schedules={displaySchedules} />}
@@ -308,8 +363,8 @@ export default function HomePage() {
                               </AdvancedMarker>;
                             })}
                           </Map>
-                        </APIProvider>
-                        {showCurrentLocation && !currentLocation && (
+                        </APIProvider>}
+                        {showCurrentLocation && !isOffline && !isUsingCachedData && !currentLocation && (
                           <div role="status" className="absolute bottom-3 left-3 right-3 rounded-xl bg-white/95 px-3 py-2 text-xs text-gray-600 shadow">
                             {!navigator.geolocation ? '이 환경에서는 현위치를 표시할 수 없어요.' : locationError || '현위치를 확인하고 있어요. 위치 권한을 허용해 주세요.'}
                           </div>
@@ -413,10 +468,10 @@ export default function HomePage() {
                                                 길찾기 시작
                                               </a>
                                             )}
-                                            <button type="button" onClick={() => void handleComplete(item)} className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold ${item.isChecked ? 'border-green-300 bg-green-600 text-white' : 'border-green-200 bg-white text-green-700'}`}>
+                                            <button type="button" disabled={isOffline || isUsingCachedData} onClick={() => void handleComplete(item)} className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-50 ${item.isChecked ? 'border-green-300 bg-green-600 text-white' : 'border-green-200 bg-white text-green-700'}`}>
                                               {item.isChecked ? '완료 취소' : '도착 완료'}
                                             </button>
-                                            <button type="button" onClick={() => void handleSkip(item)} className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold ${item.isSkipped ? 'border-gray-400 bg-gray-600 text-white' : 'border-gray-200 bg-white text-gray-500'}`}>
+                                            <button type="button" disabled={isOffline || isUsingCachedData} onClick={() => void handleSkip(item)} className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-50 ${item.isSkipped ? 'border-gray-400 bg-gray-600 text-white' : 'border-gray-200 bg-white text-gray-500'}`}>
                                               {item.isSkipped ? '건너뛰기 취소' : '건너뛰기'}
                                             </button>
                                           </div>

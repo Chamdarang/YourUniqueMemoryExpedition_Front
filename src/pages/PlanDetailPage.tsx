@@ -39,6 +39,7 @@ import {
 import { useScheduleExport } from "../components/common/useScheduleExport";
 import { getStaticMapQuery, type ExportSection } from "../components/common/scheduleExportUtils";
 import { useFeedback } from "../components/common/useFeedback";
+import { saveOfflineTripSnapshot } from "../utils/offlineHomeStorage";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const scrollbarHideStyle = `.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`;
@@ -130,6 +131,7 @@ function PlanDetailContent() {
         getAuditedScheduleCount,
     } = usePlanRouteAudit(planId, { confirm, showToast });
     const [plan, setPlan] = useState<PlanDetailResponse | null>(null);
+    const [offlineSaveLoading, setOfflineSaveLoading] = useState(false);
     const simpleDayIds = useMemo(() => new Set(
         plan?.days.filter(day => day.scheduleMode === 'SIMPLE').map(day => day.id) ?? []
     ), [plan?.days]);
@@ -282,6 +284,30 @@ function PlanDetailContent() {
             setDayOrderMap(map);
         }).finally(() => setLoading(false));
     }, [planId]);
+
+    const savePlanForOffline = async () => {
+        if (!plan) return;
+        const username = localStorage.getItem('username');
+        if (!username) {
+            showToast({ message: '계정 정보를 확인할 수 없습니다.', type: 'error' });
+            return;
+        }
+
+        setOfflineSaveLoading(true);
+        try {
+            const days = await Promise.all(plan.days.map(async day => ({
+                ...day,
+                schedules: mapSchedulesMap[day.id] ?? await getSchedulesByDay(day.id),
+            })));
+            await saveOfflineTripSnapshot({ plan, days }, username);
+            showToast({ message: `여행 일정 ${days.length}일을 이 기기에 저장했습니다.`, type: 'success' });
+        } catch (error) {
+            showToast({ message: error instanceof Error ? error.message : '오프라인 저장에 실패했습니다.', type: 'error' });
+        } finally {
+            setOfflineSaveLoading(false);
+        }
+    };
+
     useEffect(() => { mapSchedulesMapRef.current = mapSchedulesMap; }, [mapSchedulesMap]);
     useEffect(() => { if (planId) fetchPlanDetail(); }, [planId, fetchPlanDetail]);
 
@@ -947,6 +973,15 @@ function PlanDetailContent() {
                                     </span>
                                 </div>
                                 <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide [&>button]:shrink-0 [&>button]:whitespace-nowrap">
+                                    <button
+                                        type="button"
+                                        disabled={offlineSaveLoading}
+                                        onClick={() => void savePlanForOffline()}
+                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 disabled:opacity-50"
+                                        title="여행 날짜와 모든 일정을 이 기기에 저장해 오프라인에서 확인"
+                                    >
+                                        {offlineSaveLoading ? '저장 중...' : '⬇ 오프라인 저장'}
+                                    </button>
                                     <button
                                         onClick={() => setShowInjury(!showInjury)}
                                         className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm ${showInjury ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
