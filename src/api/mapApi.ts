@@ -7,8 +7,13 @@ export const makeStaticGoogleMap = async (query: string): Promise<string> => {
     );
 
     if (!res.ok) {
-        const msg = await res.text().catch(() => "");
-        throw new Error(msg || `Static map fetch failed: ${res.status}`);
+        const fallback = `내보내기용 지도 요청에 실패했습니다. (${res.status})`;
+        let message = fallback;
+        try {
+            const payload = await res.json() as { message?: string };
+            if (payload.message) message = payload.message;
+        } catch { /* JSON 오류 응답이 아니면 상태 코드 안내를 사용한다. */ }
+        throw new Error(message);
     }
 
     const blob = await res.blob();

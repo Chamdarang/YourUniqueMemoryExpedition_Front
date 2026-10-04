@@ -34,13 +34,13 @@ import { drawAuditedRouteLeg } from "../utils/mapRoutePolylines";
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const scrollbarHideStyle = `.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`;
 
-function NumberedMarker({ number, color, onClick }: { number: number, color: string, onClick?: () => void }) {
+function NumberedMarker({ number, color, onClick }: { number?: number, color: string, onClick?: () => void }) {
     return (
         <div onClick={onClick} className="relative flex flex-col items-center justify-center filter drop-shadow-md cursor-pointer hover:-translate-y-1 transition-transform group">
             <svg width="30" height="40" viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M16 0C7.16 0 0 7.16 0 16C0 24.8 16 42 16 42C16 42 32 24.8 32 16C32 7.16 24.8 0 16 0Z" fill={color} stroke="white" strokeWidth="2"/>
             </svg>
-            <span className="absolute top-[6px] text-white font-bold text-sm">{number}</span>
+            {number !== undefined && <span className="absolute top-[6px] text-white font-bold text-sm">{number}</span>}
         </div>
     );
 }
@@ -228,18 +228,33 @@ function DayDetailContent() {
     };
 
     // ✅ Export 핸들러
-    const handleExportClick = async () => {
-        const query = getStaticMapQuery(schedules);
+    const handleExportClick = () => {
+        openExportModal();
+    };
+
+    const handleExportConfirm = async (mapState?: { center: { lat: number, lng: number }, zoom: number }) => {
+        const query = exportOptions.map ? getStaticMapQuery(schedules, mapState) : null;
+        if (exportOptions.map && !query) {
+            showToast({ message: "지도에 표시할 위치가 있는 일정이 없습니다.", type: 'info' });
+            return;
+        }
         if (query) {
             try {
                 const blobUrl = await makeStaticGoogleMap(query);
                 setGeneratedMapUrl(prev => { if(prev) URL.revokeObjectURL(prev); return blobUrl; });
                 setMapVersion(v => v + 1);
-            } catch (e) { console.error(e); }
+            } catch (e) {
+                console.error(e);
+                showToast({ message: e instanceof Error ? e.message : "내보내기용 지도를 만들지 못했습니다.", type: 'error' });
+                return;
+            }
         } else {
-            setGeneratedMapUrl(null);
+            setGeneratedMapUrl(previous => {
+                if (previous) URL.revokeObjectURL(previous);
+                return null;
+            });
         }
-        openExportModal();
+        requestAnimationFrame(() => void handleSaveImage(titleForm, exportRef.current));
     };
 
     // ✅ Map Click & Spot Selection
@@ -456,7 +471,7 @@ function DayDetailContent() {
             <ImageExportModal
                 isOpen={isExportModalOpen}
                 onClose={closeExportModal}
-                onConfirm={() => handleSaveImage(titleForm, exportRef.current)}
+                onConfirm={(mapState) => void handleExportConfirm(mapState)}
                 options={exportOptions}
                 setOptions={setExportOptions}
                 schedules={schedules}
@@ -486,12 +501,12 @@ function DayDetailContent() {
                             </div>
                         )}
                         <Map defaultCenter={{ lat: 34.9858, lng: 135.7588 }} defaultZoom={13} mapId="DEMO_MAP_ID" disableDefaultUI={true} className="w-full h-full" onClick={handleMapClick} gestureHandling="auto">
-                            <MapDirections schedules={schedules} mapViewMode={mapViewMode} auditResult={routeAuditStale ? null : routeAuditResult} />
+                            {dayDetail?.scheduleMode !== 'SIMPLE' && <MapDirections schedules={schedules} mapViewMode={mapViewMode} auditResult={routeAuditStale ? null : routeAuditResult} />}
                             {mapViewMode !== 'NONE' && schedules.map((s, index) => {
                                 const lat = Number(s.lat);
                                 const lng = Number(s.lng);
                                 if (!lat || !lng) return null;
-                                return <AdvancedMarker key={s.id} position={{ lat, lng }}><NumberedMarker number={index + 1} color={'#3B82F6'} /></AdvancedMarker>;
+                                return <AdvancedMarker key={s.id} position={{ lat, lng }}><NumberedMarker number={dayDetail?.scheduleMode === 'SIMPLE' ? undefined : index + 1} color={'#3B82F6'} /></AdvancedMarker>;
                             })}
                             {tempSelectedSpot && (
                                 <><AdvancedMarker position={{ lat: tempSelectedSpot.lat, lng: tempSelectedSpot.lng }}><Pin background={'#22c55e'} borderColor={'#15803d'} glyphColor={'white'} /></AdvancedMarker>

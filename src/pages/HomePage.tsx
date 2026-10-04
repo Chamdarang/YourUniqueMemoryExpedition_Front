@@ -11,6 +11,7 @@ import { getSchedulesByDay, toggleScheduleSkip, toggleScheduleVisit } from "../a
 
 // Utils
 import { getSpotTypeInfo } from "../utils/spotUtils";
+import { getHomeScheduleState } from "../utils/homeScheduleUtils";
 
 // Types
 import type { PlanResponse } from "../types/plan";
@@ -69,7 +70,7 @@ const getTravelMode = (transportation?: Transportation | null) => {
 function MapUpdater({ schedules, activeId, activeMoveIndex }: { schedules: DayScheduleResponse[], activeId: number | undefined, activeMoveIndex: number }) {
   const map = useMap();
   useEffect(() => {
-    if (!map || schedules.length === 0) return;
+    if (!map) return;
     if (activeId) {
       const activeItem = schedules.find(s => s.id === activeId);
       if (activeItem && Number(activeItem.lat) !== 0) {
@@ -110,13 +111,13 @@ function MapDirections({ schedules }: { schedules: DayScheduleResponse[] }) {
   return null;
 }
 
-function NumberedMarker({ number, color = "#3B82F6", active = false }: { number: number, color?: string, active?: boolean }) {
+function NumberedMarker({ number, color = "#3B82F6", active = false }: { number?: number, color?: string, active?: boolean }) {
   return (
       <div className={`relative flex flex-col items-center justify-center filter drop-shadow-md transition-transform duration-300 ${active ? 'scale-125 z-50' : 'scale-90'}`}>
         <svg width="30" height="42" viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M16 0C7.16 0 0 7.16 0 16C0 24.8 16 42 16 42C16 42 32 24.8 32 16C32 7.16 24.8 0 16 0Z" fill={color} stroke="white" strokeWidth="2"/>
         </svg>
-        <span className="absolute top-[6px] text-white font-bold text-sm">{number}</span>
+        {number !== undefined && <span className="absolute top-[6px] text-white font-bold text-sm">{number}</span>}
       </div>
   );
 }
@@ -133,7 +134,10 @@ export default function HomePage() {
   const activeItemRef = useRef<HTMLDivElement>(null);
   const [hasUserScrolled, setHasUserScrolled] = useState(false);
   const [todayDayId, setTodayDayId] = useState<number | null>(null);
+  const [isSimpleDay, setIsSimpleDay] = useState(false);
   const [delayMinutes, setDelayMinutes] = useState(0);
+  const [currentLocation, setCurrentLocation] = useState<google.maps.LatLngLiteral | null>(null);
+  const [locationError, setLocationError] = useState('');
 
   useEffect(() => {
     const interval = setInterval(() => { setNowMinutes(getCurrentMinutes()); }, 60000);
@@ -160,6 +164,7 @@ export default function HomePage() {
             const targetDay = days.find(d => d.dayOrder === Math.abs(dDay) + 1);
             if (targetDay) {
               setTodayDayId(targetDay.id);
+              setIsSimpleDay(targetDay.scheduleMode === 'SIMPLE');
               setDelayMinutes(Number(localStorage.getItem(`yume-delay-${targetDay.id}`) || 0));
               const res = await getSchedulesByDay(targetDay.id);
               setTodaySchedules(res);
@@ -196,33 +201,33 @@ export default function HomePage() {
     endTime: shiftTime(item.endTime, delayMinutes),
   })), [todaySchedules, delayMinutes]);
 
-  if (loading) return <div className="p-10 text-center text-gray-500 font-bold">로딩 중... ⏳</div>;
-
-  const activeSchedule = displaySchedules.find(item => {
-    if (item.isChecked || item.isSkipped || !item.startTime) return false;
-    const start = timeToMinutes(item.startTime);
-    return nowMinutes >= start && nowMinutes < (start + item.duration);
-  });
+  const { activeSchedule, nextSchedule, activeMovingIndex } = getHomeScheduleState(displaySchedules, nowMinutes);
   const activeScheduleId = activeSchedule?.id;
+  const showCurrentLocation = !loading && status === 'ONGOING'
+      && !activeSchedule && !nextSchedule && activeMovingIndex === -1;
 
-  const activeMovingIndex = displaySchedules.findIndex((item, index) => {
-    if (item.isChecked || item.isSkipped || index === 0 || !displaySchedules[index - 1].endTime) return false;
-    const moveStart = timeToMinutes(displaySchedules[index - 1].endTime);
-    return nowMinutes >= moveStart && nowMinutes < (moveStart + item.movingDuration);
-  });
+  useEffect(() => {
+    if (!showCurrentLocation || !navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      position => {
+        setCurrentLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+        setLocationError('');
+      },
+      error => setLocationError(error.code === 1
+          ? '위치 권한을 허용하면 현위치를 표시할 수 있어요.'
+          : '현위치를 확인하지 못했어요.'),
+      { enableHighAccuracy: true, maximumAge: 60000, timeout: 15000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [showCurrentLocation]);
 
-  const activeIndex = activeSchedule
-      ? displaySchedules.findIndex(item => item.id === activeSchedule.id)
-      : activeMovingIndex;
-  const nextSchedule = displaySchedules.find((item, index) =>
-      !item.isChecked && !item.isSkipped && index > activeIndex
-  ) || displaySchedules.find(item => !item.isChecked && !item.isSkipped);
+  if (loading) return <div className="p-10 text-center text-gray-500 font-bold">로딩 중... ⏳</div>;
 
   const currentStatusText = activeSchedule
       ? `현재: ${activeSchedule.spotName}`
       : (activeMovingIndex !== -1
           ? `이동 중: ${getTransLabel(displaySchedules[activeMovingIndex].transportation)}`
-          : nextSchedule ? `다음: ${nextSchedule.spotName || '장소 미정'}` : '오늘 일정 완료');
+          : nextSchedule ? `다음: ${nextSchedule.spotName || '장소 미정'}` : '다음 일정이 정해져 있지 않아요');
 
   const changeDelay = (nextDelay: number) => {
     const bounded = Math.max(-120, Math.min(360, nextDelay));
@@ -281,34 +286,34 @@ export default function HomePage() {
                   <Link to={`/plans/${upcomingPlan.id}`} className="text-sm text-blue-600 font-bold hover:underline">전체 일정</Link>
                 </div>
 
-                {displaySchedules.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 p-10 text-center">
-                    <div className="text-4xl mb-4">🗓️</div>
-                    <h3 className="text-gray-800 font-bold text-lg">오늘은 등록된 일정이 없습니다.</h3>
-                    <p className="text-gray-500 text-sm mt-2">
-                      오늘 하루는 자유롭게 탐색하거나<br/>
-                      전체 일정에서 새로운 계획을 추가해 보세요!
-                    </p>
-                    <Link to={`/plans/${upcomingPlan.id}`} className="mt-6 px-6 py-2.5 bg-white border border-blue-200 text-blue-600 rounded-xl font-bold text-sm shadow-sm hover:bg-blue-50 transition">
-                      일정 편집하러 가기
-                    </Link>
-                  </div>
-                ):(
                     <>
                       <div className="h-64 md:h-72 w-full relative border-b border-gray-100 shrink-0">
                         <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'geocoding', 'marker']} language="ko" region="KR" version="beta">
 
                           <Map defaultCenter={{ lat: 34.9858, lng: 135.7588 }} defaultZoom={13} mapId="HOME_MAP_ID" disableDefaultUI={true} className="w-full h-full">
-                            <MapDirections schedules={displaySchedules} />
+                            {!isSimpleDay && <MapDirections schedules={displaySchedules} />}
                             <MapUpdater schedules={displaySchedules} activeId={activeScheduleId} activeMoveIndex={activeMovingIndex} />
+                            {showCurrentLocation && currentLocation && (
+                              <AdvancedMarker position={currentLocation} zIndex={200} title="현위치">
+                                <div className="flex flex-col items-center" aria-label="현위치">
+                                  <span className="rounded-full border-4 border-white bg-blue-500 h-5 w-5 shadow-lg ring-4 ring-blue-200/60" />
+                                  <span className="mt-1 rounded bg-white px-2 py-0.5 text-xs font-bold text-blue-700 shadow">현위치</span>
+                                </div>
+                              </AdvancedMarker>
+                            )}
                             {displaySchedules.flatMap((schedule, index) => schedule.lat != null && schedule.lng != null ? [{ schedule, index }] : []).map(({ schedule, index }) => {
                               const isActive = (schedule.id === activeScheduleId || index === activeMovingIndex);
                               return <AdvancedMarker key={schedule.id} position={{ lat: Number(schedule.lat), lng: Number(schedule.lng) }} zIndex={isActive ? 100 : 1}>
-                                <NumberedMarker number={index + 1} color={isActive ? "#EF4444" : "#3B82F6"} active={isActive} />
+                                <NumberedMarker number={isSimpleDay ? undefined : index + 1} color={isActive ? "#EF4444" : "#3B82F6"} active={isActive} />
                               </AdvancedMarker>;
                             })}
                           </Map>
                         </APIProvider>
+                        {showCurrentLocation && !currentLocation && (
+                          <div role="status" className="absolute bottom-3 left-3 right-3 rounded-xl bg-white/95 px-3 py-2 text-xs text-gray-600 shadow">
+                            {!navigator.geolocation ? '이 환경에서는 현위치를 표시할 수 없어요.' : locationError || '현위치를 확인하고 있어요. 위치 권한을 허용해 주세요.'}
+                          </div>
+                        )}
                       </div>
 
                       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-gray-50 scrollbar-hide relative" onWheel={handleManualScroll} onTouchStart={handleManualScroll}>
@@ -354,6 +359,9 @@ export default function HomePage() {
                           </div>
 
                           <div className="space-y-0 mt-2 pb-10 relative z-10">
+                            {displaySchedules.length === 0 && (
+                              <p className="py-6 text-center text-sm text-gray-500">오늘은 등록된 일정이 없습니다. 전체 일정에서 추가해 보세요.</p>
+                            )}
                             {displaySchedules.map((item, index) => {
                               const isActive = (item.id === activeScheduleId);
                               const isMovingActive = (index === activeMovingIndex);
@@ -422,7 +430,6 @@ export default function HomePage() {
                         </div>
                       </div>
                     </>
-                )}
               </div>
           ) : (
               <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg shrink-0">

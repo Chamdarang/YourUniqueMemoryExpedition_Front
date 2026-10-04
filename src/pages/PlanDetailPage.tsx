@@ -2,14 +2,14 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useParams, useBlocker } from "react-router-dom";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary, InfoWindow, Pin, type MapMouseEvent } from "@vis.gl/react-google-maps";
+import { APIProvider, useMapsLibrary, type MapMouseEvent } from "@vis.gl/react-google-maps";
 
 // API
 import { exportPlanData, getPlanDetail } from "../api/planApi";
-import { copyPlanDay, createDayInPlan, swapPlanDay, getIndependentDays } from "../api/dayApi";
+import { copyPlanDay, createDayInPlan, swapPlanDay } from "../api/dayApi";
 import { getSchedulesByDay, getUnlinkedSpotGroups, transferSchedule, updateSchedule as updateScheduleApi, type UnlinkedSpotGroup } from "../api/scheduleApi";
 import { createSpot } from "../api/spotApi";
-import { applyDayRouteEstimates, auditDayRoute, auditPlanRoutes } from "../api/routeApi";
+import { applyDayRouteEstimates, auditDayRoute } from "../api/routeApi";
 // ✅ 지도 생성 API
 import { makeStaticGoogleMap } from "../api/mapApi";
 
@@ -18,14 +18,17 @@ import PlanHeader from "../components/plan/PlanHeader";
 import PlanDayItem from "../components/plan/PlanDayItem";
 import SpotLinkModal from "../components/plan/SpotLinkModal";
 import PlanRouteAuditModal from "../components/plan/PlanRouteAuditModal";
+import EmptyPlanDaySlot from "../components/plan/EmptyPlanDaySlot";
+import PlanMapPanel from "../components/plan/PlanMapPanel";
 import DayRouteAuditModal from "../components/day/DayRouteAuditModal";
+import { usePlanRouteAudit } from "../hooks/usePlanRouteAudit";
 
 // Types & Utils
 import type { PlanDetailResponse } from "../types/plan";
 import type { PlanDayResponse, ScheduleMode } from "../types/planDay.ts";
 import type { DayScheduleResponse } from "../types/schedule";
 import type { SpotCreateRequest } from "../types/spot";
-import type { DayRouteAuditLeg, DayRouteAuditResponse, PlanRouteAuditResponse } from "../types/route";
+import type { DayRouteAuditLeg, DayRouteAuditResponse } from "../types/route";
 
 // ✅ Export 관련 컴포넌트
 import {
@@ -36,7 +39,6 @@ import {
 import { useScheduleExport } from "../components/common/useScheduleExport";
 import { getStaticMapQuery, type ExportSection } from "../components/common/scheduleExportUtils";
 import { useFeedback } from "../components/common/useFeedback";
-import { drawAuditedRouteLeg } from "../utils/mapRoutePolylines";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const scrollbarHideStyle = `.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`;
@@ -46,16 +48,6 @@ type PlanWorkspacePreferences = {
     showInjury: boolean;
     visibleDayIds: number[];
     expandedDayIds: number[];
-};
-
-type PlanSearchResult = {
-    key: string;
-    dayId: number;
-    dayOrder: number;
-    dayName: string;
-    scheduleId?: number;
-    title: string;
-    detail: string;
 };
 
 const defaultPlanWorkspacePreferences: PlanWorkspacePreferences = {
@@ -96,14 +88,6 @@ const getPlanDayDate = (startDate: string, dayOrder: number) => {
     ].join('-');
 };
 
-const duplicatedLocalRouteMessages = new Set([
-    '출발지 또는 도착지의 위치 정보가 없습니다.',
-    '이동수단이 지정되지 않았습니다.',
-]);
-
-const countAdditionalRouteIssues = (routeAudit: NonNullable<PlanRouteAuditResponse['days'][number]['routeAudit']>) =>
-    routeAudit.legs.filter(leg => leg.status !== 'OK' && !duplicatedLocalRouteMessages.has(leg.message)).length;
-
 const scheduleAuditFingerprint = (schedules: DayScheduleResponse[]) => JSON.stringify(schedules.map(schedule => ({
     id: schedule.id,
     order: schedule.scheduleOrder,
@@ -118,186 +102,6 @@ const scheduleAuditFingerprint = (schedules: DayScheduleResponse[]) => JSON.stri
     transportation: schedule.transportation,
 })));
 
-// 🛠️ 임시 장소 파싱 제거됨 (필드 직접 사용)
-
-function NumberedMarker({ number, color, onClick }: { number: number, color: string, onClick?: () => void }) {
-    return (
-        <div onClick={onClick} className="relative flex flex-col items-center justify-center filter drop-shadow-md cursor-pointer hover:-translate-y-1 transition-transform group">
-            <svg width="30" height="40" viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 0C7.16 0 0 7.16 0 16C0 24.8 16 42 16 42C16 42 32 24.8 32 16C32 7.16 24.8 0 16 0Z" fill={color} stroke="white" strokeWidth="2"/>
-            </svg>
-            <span className="absolute top-[6px] text-white font-bold text-sm">{number}</span>
-        </div>
-    );
-}
-
-interface MapDirectionsProps {
-    daySchedulesMap: Record<number, DayScheduleResponse[]>;
-    dayOrderMap: Record<number, number>;
-    mapViewMode: 'ALL' | 'PINS' | 'NONE';
-    visibleDays: Set<number>;
-    auditedDayRoute: { dayId: number; result: DayRouteAuditResponse } | null;
-}
-
-function MapDirections({ daySchedulesMap, dayOrderMap, mapViewMode, visibleDays, auditedDayRoute }: MapDirectionsProps) {
-    const map = useMap();
-    const mapsLibrary = useMapsLibrary("maps");
-    const polylinesRef = useRef<google.maps.Polyline[]>([]);
-
-    useEffect(() => {
-        const clearPolylines = () => {
-            polylinesRef.current.forEach(polyline => polyline.setMap(null));
-            polylinesRef.current = [];
-        };
-
-        clearPolylines();
-        if (!map || !mapsLibrary) return;
-        if (mapViewMode !== 'ALL') return;
-
-        const newPolylines: google.maps.Polyline[] = [];
-        const bounds = new google.maps.LatLngBounds();
-        let hasPoints = false;
-
-        Object.entries(daySchedulesMap).forEach(([dayIdStr, schedules]) => {
-            const dayId = Number(dayIdStr);
-            if (!visibleDays.has(dayId)) return;
-            if (!schedules) return;
-
-            const dayOrder = dayOrderMap[dayId] || 1;
-            const color = getDayColor(dayOrder);
-            if (auditedDayRoute?.dayId === dayId) {
-                const scheduleById = new globalThis.Map(schedules.map(schedule => [schedule.id, schedule]));
-                auditedDayRoute.result.legs.forEach(leg => {
-                    const from = scheduleById.get(leg.fromScheduleId);
-                    const to = scheduleById.get(leg.toScheduleId);
-                    if (!from || !to) return;
-                    const drawing = drawAuditedRouteLeg({ mapsLibrary, map, leg, from, to });
-                    if (!drawing) return;
-                    if (!drawing.actualRoute) {
-                        const connector = new mapsLibrary.Polyline({
-                            path: [
-                                { lat: Number(from.lat), lng: Number(from.lng) },
-                                { lat: Number(to.lat), lng: Number(to.lng) },
-                            ],
-                            geodesic: true,
-                            strokeColor: color,
-                            strokeOpacity: 0.8,
-                            strokeWeight: 5,
-                            zIndex: 10,
-                            icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW }, offset: '50%', repeat: '100px' }],
-                        });
-                        connector.setMap(map);
-                        newPolylines.push(connector);
-                    }
-                    newPolylines.push(...drawing.polylines);
-                    drawing.path.forEach(point => bounds.extend(point));
-                    hasPoints = true;
-                });
-                return;
-            }
-
-            const path = schedules.map(s => ({
-                lat: Number(s.lat),
-                lng: Number(s.lng)
-            })).filter(pos => !isNaN(pos.lat) && !isNaN(pos.lng) && pos.lat !== 0 && pos.lng !== 0);
-            if (path.length > 0) {
-                path.forEach(pos => bounds.extend(pos));
-                hasPoints = true;
-                const polyline = new mapsLibrary.Polyline({
-                    path, geodesic: true, strokeColor: color, strokeOpacity: 0.8, strokeWeight: 5, zIndex: 20,
-                    icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW }, offset: '50%', repeat: '100px' }]
-                });
-                polyline.setMap(map);
-                newPolylines.push(polyline);
-            }
-        });
-        polylinesRef.current = newPolylines;
-
-        if (hasPoints && !bounds.isEmpty()) {
-            const currentBounds = map.getBounds();
-            const isAllVisible = currentBounds && currentBounds.contains(bounds.getNorthEast()) && currentBounds.contains(bounds.getSouthWest());
-            if (!isAllVisible) map.fitBounds(bounds);
-        }
-        return clearPolylines;
-    }, [map, mapsLibrary, daySchedulesMap, dayOrderMap, mapViewMode, visibleDays, auditedDayRoute]);
-    return null;
-}
-
-function EmptySlotModeSelector({ dayOrder, onCreateNew, onImportSelect }: { dayOrder: number, onCreateNew: (scheduleMode: ScheduleMode) => void, onImportSelect: (id: number) => void }) {
-    const { showToast } = useFeedback();
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [showImport, setShowImport] = useState(false);
-    const [candidates, setCandidates] = useState<PlanDayResponse[]>([]);
-    const [loading, setLoading] = useState(false);
-
-    const loadCandidates = async () => {
-        setShowImport(true);
-        setLoading(true);
-        try {
-            setCandidates((await getIndependentDays()).content);
-        } catch {
-            showToast({ message: "하루 일정 목록을 불러오지 못했습니다.", type: 'error' });
-            setShowImport(false);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (!isExpanded) {
-        return (
-            <button type="button" data-plan-day-order={dayOrder} onClick={() => setIsExpanded(true)} className="mb-3 flex w-full scroll-mt-24 items-center gap-3 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 text-left font-bold text-gray-400 transition hover:border-blue-400 hover:bg-white hover:text-blue-600">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-200 text-lg">+</span>
-                Day {dayOrder} 일정 추가하기
-            </button>
-        );
-    }
-
-    return (
-        <div data-plan-day-order={dayOrder} className="mb-4 scroll-mt-24 rounded-2xl border-2 border-blue-100 bg-blue-50/60 p-4">
-            <div className="mb-3 flex items-center justify-between">
-                <h3 className="font-bold text-blue-900">Day {dayOrder} 일정 방식 선택</h3>
-                <button type="button" onClick={() => { setIsExpanded(false); setShowImport(false); }} className="text-xs font-bold text-gray-400">닫기</button>
-            </div>
-            {!showImport ? (
-                <div className="grid gap-2 sm:grid-cols-3">
-                    <button type="button" onClick={() => onCreateNew('SIMPLE')} className="rounded-xl border border-blue-200 bg-white px-3 py-3 font-bold text-blue-700 shadow-sm hover:bg-blue-50">간편 일정<span className="mt-1 block text-[10px] font-medium text-gray-400">장소 · 시간 · 메모</span></button>
-                    <button type="button" onClick={() => onCreateNew('DETAILED')} className="rounded-xl border border-orange-200 bg-white px-3 py-3 font-bold text-orange-600 shadow-sm hover:bg-orange-50">상세 일정<span className="mt-1 block text-[10px] font-medium text-gray-400">체류 · 이동 · 교통수단</span></button>
-                    <button type="button" onClick={loadCandidates} className="rounded-xl border border-gray-200 bg-white px-3 py-3 font-bold text-gray-600 shadow-sm hover:bg-gray-50">기존 일정 가져오기</button>
-                </div>
-            ) : (
-                <div className="overflow-hidden rounded-xl border border-blue-100 bg-white">
-                    <div className="flex items-center justify-between border-b border-blue-50 bg-blue-50/40 px-3 py-2">
-                        <button type="button" onClick={() => setShowImport(false)} className="text-xs font-bold text-blue-600 hover:text-blue-800">
-                            ← 일정 방식 선택
-                        </button>
-                        {!loading && candidates.length > 0 && (
-                            <span className="text-[10px] font-bold text-gray-400">{candidates.length}개</span>
-                        )}
-                    </div>
-                    <div className="max-h-52 overflow-y-auto">
-                        {loading ? (
-                            <p className="p-6 text-center text-sm text-gray-400">불러오는 중...</p>
-                        ) : candidates.length === 0 ? (
-                            <div className="px-4 py-8 text-center">
-                                <p className="text-sm font-bold text-gray-500">가져올 수 있는 하루 일정이 없습니다.</p>
-                                <p className="mt-1 text-xs text-gray-400">내 하루 일정에서 먼저 일정을 만들어 주세요.</p>
-                            </div>
-                        ) : candidates.map((day) => (
-                            <button type="button" key={day.id} onClick={() => onImportSelect(day.id)} className="flex w-full items-center justify-between border-b border-gray-50 p-3 text-left last:border-0 hover:bg-blue-50">
-                                <span className="font-bold text-gray-700">{day.dayName}</span>
-                                <span className="rounded bg-gray-100 px-2 py-1 text-[10px] font-bold text-gray-500">{day.scheduleMode === 'SIMPLE' ? '간편' : '상세'}</span>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
-
-const DAY_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
-const getDayColor = (dayOrder: number) => DAY_COLORS[(dayOrder - 1) % DAY_COLORS.length];
-
 // 🚀 Main Page Component
 export default function PlanDetailPage() {
     return (
@@ -311,7 +115,24 @@ function PlanDetailContent() {
     const { confirm, showToast } = useFeedback();
     const { id } = useParams<{ id: string }>();
     const planId = Number(id);
+    const {
+        result: planAuditResult,
+        open: planAuditOpen,
+        loading: planAuditLoading,
+        checkedAt: planAuditCheckedAt,
+        stale: planAuditStale,
+        progress: planAuditProgress,
+        setOpen: setPlanAuditOpen,
+        runAudit: runPlanAudit,
+        calculateRoutes: calculatePlanRoutes,
+        cancelCalculation: cancelPlanAuditCalculation,
+        markStale: markPlanAuditStale,
+        getAuditedScheduleCount,
+    } = usePlanRouteAudit(planId, { confirm, showToast });
     const [plan, setPlan] = useState<PlanDetailResponse | null>(null);
+    const simpleDayIds = useMemo(() => new Set(
+        plan?.days.filter(day => day.scheduleMode === 'SIMPLE').map(day => day.id) ?? []
+    ), [plan?.days]);
     const [loading, setLoading] = useState(true);
     const [mapSchedulesMap, setMapSchedulesMap] = useState<Record<number, DayScheduleResponse[]>>({});
     const mapSchedulesMapRef = useRef<Record<number, DayScheduleResponse[]>>({});
@@ -332,7 +153,7 @@ function PlanDetailContent() {
     // Export 관련 State
     const { isExportModalOpen, openExportModal, closeExportModal, exportOptions, setExportOptions, handleSaveImage } = useScheduleExport();
     const exportRef = useRef<HTMLDivElement>(null);
-    const exportMenuRef = useRef<HTMLDetailsElement>(null);
+    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
     const [generatedMapUrl, setGeneratedMapUrl] = useState<string | null>(null);
     const [mapVersion, setMapVersion] = useState(0);
     const [exportMode, setExportMode] = useState<'PLAN' | 'DAY'>('PLAN');
@@ -349,20 +170,8 @@ function PlanDetailContent() {
     const [scheduleTransferLoading, setScheduleTransferLoading] = useState(false);
     const [spotLinkGroups, setSpotLinkGroups] = useState<UnlinkedSpotGroup[] | null>(null);
     const [spotLinksLoading, setSpotLinksLoading] = useState(false);
-    const [planAuditResult, setPlanAuditResult] = useState<PlanRouteAuditResponse | null>(null);
-    const [planAuditOpen, setPlanAuditOpen] = useState(false);
-    const [planAuditLoading, setPlanAuditLoading] = useState(false);
-    const [planAuditCheckedAt, setPlanAuditCheckedAt] = useState<number | null>(null);
-    const [planAuditStale, setPlanAuditStale] = useState(false);
-    const [planAuditProgress, setPlanAuditProgress] = useState<{ completedLegs: number; totalLegs: number; completedDays: number; totalDays: number } | null>(null);
     const [dayOpenRequest, setDayOpenRequest] = useState<{ dayId: number; key: number } | null>(null);
     const [scheduleFocusRequest, setScheduleFocusRequest] = useState<{ dayId: number; scheduleId: number; key: number; openEditor: boolean } | null>(null);
-    const [allDaysOpenRequest, setAllDaysOpenRequest] = useState<{ key: number; expanded: boolean } | null>(null);
-    const [showIssueDaysOnly, setShowIssueDaysOnly] = useState(false);
-    const [planSearchQuery, setPlanSearchQuery] = useState('');
-    const [planSearchLoading, setPlanSearchLoading] = useState(false);
-    const [planSearchError, setPlanSearchError] = useState('');
-    const searchLoadPromiseRef = useRef<Promise<void> | null>(null);
     const [dayRouteAudit, setDayRouteAudit] = useState<{
         dayId: number;
         dayName: string;
@@ -373,10 +182,6 @@ function PlanDetailContent() {
     const [dayRouteAuditOpen, setDayRouteAuditOpen] = useState(false);
     const [dayRouteAuditLoadingId, setDayRouteAuditLoadingId] = useState<number | null>(null);
     const [dayRouteApplyLoading, setDayRouteApplyLoading] = useState(false);
-    const planAuditAbortRef = useRef<AbortController | null>(null);
-    const hasPlanAuditResultRef = useRef(false);
-    const planAuditResultRef = useRef<PlanRouteAuditResponse | null>(null);
-
     // 헤더 상태
     const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
@@ -431,16 +236,10 @@ function PlanDetailContent() {
         setVisibleDays(new Set(preferences.visibleDayIds));
         setExpandedDayIds(new Set(preferences.expandedDayIds));
         setGeneratedMapUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+        setIsExportMenuOpen(false);
         setDirtyMap({});
         setMobileViewMode('LIST');
         setIsHeaderExpanded(false);
-        setPlanAuditResult(null);
-        hasPlanAuditResultRef.current = false;
-        planAuditResultRef.current = null;
-        setPlanAuditOpen(false);
-        setPlanAuditCheckedAt(null);
-        setPlanAuditStale(false);
-        setPlanAuditProgress(null);
         setDayRouteAudit(null);
         setDayRouteAuditOpen(false);
         setDayRouteAuditLoadingId(null);
@@ -449,14 +248,6 @@ function PlanDetailContent() {
         setScheduleTransferSource(null);
         setScheduleTransferTargetDayId(null);
         setScheduleTransferLoading(false);
-        setAllDaysOpenRequest(null);
-        setShowIssueDaysOnly(false);
-        setPlanSearchQuery('');
-        setPlanSearchLoading(false);
-        setPlanSearchError('');
-        searchLoadPromiseRef.current = null;
-        planAuditAbortRef.current?.abort();
-        planAuditAbortRef.current = null;
         setWorkspaceReadyPlanId(planId);
     }, [planId]);
 
@@ -492,9 +283,7 @@ function PlanDetailContent() {
         }).finally(() => setLoading(false));
     }, [planId]);
     useEffect(() => { mapSchedulesMapRef.current = mapSchedulesMap; }, [mapSchedulesMap]);
-    useEffect(() => { planAuditResultRef.current = planAuditResult; }, [planAuditResult]);
     useEffect(() => { if (planId) fetchPlanDetail(); }, [planId, fetchPlanDetail]);
-    useEffect(() => () => planAuditAbortRef.current?.abort(), []);
 
     useEffect(() => {
         if (!plan || workspaceReadyPlanId !== planId) return;
@@ -615,14 +404,23 @@ function PlanDetailContent() {
 
     const onModalConfirm = async (mapState?: { center: { lat: number, lng: number }, zoom: number }) => {
         const targetSchedules = exportMode === 'PLAN' ? exportSections.flatMap(s => s.schedules) : dayExportData?.schedules || [];
-        const query = getStaticMapQuery(targetSchedules, mapState);
+        const query = exportOptions.map ? getStaticMapQuery(targetSchedules, mapState) : null;
+
+        if (exportOptions.map && !query) {
+            showToast({ message: "지도에 표시할 위치가 있는 일정이 없습니다.", type: 'info' });
+            return;
+        }
 
         if (query) {
             try {
                 const blobUrl = await makeStaticGoogleMap(query);
                 setGeneratedMapUrl(prev => { if(prev) URL.revokeObjectURL(prev); return blobUrl; });
                 setMapVersion(v => v + 1);
-            } catch(e) { console.error(e); showToast({ message: "내보내기용 지도를 만들지 못했습니다.", type: 'error' }); return; }
+            } catch(e) {
+                console.error(e);
+                showToast({ message: e instanceof Error ? e.message : "내보내기용 지도를 만들지 못했습니다.", type: 'error' });
+                return;
+            }
         }
 
         const filename = exportMode === 'PLAN' ? plan?.planName || "여행_전체일정" : dayExportData?.title || "여행_일정";
@@ -663,10 +461,6 @@ function PlanDetailContent() {
         }
     }, []);
 
-    const markPlanAuditStale = useCallback(() => {
-        if (hasPlanAuditResultRef.current) setPlanAuditStale(true);
-    }, []);
-
     const refreshPlanAfterMutation = useCallback(() => {
         markPlanAuditStale();
         fetchPlanDetail();
@@ -674,7 +468,7 @@ function PlanDetailContent() {
 
     const handleSchedulesChange = useCallback((dayId: number, newSchedules: DayScheduleResponse[]) => {
         const previous = mapSchedulesMapRef.current[dayId];
-        const auditedScheduleCount = planAuditResultRef.current?.days.find(day => day.dayId === dayId)?.scheduleCount;
+        const auditedScheduleCount = getAuditedScheduleCount(dayId);
         const hydratedAfterAudit = previous?.length === 0 && auditedScheduleCount === newSchedules.length;
         if (previous && !hydratedAfterAudit && scheduleAuditFingerprint(previous) !== scheduleAuditFingerprint(newSchedules)) {
             markPlanAuditStale();
@@ -682,43 +476,7 @@ function PlanDetailContent() {
         const next = { ...mapSchedulesMapRef.current, [dayId]: newSchedules };
         mapSchedulesMapRef.current = next;
         setMapSchedulesMap(next);
-    }, [markPlanAuditStale]);
-
-    const ensureAllPlanSchedulesLoaded = useCallback(async () => {
-        if (!plan) return;
-        if (searchLoadPromiseRef.current) return searchLoadPromiseRef.current;
-        const missingDayIds = plan.days
-            .map(day => day.id)
-            .filter(dayId => mapSchedulesMapRef.current[dayId] === undefined);
-        if (missingDayIds.length === 0) return;
-
-        setPlanSearchLoading(true);
-        setPlanSearchError('');
-        const loadPromise = Promise.allSettled(
-            missingDayIds.map(async dayId => ({ dayId, schedules: await getSchedulesByDay(dayId) })),
-        ).then(results => {
-            const next = { ...mapSchedulesMapRef.current };
-            let failed = false;
-            results.forEach(result => {
-                if (result.status === 'fulfilled') next[result.value.dayId] = result.value.schedules;
-                else failed = true;
-            });
-            mapSchedulesMapRef.current = next;
-            setMapSchedulesMap(next);
-            if (failed) setPlanSearchError('일부 일정을 불러오지 못했습니다. 다시 검색해 주세요.');
-        }).finally(() => {
-            searchLoadPromiseRef.current = null;
-            setPlanSearchLoading(false);
-        });
-        searchLoadPromiseRef.current = loadPromise;
-        return loadPromise;
-    }, [plan]);
-
-    useEffect(() => {
-        if (planSearchQuery.trim().length < 2) return;
-        const timer = window.setTimeout(() => { void ensureAllPlanSchedulesLoaded(); }, 250);
-        return () => window.clearTimeout(timer);
-    }, [ensureAllPlanSchedulesLoaded, planSearchQuery]);
+    }, [getAuditedScheduleCount, markPlanAuditStale]);
 
     const handleCreateNew = async (dayOrder: number, scheduleMode: ScheduleMode) => {
         try {
@@ -913,85 +671,9 @@ function PlanDetailContent() {
         });
     }, [plan]);
 
-    const issueDayOrders = useMemo(
-        () => new Set((planAuditResult?.days || []).filter(day => day.issueCount > 0).map(day => day.dayOrder)),
-        [planAuditResult],
-    );
-    const displayedFullDays = useMemo(
-        () => showIssueDaysOnly ? fullDays.filter(day => issueDayOrders.has(day.dayOrder)) : fullDays,
-        [fullDays, issueDayOrders, showIssueDaysOnly],
-    );
-    const planSearchResults = useMemo<PlanSearchResult[]>(() => {
-        const query = planSearchQuery.trim().toLocaleLowerCase();
-        if (!plan || query.length < 2) return [];
-
-        const results: PlanSearchResult[] = [];
-        [...plan.days].sort((left, right) => left.dayOrder - right.dayOrder).forEach(day => {
-            const dayText = `${day.dayName || ''} ${day.memo || ''}`.toLocaleLowerCase();
-            if (dayText.includes(query)) {
-                results.push({
-                    key: `day-${day.id}`,
-                    dayId: day.id,
-                    dayOrder: day.dayOrder,
-                    dayName: day.dayName,
-                    title: day.dayName,
-                    detail: day.memo || '일차 전체 열기',
-                });
-            }
-
-            (mapSchedulesMap[day.id] || []).forEach(schedule => {
-                const searchable = [schedule.spotName, schedule.memo, schedule.movingMemo]
-                    .filter((value): value is string => Boolean(value))
-                    .join(' ')
-                    .toLocaleLowerCase();
-                if (!searchable.includes(query)) return;
-                results.push({
-                    key: `schedule-${schedule.id}`,
-                    dayId: day.id,
-                    dayOrder: day.dayOrder,
-                    dayName: day.dayName,
-                    scheduleId: schedule.id,
-                    title: schedule.spotName || '장소명 없음',
-                    detail: [schedule.memo, schedule.movingMemo].filter(Boolean).join(' · ') || '세부일정 열기',
-                });
-            });
-        });
-        return results.slice(0, 40);
-    }, [mapSchedulesMap, plan, planSearchQuery]);
-
-    const jumpToDay = (item: (typeof fullDays)[number]) => {
-        setMobileViewMode('LIST');
-        if (showIssueDaysOnly && !issueDayOrders.has(item.dayOrder)) setShowIssueDaysOnly(false);
-        if (item.data) {
-            setDayOpenRequest(previous => ({ dayId: item.data!.id, key: (previous?.key ?? 0) + 1 }));
-        }
-        window.setTimeout(() => {
-            document.querySelector(`[data-plan-day-order="${item.dayOrder}"]`)?.scrollIntoView({
-                behavior: 'smooth',
-                block: 'start',
-            });
-        }, 100);
-    };
-
-    const setAllDaysExpanded = (expanded: boolean) => {
-        setExpandedDayIds(expanded ? new Set(plan?.days.map(day => day.id) || []) : new Set());
-        setAllDaysOpenRequest(previous => ({ key: (previous?.key ?? 0) + 1, expanded }));
-    };
-
-    const resetWorkspaceView = () => {
-        setMapViewMode('ALL');
-        setShowInjury(false);
-        setVisibleDays(new Set());
-        setExpandedDayIds(new Set());
-        setShowIssueDaysOnly(false);
-        setAllDaysOpenRequest(previous => ({ key: (previous?.key ?? 0) + 1, expanded: false }));
-        showToast({ message: '화면 표시 설정을 초기화했습니다.', type: 'info' });
-    };
-
     const openPlanDay = (dayId: number, scheduleId?: number, openEditor = true) => {
         setPlanAuditOpen(false);
         setMobileViewMode('LIST');
-        setShowIssueDaysOnly(false);
         setDayOpenRequest(previous => ({ dayId, key: (previous?.key ?? 0) + 1 }));
         if (scheduleId != null) {
             setSelectedScheduleId(scheduleId);
@@ -1008,11 +690,6 @@ function PlanDetailContent() {
                 : document.querySelector(`[data-schedule-id="${scheduleId}"]`);
             target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, delay));
-    };
-
-    const openPlanSearchResult = (result: PlanSearchResult) => {
-        setPlanSearchQuery('');
-        openPlanDay(result.dayId, result.scheduleId, false);
     };
 
     const openScheduleTransfer = (sourceDay: PlanDayResponse, schedule: DayScheduleResponse) => {
@@ -1180,95 +857,6 @@ function PlanDetailContent() {
         }
     };
 
-    const runPlanAudit = async (force = false) => {
-        if (planAuditResult && !force) {
-            setPlanAuditOpen(true);
-            return;
-        }
-        if (planAuditLoading) return;
-        setPlanAuditProgress(null);
-        setPlanAuditLoading(true);
-        try {
-            const result = await auditPlanRoutes(planId);
-            setPlanAuditResult(result);
-            hasPlanAuditResultRef.current = true;
-            planAuditResultRef.current = result;
-            setPlanAuditOpen(true);
-            setPlanAuditCheckedAt(Date.now());
-            setPlanAuditStale(false);
-            setPlanAuditProgress(null);
-        } catch (error) {
-            showToast({ message: error instanceof Error ? error.message : '여행 전체 일정을 점검하지 못했습니다.', type: 'error' });
-        } finally {
-            setPlanAuditLoading(false);
-        }
-    };
-
-    const calculatePlanRoutes = async () => {
-        if (!planAuditResult || planAuditLoading || planAuditStale) return;
-        if (!await confirm({
-            title: '여행 전체 경로 점검',
-            message: `캐시에 없는 최대 ${planAuditResult.totalLegs}개 구간은 외부 경로 API를 호출합니다. 완료된 날짜부터 결과를 표시합니다.`,
-            confirmLabel: '경로까지 점검',
-        })) return;
-
-        const targets = planAuditResult.days
-            .filter(day => day.dayId != null && day.scheduleCount > 1)
-            .map(day => ({ dayId: day.dayId as number, legs: day.scheduleCount - 1 }));
-        const totalLegs = targets.reduce((sum, target) => sum + target.legs, 0);
-        const controller = new AbortController();
-        planAuditAbortRef.current = controller;
-        setPlanAuditLoading(true);
-        setPlanAuditProgress({ completedLegs: 0, totalLegs, completedDays: 0, totalDays: targets.length });
-        let cursor = 0;
-        try {
-            const worker = async () => {
-                while (!controller.signal.aborted) {
-                    const targetIndex = cursor++;
-                    if (targetIndex >= targets.length) return;
-                    const target = targets[targetIndex];
-                    let routeAudit = null;
-                    let routeAuditError: string | null = null;
-                    try {
-                        routeAudit = await auditDayRoute(target.dayId, controller.signal);
-                    } catch (error) {
-                        if (error instanceof DOMException && error.name === 'AbortError') return;
-                        routeAuditError = error instanceof Error ? error.message : '이 날짜의 경로를 점검하지 못했습니다.';
-                    }
-                    setPlanAuditResult(previous => {
-                        if (!previous) return previous;
-                        const days = previous.days.map(day => {
-                            if (day.dayId !== target.dayId) return day;
-                            const routeIssueCount = routeAudit ? countAdditionalRouteIssues(routeAudit) : 1;
-                            return {
-                                ...day,
-                                routeAudit,
-                                routeAuditError,
-                                issueCount: day.scheduleIssues.length + routeIssueCount,
-                            };
-                        });
-                        return { ...previous, days, issueCount: days.reduce((sum, day) => sum + day.issueCount, 0) };
-                    });
-                    setPlanAuditProgress(previous => previous && ({
-                        ...previous,
-                        completedLegs: previous.completedLegs + target.legs,
-                        completedDays: previous.completedDays + 1,
-                    }));
-                }
-            };
-            await Promise.all(Array.from({ length: Math.min(3, targets.length) }, () => worker()));
-            if (!controller.signal.aborted) {
-                setPlanAuditResult(previous => previous && ({ ...previous, routesCalculated: true }));
-                setPlanAuditCheckedAt(Date.now());
-            } else {
-                showToast({ message: '경로 점검을 취소했습니다. 완료된 결과는 유지됩니다.', type: 'info' });
-            }
-        } finally {
-            planAuditAbortRef.current = null;
-            setPlanAuditLoading(false);
-        }
-    };
-
     if (loading || !plan) return <div className="text-center py-20">로딩 중...</div>;
 
     return (
@@ -1313,64 +901,28 @@ function PlanDetailContent() {
 
             <div className="flex flex-col h-full w-full relative overflow-hidden bg-white">
                 <div className="flex w-full h-full relative">
-                    <div className={`absolute inset-0 z-20 bg-gray-50 transition-transform duration-300 md:relative md:w-1/2 md:translate-x-0 md:z-auto ${mobileViewMode === 'MAP' ? 'translate-x-0' : '-translate-x-full'}`}>
-                        <div className="absolute top-4 right-4 z-50 flex gap-2">
-                            <button onClick={toggleMapViewMode} className={`px-4 py-2 rounded-full text-xs font-bold shadow-md transition border bg-white text-blue-600 border-blue-200 hover:bg-blue-50`}>{getMapViewModeLabel()}</button>
-                        </div>
-                        {pickingTarget && (
-                            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-green-600 text-white px-5 py-2.5 rounded-full shadow-lg border-2 border-white cursor-pointer hover:bg-green-700 transition" onClick={() => { setPickingTarget(null); setTempSelectedSpot(null); }}>
-                                <span className="font-bold text-sm">📍 지도에서 위치를 클릭하세요!</span><span className="bg-white/20 px-2 py-0.5 rounded text-xs">취소 X</span>
-                            </div>
-                        )}
-                        <Map defaultCenter={{ lat: 34.9858, lng: 135.7588 }} defaultZoom={13} mapId="DEMO_MAP_ID" disableDefaultUI={true} className="w-full h-full" onClick={handleMapClick} gestureHandling="auto">
-                            <MapDirections
-                                daySchedulesMap={mapSchedulesMap}
-                                dayOrderMap={dayOrderMap}
-                                mapViewMode={mapViewMode}
-                                visibleDays={visibleDays}
-                                auditedDayRoute={dayRouteAudit && !dayRouteAuditStale ? { dayId: dayRouteAudit.dayId, result: dayRouteAudit.result } : null}
-                            />
-                            {mapViewMode !== 'NONE' && Object.entries(mapSchedulesMap).flatMap(([dayIdStr, schedules]) => {
-                                const dayId = Number(dayIdStr);
-                                if (!visibleDays.has(dayId)) return [];
-                                const color = getDayColor(dayOrderMap[dayId] || 1);
-                                return (schedules || []).map((schedule, index) => {
-                                    if (!schedule) return null;
-                                    const lat = Number(schedule.lat);
-                                    const lng = Number(schedule.lng);
-                                    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return null;
-                                    return <AdvancedMarker key={schedule.id} position={{ lat, lng }} onClick={() => setSelectedScheduleId(schedule.id)} zIndex={selectedScheduleId === schedule.id ? 100 : 10}><NumberedMarker number={index + 1} color={color} /></AdvancedMarker>;
-                                });
-                            })}
-                            {tempSelectedSpot && (
-                                <><AdvancedMarker position={{ lat: tempSelectedSpot.lat, lng: tempSelectedSpot.lng }}><Pin background={'#22c55e'} borderColor={'#15803d'} glyphColor={'white'} /></AdvancedMarker>
-                                    <InfoWindow position={{ lat: tempSelectedSpot.lat, lng: tempSelectedSpot.lng }} onCloseClick={() => setTempSelectedSpot(null)} headerContent={<div className="font-bold text-sm">{tempSelectedSpot.spotName}</div>}>
-                                        <div className="p-1 min-w-[200px]"><p className="text-xs text-gray-500 mb-3">{tempSelectedSpot.address}</p>
-                                            <div className="flex gap-2"><button onClick={handleConfirmScheduleOnly} className="flex-1 bg-white border border-gray-300 text-gray-700 text-xs py-2 rounded-lg hover:bg-gray-50 font-bold">일정에만 추가</button><button onClick={handleConfirmRegister} className="flex-1 bg-green-600 text-white text-xs py-2 rounded-lg hover:bg-green-700 font-bold">내 장소 등록 & 추가</button></div>
-                                        </div>
-                                    </InfoWindow></>
-                            )}
-                        </Map>
-
-                        {dayRouteAudit && !dayRouteAuditStale && (
-                            <div className="absolute right-4 top-16 z-40 rounded-xl border border-gray-200 bg-white/95 px-3 py-2 text-[10px] font-bold text-gray-600 shadow-lg backdrop-blur">
-                                <div className="mb-1 font-black text-gray-800">{dayRouteAudit.dayName} 점검 경로</div>
-                                <div className="flex items-center gap-1.5"><span className="h-1 w-5 rounded bg-blue-600" /> 실제 경로</div>
-                                <div className="mt-1 flex items-center gap-1.5"><span className="h-1 w-5 border-t-2 border-dashed border-amber-500" /> 확인 필요</div>
-                                <div className="mt-1 flex items-center gap-1.5"><span className="h-1 w-5 border-t-2 border-dashed border-gray-500" /> 실제 선형 없음</div>
-                            </div>
-                        )}
-
-                        <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-50 w-full px-6 pointer-events-none">
-                            <button
-                                onClick={() => setMobileViewMode('LIST')}
-                                className="pointer-events-auto mx-auto bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform"
-                            >
-                                🔙 목록 보기
-                            </button>
-                        </div>
-                    </div>
-
+                    <PlanMapPanel
+                        mobileViewMode={mobileViewMode}
+                        mapViewMode={mapViewMode}
+                        mapViewModeLabel={getMapViewModeLabel()}
+                        onToggleMapViewMode={toggleMapViewMode}
+                        onMapClick={handleMapClick}
+                        simpleDayIds={simpleDayIds}
+                        mapSchedulesMap={mapSchedulesMap}
+                        dayOrderMap={dayOrderMap}
+                        visibleDays={visibleDays}
+                        dayRouteAudit={dayRouteAudit}
+                        dayRouteAuditStale={dayRouteAuditStale}
+                        pickingTarget={pickingTarget}
+                        onCancelPicking={() => { setPickingTarget(null); setTempSelectedSpot(null); }}
+                        selectedScheduleId={selectedScheduleId}
+                        onSelectSchedule={setSelectedScheduleId}
+                        tempSelectedSpot={tempSelectedSpot}
+                        onClearTempSelectedSpot={() => setTempSelectedSpot(null)}
+                        onConfirmScheduleOnly={handleConfirmScheduleOnly}
+                        onConfirmRegister={handleConfirmRegister}
+                        onShowList={() => setMobileViewMode('LIST')}
+                    />
                     <div className={`flex flex-col w-full h-full bg-white md:w-1/2 relative z-10 transition-transform duration-300 ${mobileViewMode === 'MAP' ? 'translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
                         {/* 헤더 영역 (모바일 접기/펼치기 적용) */}
                         <div className={`relative bg-white z-30 flex-shrink-0 border-b border-gray-100 transition-all duration-300 ease-in-out ${!isHeaderExpanded ? 'max-h-[190px] overflow-hidden' : ''} md:max-h-none md:overflow-visible`}>
@@ -1387,7 +939,7 @@ function PlanDetailContent() {
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-4 pb-24 bg-white scrollbar-hide">
-                            <div className="mb-4 px-1 md:flex md:items-center md:justify-between">
+                            <div className="relative mb-4 px-1 md:flex md:items-center md:justify-between">
                                 <div className="mb-2 flex items-center gap-2 md:mb-0">
                                     <h2 className="text-xl font-bold text-gray-800">상세 일정</h2>
                                     <span className={`rounded-full px-2 py-1 text-[10px] font-black transition ${isAnyDirty ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-600'}`}>
@@ -1401,28 +953,13 @@ function PlanDetailContent() {
                                     >
                                         ⚽ {showInjury ? '인저리 ON' : 'OFF'}
                                     </button>
-                                    <details ref={exportMenuRef} className="relative shrink-0">
-                                        <summary className="cursor-pointer list-none rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 shadow-sm transition hover:bg-blue-100">
-                                            📤 내보내기 ▾
-                                        </summary>
-                                        <div className="absolute right-0 top-full z-[120] mt-2 w-48 overflow-hidden rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl">
-                                            <button
-                                                id="save-btn"
-                                                type="button"
-                                                onClick={() => { exportMenuRef.current?.removeAttribute('open'); void handlePlanExportClick(); }}
-                                                className="block w-full rounded-lg px-3 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-gray-50"
-                                            >
-                                                📸 전체 이미지 저장
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => { exportMenuRef.current?.removeAttribute('open'); void handlePlanDataExport(); }}
-                                                className="block w-full rounded-lg px-3 py-2.5 text-left text-xs font-bold text-blue-700 hover:bg-blue-50"
-                                            >
-                                                💾 계획 파일 내보내기 (JSON)
-                                            </button>
-                                        </div>
-                                    </details>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsExportMenuOpen(true)}
+                                        className="shrink-0 whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 shadow-sm transition hover:bg-blue-100"
+                                    >
+                                        📤 내보내기
+                                    </button>
                                     <button
                                         type="button"
                                         disabled={spotLinksLoading}
@@ -1450,100 +987,10 @@ function PlanDetailContent() {
                                 </div>
                             </div>
 
-                            <div className="sticky top-0 z-20 mb-4 rounded-2xl border border-blue-100 bg-white/95 p-3 shadow-sm backdrop-blur">
-                                <div className="relative mb-2">
-                                    <div className="flex items-center rounded-xl border border-gray-200 bg-gray-50 px-3 transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100">
-                                        <span className="mr-2 text-sm text-gray-400">⌕</span>
-                                        <input
-                                            type="search"
-                                            value={planSearchQuery}
-                                            onChange={event => setPlanSearchQuery(event.target.value)}
-                                            onKeyDown={event => {
-                                                if (event.key === 'Escape') setPlanSearchQuery('');
-                                                if (event.key === 'Enter' && planSearchResults[0]) openPlanSearchResult(planSearchResults[0]);
-                                            }}
-                                            placeholder="이 여행에서 장소·메모 검색"
-                                            aria-label="여행 전체 일정 검색"
-                                            className="min-w-0 flex-1 bg-transparent py-2 text-xs font-medium text-gray-700 outline-none placeholder:text-gray-400"
-                                        />
-                                        {planSearchLoading && <span className="shrink-0 text-[10px] font-bold text-blue-500">불러오는 중…</span>}
-                                        {planSearchQuery && !planSearchLoading && (
-                                            <button type="button" onClick={() => setPlanSearchQuery('')} className="shrink-0 rounded p-1 text-xs font-bold text-gray-400 hover:bg-gray-200" aria-label="검색어 지우기">✕</button>
-                                        )}
-                                    </div>
-                                    {planSearchQuery.trim() && (
-                                        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl">
-                                            {planSearchQuery.trim().length < 2 ? (
-                                                <p className="px-3 py-4 text-center text-xs font-medium text-gray-400">두 글자 이상 입력해 주세요.</p>
-                                            ) : planSearchError ? (
-                                                <div className="px-3 py-3 text-center">
-                                                    <p className="text-xs font-bold text-red-500">{planSearchError}</p>
-                                                    <button type="button" onClick={() => void ensureAllPlanSchedulesLoaded()} className="mt-2 rounded-lg bg-red-50 px-3 py-1.5 text-[10px] font-bold text-red-600 hover:bg-red-100">다시 불러오기</button>
-                                                </div>
-                                            ) : !planSearchLoading && planSearchResults.length === 0 ? (
-                                                <p className="px-3 py-4 text-center text-xs font-medium text-gray-400">일치하는 일정이 없습니다.</p>
-                                            ) : (
-                                                planSearchResults.map(result => (
-                                                    <button
-                                                        key={result.key}
-                                                        type="button"
-                                                        onClick={() => openPlanSearchResult(result)}
-                                                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-blue-50"
-                                                    >
-                                                        <span className="shrink-0 rounded-md bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-600">DAY {result.dayOrder}</span>
-                                                        <span className="min-w-0 flex-1">
-                                                            <span className="block truncate text-xs font-black text-gray-800">{result.title}</span>
-                                                            <span className="block truncate text-[10px] text-gray-400">{result.dayName} · {result.detail}</span>
-                                                        </span>
-                                                        <span className="shrink-0 text-xs font-bold text-blue-500">열기 →</span>
-                                                    </button>
-                                                ))
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                                    {fullDays.map(item => (
-                                        <button
-                                            key={`jump-day-${item.dayOrder}`}
-                                            type="button"
-                                            onClick={() => jumpToDay(item)}
-                                            className={`shrink-0 rounded-lg border px-3 py-1.5 text-[11px] font-black transition ${issueDayOrders.has(item.dayOrder) ? 'border-amber-200 bg-amber-50 text-amber-700' : item.data ? 'border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'border-gray-200 bg-gray-50 text-gray-400'}`}
-                                        >
-                                            DAY {item.dayOrder}{issueDayOrders.has(item.dayOrder) ? ' · !' : ''}
-                                        </button>
-                                    ))}
-                                </div>
-                                <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2">
-                                    <button type="button" onClick={() => setAllDaysExpanded(true)} className="rounded-lg px-2.5 py-1 text-[10px] font-bold text-gray-600 hover:bg-gray-100">전체 펼치기</button>
-                                    <button type="button" onClick={() => setAllDaysExpanded(false)} className="rounded-lg px-2.5 py-1 text-[10px] font-bold text-gray-600 hover:bg-gray-100">전체 접기</button>
-                                    <button
-                                        type="button"
-                                        disabled={!planAuditResult}
-                                        onClick={() => setShowIssueDaysOnly(previous => !previous)}
-                                        className={`ml-auto rounded-lg border px-2.5 py-1 text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${showIssueDaysOnly ? 'border-amber-300 bg-amber-100 text-amber-800' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}
-                                        title={planAuditResult ? '점검에서 문제가 발견된 날짜만 표시' : '전체 점검 후 사용할 수 있습니다.'}
-                                    >
-                                        {showIssueDaysOnly ? '전체 날짜 보기' : `문제 날짜만${planAuditResult ? ` · ${issueDayOrders.size}` : ''}`}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={resetWorkspaceView}
-                                        className="rounded-lg px-2.5 py-1 text-[10px] font-bold text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                                        title="펼친 일차와 지도 표시 설정을 초기화"
-                                    >
-                                        화면 설정 초기화
-                                    </button>
-                                </div>
-                            </div>
-
                             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                                <SortableContext items={displayedFullDays.map(d => d.id)} strategy={verticalListSortingStrategy}>
+                                <SortableContext items={fullDays.map(d => d.id)} strategy={verticalListSortingStrategy}>
                                     <div className="space-y-4">
-                                        {displayedFullDays.length === 0 && (
-                                            <div className="rounded-2xl border-2 border-dashed border-emerald-200 bg-emerald-50/50 p-8 text-center text-sm font-bold text-emerald-700">문제가 발견된 날짜가 없습니다.</div>
-                                        )}
-                                        {displayedFullDays.map(item => (
+                                        {fullDays.map(item => (
                                             item.data ? (
                                                 <PlanDayItem
                                                     key={item.id} id={item.id} dayOrder={item.dayOrder} data={item.data}
@@ -1571,14 +1018,13 @@ function PlanDetailContent() {
                                                     onAuditDay={(day) => void runDayRouteAudit(day)}
                                                     isRouteAuditLoading={dayRouteAuditLoadingId === item.data.id}
                                                     openRequestKey={dayOpenRequest?.dayId === item.data.id ? dayOpenRequest.key : undefined}
-                                                    allOpenRequest={allDaysOpenRequest || undefined}
                                                     expanded={expandedDayIds.has(item.data.id)}
                                                     selectedScheduleId={selectedScheduleId}
                                                     focusRequest={scheduleFocusRequest?.dayId === item.data.id ? { scheduleId: scheduleFocusRequest.scheduleId, key: scheduleFocusRequest.key, openEditor: scheduleFocusRequest.openEditor } : undefined}
                                                     onTransferSchedule={openScheduleTransfer}
                                                 />
                                             ) : (
-                                                <EmptySlotModeSelector key={item.id} dayOrder={item.dayOrder} onCreateNew={(mode) => handleCreateNew(item.dayOrder, mode)} onImportSelect={(src) => handleImportSelect(item.dayOrder, src)} />
+                                                <EmptyPlanDaySlot key={item.id} dayOrder={item.dayOrder} onCreateNew={(mode) => handleCreateNew(item.dayOrder, mode)} onImportSelect={(src) => handleImportSelect(item.dayOrder, src)} />
                                             )
                                         ))}
                                     </div>
@@ -1593,6 +1039,39 @@ function PlanDetailContent() {
                     </div>
                 </div>
             </div>
+
+            {isExportMenuOpen && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}>
+                    <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={event => event.stopPropagation()}>
+                        <div className="mb-5 flex items-center justify-between">
+                            <div>
+                                <div className="text-xs font-black text-blue-500">PLAN EXPORT</div>
+                                <h3 className="mt-1 text-xl font-black text-gray-900">계획 내보내기</h3>
+                            </div>
+                            <button type="button" onClick={() => setIsExportMenuOpen(false)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100" aria-label="내보내기 창 닫기">✕</button>
+                        </div>
+                        <div className="space-y-2">
+                            <button
+                                id="save-btn"
+                                type="button"
+                                onClick={() => { setIsExportMenuOpen(false); void handlePlanExportClick(); }}
+                                className="block w-full rounded-xl border border-gray-200 px-4 py-3.5 text-left text-sm font-bold text-gray-700 transition hover:border-blue-200 hover:bg-blue-50"
+                            >
+                                📸 전체 이미지 저장
+                                <span className="mt-1 block text-[10px] font-medium text-gray-400">지도와 일차별 일정을 한 장의 이미지로 저장</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setIsExportMenuOpen(false); void handlePlanDataExport(); }}
+                                className="block w-full rounded-xl border border-gray-200 px-4 py-3.5 text-left text-sm font-bold text-blue-700 transition hover:border-blue-200 hover:bg-blue-50"
+                            >
+                                💾 계획 파일 내보내기 (JSON)
+                                <span className="mt-1 block text-[10px] font-medium text-gray-400">다른 YUME 계정에서 다시 가져올 수 있는 원본 데이터</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {copySourceDay && (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -1705,7 +1184,7 @@ function PlanDetailContent() {
                     stale={planAuditStale}
                     progress={planAuditProgress}
                     onCalculateRoutes={() => void calculatePlanRoutes()}
-                    onCancelCalculation={() => planAuditAbortRef.current?.abort()}
+                    onCancelCalculation={cancelPlanAuditCalculation}
                     onRefresh={() => void runPlanAudit(true)}
                     onOpenDay={(dayId) => openPlanDay(dayId)}
                     onOpenIssue={(dayId, scheduleId) => openPlanDay(dayId, scheduleId)}

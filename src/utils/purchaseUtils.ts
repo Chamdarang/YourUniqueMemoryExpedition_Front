@@ -4,7 +4,7 @@ export const PURCHASE_KIND_KEYS: PurchaseKind[] = [
     'SOUVENIR', 'GOSHUIN', 'GOSHUINCHO', 'GACHA', 'FOOD_ITEM', 'STAMP', 'TICKET', 'OTHER'
 ];
 export const PURCHASE_STATUS_KEYS: PurchaseStatus[] = [
-    'WANT', 'AVAILABLE', 'ACQUIRED', 'SKIPPED', 'UNAVAILABLE'
+    'UNKNOWN', 'WANT', 'AVAILABLE', 'ACQUIRED', 'SKIPPED', 'UNAVAILABLE'
 ];
 //todo: 백엔드에서 enum 목록 가져오기?
 
@@ -29,6 +29,7 @@ export const getPurchaseKindInfo = (kind: PurchaseKind) => {
  */
 export const getPurchaseStatusInfo = (status: PurchaseStatus) => {
     switch (status) {
+        case 'UNKNOWN': return { label: '❓ 모름', color: 'bg-gray-50 text-gray-400 border-gray-100' };
         case 'WANT': return { label: '🥺 사고 싶음', color: 'bg-yellow-50 text-yellow-700 border-yellow-200' };
         case 'AVAILABLE': return { label: '🏷️ 판매 중', color: 'bg-blue-50 text-blue-700 border-blue-200' };
         case 'ACQUIRED': return { label: '✅ 구매 완료', color: 'bg-green-50 text-green-700 border-green-200' };
