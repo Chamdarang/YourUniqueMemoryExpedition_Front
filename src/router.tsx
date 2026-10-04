@@ -14,6 +14,7 @@ const DayDetailPage = lazy(() => import("./pages/DayDetailPage"));
 const SpotListPage = lazy(() => import("./pages/SpotListPage"));
 const SpotDetailPage = lazy(() => import("./pages/SpotDetailPage"));
 const SpotDataUpdater = lazy(() => import("./pages/SpotDataUpdater"));
+const SharedPlanPage = lazy(() => import("./pages/SharedPlanPage"));
 
 // Components
 import Layout from "./components/common/Layout";
@@ -28,6 +29,10 @@ export const router = createBrowserRouter([
                 <LoginPage />
             </PublicRoute>
         ),
+    },
+    {
+        path: "/shared",
+        element: <SharedPlanPage />,
     },
     {
         // 2. 보호된 라우트 (Layout 적용 + PrivateRoute)

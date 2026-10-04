@@ -15,6 +15,7 @@ import { makeStaticGoogleMap } from "../api/mapApi";
 
 // Components
 import PlanHeader from "../components/plan/PlanHeader";
+import PlanShareModal from "../components/plan/PlanShareModal";
 import PlanDayItem from "../components/plan/PlanDayItem";
 import SpotLinkModal from "../components/plan/SpotLinkModal";
 import PlanRouteAuditModal from "../components/plan/PlanRouteAuditModal";
@@ -132,6 +133,7 @@ function PlanDetailContent() {
     } = usePlanRouteAudit(planId, { confirm, showToast });
     const [plan, setPlan] = useState<PlanDetailResponse | null>(null);
     const [offlineSaveLoading, setOfflineSaveLoading] = useState(false);
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const simpleDayIds = useMemo(() => new Set(
         plan?.days.filter(day => day.scheduleMode === 'SIMPLE').map(day => day.id) ?? []
     ), [plan?.days]);
@@ -925,6 +927,14 @@ function PlanDetailContent() {
                 schedules={exportMode === 'PLAN' ? exportSections.flatMap(s => s.schedules) : dayExportData?.schedules || []}
             />
 
+            {isShareModalOpen && (
+                <PlanShareModal
+                    planId={plan.id}
+                    planName={plan.planName}
+                    onClose={() => setIsShareModalOpen(false)}
+                />
+            )}
+
             <div className="flex flex-col h-full w-full relative overflow-hidden bg-white">
                 <div className="flex w-full h-full relative">
                     <PlanMapPanel
@@ -973,6 +983,13 @@ function PlanDetailContent() {
                                     </span>
                                 </div>
                                 <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide [&>button]:shrink-0 [&>button]:whitespace-nowrap">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsShareModalOpen(true)}
+                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100"
+                                    >
+                                        🔗 일정 공유
+                                    </button>
                                     <button
                                         type="button"
                                         disabled={offlineSaveLoading}
