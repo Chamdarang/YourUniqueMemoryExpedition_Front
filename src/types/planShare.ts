@@ -2,6 +2,7 @@ import type { ScheduleMode } from './planDay';
 import type { SpotType, Transportation } from './enums';
 
 export interface PlanShareStatus {
+  state: 'ACTIVE' | 'EXPIRED' | 'REVOKED' | 'NOT_CREATED';
   active: boolean;
   updatedAt: string | null;
   expiresAt: string | null;
@@ -31,7 +32,6 @@ export interface PublicPlanShareDay {
   dayOrder: number;
   memo: string | null;
   scheduleMode: ScheduleMode;
-  schedules: PublicPlanShareSchedule[];
 }
 
 export interface PublicPlanShareSchedule {

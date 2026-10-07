@@ -328,12 +328,15 @@ function DayDetailContent() {
             return;
         }
         const original = { dayName: dayDetail.dayName, memo: dayDetail.memo };
-        const snapshot = { dayName: titleForm, memo: memoForm, expectedVersion: dayVersionRef.current };
+        const snapshot = { dayName: titleForm, memo: memoForm };
         pendingHeaderSaves.current += 1;
         setHeaderSaveState('SAVING');
         headerSaveQueue.current = headerSaveQueue.current.then(async () => {
             try {
-                const updatedDay = await updatePlanDay(dayId, snapshot);
+                const updatedDay = await updatePlanDay(dayId, {
+                    ...snapshot,
+                    expectedVersion: dayVersionRef.current,
+                });
                 dayVersionRef.current = updatedDay.version;
                 setDayDetail(previous => previous?.id === dayId ? { ...previous, dayName: snapshot.dayName, memo: snapshot.memo, version: updatedDay.version } : previous);
                 setHeaderSaveState(pendingHeaderSaves.current > 1 ? 'SAVING' : 'IDLE');
@@ -769,7 +772,7 @@ function DayDetailContent() {
                                 <SaveStatusIndicator isDirty={isAnyDirty} statusOverride={headerSaveState === 'ERROR' ? 'ERROR' : headerSaveState === 'SAVING' ? 'SAVING' : undefined} className="shrink-0" />
                                 <span className="text-xs text-slate-500">입력 후 다른 곳을 누르면 자동 저장됩니다.</span>
                                 {dayDetail.planId != null && <span role="status" className={`text-xs ${liveConnectionState === 'connected' ? 'text-emerald-700' : 'text-slate-500'}`}>
-                                    {liveConnectionState === 'connected' ? '● 실시간 동기화 중' : liveConnectionState === 'unavailable' ? '실시간 연결을 사용할 수 없습니다' : '실시간 연결 중…'}
+                                    {liveConnectionState === 'connected' ? '● 실시간 동기화 중' : liveConnectionState === 'unavailable' ? '실시간 연결을 사용할 수 없습니다' : liveConnectionState === 'paused' ? '탭이 숨겨져 있어 연결을 쉬는 중' : '실시간 연결 중…'}
                                 </span>}
                             </div>
                             {remoteUpdatePending && <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">

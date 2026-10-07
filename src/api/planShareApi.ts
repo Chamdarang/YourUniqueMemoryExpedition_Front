@@ -1,5 +1,5 @@
 import type { ApiResponse } from '../types/common';
-import type { PlanShareLink, PlanShareStatus, PublicPlanShare } from '../types/planShare';
+import type { PlanShareLink, PlanShareStatus, PublicPlanShare, PublicPlanShareSchedule } from '../types/planShare';
 import { fetchWithAuth, getApiUrl } from './utils';
 
 export async function getPlanShareStatus(planId: number): Promise<PlanShareStatus> {
@@ -45,6 +45,18 @@ export async function getPublicPlanShare(token: string): Promise<PublicPlanShare
     headers: { 'X-Plan-Share-Token': token },
   });
   const json: ApiResponse<PublicPlanShare> = await response.json();
+  if (!json.success) throw new Error(json.message);
+  return json.data;
+}
+
+export async function getPublicPlanDaySchedules(token: string, dayOrder: number): Promise<PublicPlanShareSchedule[]> {
+  const response = await fetch(getApiUrl(`/api/public/plans/share/day-schedules?dayOrder=${dayOrder}`), {
+    method: 'GET',
+    cache: 'no-store',
+    referrerPolicy: 'no-referrer',
+    headers: { 'X-Plan-Share-Token': token },
+  });
+  const json: ApiResponse<PublicPlanShareSchedule[]> = await response.json();
   if (!json.success) throw new Error(json.message);
   return json.data;
 }

@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 // API
-import { getPlans, deletePlan, importPlanData, updatePlan, createPlan, PlanEditConflictError, type GetPlansParams } from '../api/planApi';
+import { getPlans, getPlanDetail, deletePlan, importPlanData, updatePlan, createPlan, PlanEditConflictError, type GetPlansParams } from '../api/planApi';
 import { acceptPlanInvitation, declinePlanInvitation, getPlanInvitations, getSharedPlans } from '../api/planMemberApi';
 
 // Types & Utils
-import type { PlanCreateRequest, PlanInvitationResponse, PlanResponse, PlanTransferData, SharedPlanResponse } from '../types/plan';
+import type { PlanCreateRequest, PlanDetailResponse, PlanInvitationResponse, PlanResponse, PlanTransferData, SharedPlanResponse } from '../types/plan';
 import { enforceFourDigitDateYear, getDurationInfo, limitDateYear } from '../utils/timeUtils';
 
 // Components
@@ -73,7 +73,7 @@ export default function PlanListPage() {
   // 수정 팝업 상태
   const [editingPlan, setEditingPlan] = useState<PlanResponse | null>(null);
   const [editForm, setEditForm] = useState({ planName: '', planStartDate: '', planEndDate: '', planMemo: '' });
-  const [editConflict, setEditConflict] = useState<{ original: PlanResponse; mine: typeof editForm; latest: PlanResponse } | null>(null);
+  const [editConflict, setEditConflict] = useState<{ original: PlanResponse; mine: typeof editForm; latest: PlanDetailResponse } | null>(null);
 
   const editDialogRef = useDialogFocus(editingPlan !== null, () => setEditingPlan(null));
   const importReportRef = useDialogFocus(importCompletion !== null, () => setImportCompletion(null));
@@ -198,11 +198,24 @@ export default function PlanListPage() {
     if (!info.valid) return showToast({ message: info.msg, type: 'info' });
 
     try {
-      // PlanHeader와 동일 로직: planDays 포함하여 전송
+      const latestDetail = await getPlanDetail(editingPlan.id);
+      const daysToDetach = latestDetail.days.filter(day => day.dayOrder > info.days);
+      let detachDayIds: number[] = [];
+      if (daysToDetach.length > 0) {
+        const dayNames = daysToDetach.map(day => `${day.dayOrder}일차`).join(', ');
+        const confirmed = await confirm({
+          title: '여행 기간 단축',
+          message: `여행 기간을 ${info.days}일로 줄이면 [ ${dayNames} ] 날짜가 하루 코스 보관함으로 이동됩니다. 계속할까요?`,
+          confirmLabel: '보관함으로 이동',
+        });
+        if (!confirmed) return;
+        detachDayIds = daysToDetach.map(day => day.id);
+      }
       await updatePlan(editingPlan.id, {
         ...editForm,
         planDays: info.days,
         expectedVersion: editingPlan.version,
+        detachDayIds,
       });
 
       setEditingPlan(null);
@@ -210,7 +223,12 @@ export default function PlanListPage() {
       fetchPlans(undefined, page); // 목록 갱신
     } catch (err) {
       if (err instanceof PlanEditConflictError && err.latestPlan) {
-        setEditConflict({ original: editingPlan, mine: editForm, latest: err.latestPlan });
+        try {
+          const latest = await getPlanDetail(editingPlan.id);
+          setEditConflict({ original: editingPlan, mine: editForm, latest });
+        } catch {
+          showToast({ message: '충돌 내용을 불러오지 못했습니다. 최신 여행 정보를 다시 열어 주세요.', type: 'error' });
+        }
       } else showToast({ message: "여행 정보를 수정하지 못했습니다.", type: 'error' });
     }
   };
@@ -228,14 +246,32 @@ export default function PlanListPage() {
     const duration = getDurationInfo(merged.planStartDate, merged.planEndDate);
     if (!duration.valid) return showToast({ message: duration.msg, type: 'info' });
     try {
-      await updatePlan(editConflict.latest.id, { ...merged, planDays: duration.days, expectedVersion: editConflict.latest.version });
+      const daysToDetach = editConflict.latest.days.filter(day => day.dayOrder > duration.days);
+      let detachDayIds: number[] = [];
+      if (daysToDetach.length > 0) {
+        const dayNames = daysToDetach.map(day => `${day.dayOrder}일차`).join(', ');
+        const confirmed = await confirm({
+          title: '여행 기간 단축',
+          message: `여행 기간을 ${duration.days}일로 줄이면 [ ${dayNames} ] 날짜가 하루 코스 보관함으로 이동됩니다. 계속할까요?`,
+          confirmLabel: '보관함으로 이동',
+        });
+        if (!confirmed) return;
+        detachDayIds = daysToDetach.map(day => day.id);
+      }
+      await updatePlan(editConflict.latest.id, { ...merged, planDays: duration.days, expectedVersion: editConflict.latest.version, detachDayIds });
       setEditConflict(null);
       setEditingPlan(null);
       showToast({ message: '변경 내용을 병합해 저장했습니다.', type: 'success' });
       await fetchPlans(undefined, page);
     } catch (err) {
-      if (err instanceof PlanEditConflictError && err.latestPlan) setEditConflict({ original: editConflict.latest, mine: merged, latest: err.latestPlan });
-      else showToast({ message: '병합한 여행 정보를 저장하지 못했습니다. 최신 내용을 다시 불러와 주세요.', type: 'error' });
+      if (err instanceof PlanEditConflictError && err.latestPlan) {
+        try {
+          const latest = await getPlanDetail(editConflict.latest.id);
+          setEditConflict({ original: editConflict.latest, mine: merged, latest });
+        } catch {
+          showToast({ message: '충돌 내용을 불러오지 못했습니다. 최신 여행 정보를 다시 열어 주세요.', type: 'error' });
+        }
+      } else showToast({ message: '병합한 여행 정보를 저장하지 못했습니다. 최신 내용을 다시 불러와 주세요.', type: 'error' });
     }
   };
 

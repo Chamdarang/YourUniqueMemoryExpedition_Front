@@ -1100,7 +1100,7 @@ function PlanDetailContent() {
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <PlanCollaboratorsBar planId={plan.id} refreshVersion={collaboratorsRefreshVersion} />
                                     <span role="status" className={`text-xs ${liveConnectionState === 'connected' ? 'text-emerald-700' : 'text-slate-500'}`}>
-                                        {liveConnectionState === 'connected' ? '● 실시간 동기화 중' : liveConnectionState === 'unavailable' ? '실시간 연결을 사용할 수 없습니다' : '실시간 연결 중…'}
+                                        {liveConnectionState === 'connected' ? '● 실시간 동기화 중' : liveConnectionState === 'unavailable' ? '실시간 연결을 사용할 수 없습니다' : liveConnectionState === 'paused' ? '탭이 숨겨져 있어 연결을 쉬는 중' : '실시간 연결 중…'}
                                     </span>
                                 </div>
                             </div>

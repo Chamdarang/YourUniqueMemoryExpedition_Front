@@ -20,7 +20,7 @@ export default function PlanShareModal({ planId, planName, onClose }: Props) {
   const [busy, setBusy] = useState(true);
   const [statusReady, setStatusReady] = useState(false);
   const [error, setError] = useState('');
-  const [expiresInDays, setExpiresInDays] = useState('never');
+  const [expiresInDays, setExpiresInDays] = useState('7');
   const [accessMode, setAccessMode] = useState<'VIEW' | 'EDIT'>('VIEW');
   const [members, setMembers] = useState<PlanMemberResponse[]>([]);
 
@@ -62,7 +62,7 @@ export default function PlanShareModal({ planId, planName, onClose }: Props) {
     setBusy(true); setError('');
     try {
       const result = await createPlanShareLink(planId, expiresInDays === 'never' ? null : Number(expiresInDays), accessMode);
-      const next: PlanShareStatus = { active: true, updatedAt: result.createdAt, expiresAt: result.expiresAt, token: result.token, accessMode: result.accessMode };
+      const next: PlanShareStatus = { state: 'ACTIVE', active: true, updatedAt: result.createdAt, expiresAt: result.expiresAt, token: result.token, accessMode: result.accessMode };
       applyStatus(next);
       await refreshMembers();
       showToast({ message: '공유 링크를 만들었습니다.', type: 'success' });
@@ -80,7 +80,7 @@ export default function PlanShareModal({ planId, planName, onClose }: Props) {
     setBusy(true); setError('');
     try {
       await revokePlanShareLink(planId); clearCachedShareToken(planId);
-      setStatus({ active: false, updatedAt: status?.updatedAt ?? null, expiresAt: status?.expiresAt ?? null, token: null, accessMode: status?.accessMode ?? 'VIEW' });
+      setStatus({ state: 'REVOKED', active: false, updatedAt: status?.updatedAt ?? null, expiresAt: status?.expiresAt ?? null, token: null, accessMode: status?.accessMode ?? 'VIEW' });
       setShareUrl(''); await refreshMembers(); showToast({ message: '공유를 중지했습니다.', type: 'success' });
     } catch (reason) { setError(reason instanceof Error ? reason.message : '공유를 중지하지 못했습니다.'); }
     finally { setBusy(false); }
@@ -121,7 +121,10 @@ export default function PlanShareModal({ planId, planName, onClose }: Props) {
             </select>
             <button type="button" disabled={busy || !statusReady} onClick={() => void issueLink()} className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{busy ? '처리 중…' : status?.active ? '새 링크 만들기' : '링크 만들기'}</button>
           </div>
+          <p className="mt-2 text-xs text-slate-500">새 링크는 기본 7일 후 만료됩니다.</p>
           {status?.active && <p className="mt-3 text-xs text-slate-600">현재 링크 · {status.accessMode === 'EDIT' ? '편집 가능' : '보기 전용'} · {status.expiresAt ? `${formatDateTime(status.expiresAt)} 만료` : '만료 없음'}</p>}
+          {status?.state === 'EXPIRED' && <p role="status" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">{status.expiresAt ? `${formatDateTime(status.expiresAt)}에 공유 링크가 만료되었습니다.` : '공유 링크가 만료되었습니다.'} 새 링크를 만들면 다시 공유할 수 있습니다.</p>}
+          {status?.state === 'REVOKED' && <p role="status" className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-xs leading-5 text-slate-700">공유를 중지한 상태입니다. 새 링크를 만들면 다시 공유할 수 있습니다.</p>}
           {status?.active && !status.token && <p className="mt-2 text-xs leading-5 text-amber-700">현재 링크 주소를 복구할 수 없습니다. 새 링크를 만들면 기존 링크는 사용할 수 없게 됩니다.</p>}
           {shareUrl && <div className="mt-3 flex gap-2"><input aria-label="공유 링크" readOnly value={shareUrl} onFocus={event => event.currentTarget.select()} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700" /><button type="button" onClick={() => void copyLink()} className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">복사</button></div>}
           {status?.active && <button type="button" disabled={busy} onClick={() => void revokeLink()} className="mt-3 text-xs font-medium text-slate-500 hover:text-red-600 disabled:opacity-50">링크 공유 중지</button>}
