@@ -5,11 +5,14 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary, InfoWindow, Pin, type MapMouseEvent } from "@vis.gl/react-google-maps";
 
 // API & Hook
-import { getPlanDayDetail, updatePlanDay } from "../api/dayApi";
+import { getPlanDayDetail, PlanDayEditConflictError, updatePlanDay } from "../api/dayApi";
+import { getSchedulesByDay, ScheduleEditConflictError } from "../api/scheduleApi";
 import { createSpot } from "../api/spotApi";
 import { makeStaticGoogleMap } from "../api/mapApi";
 import { applyDayRouteEstimates, auditDayRoute } from "../api/routeApi";
 import { useSchedule } from "../hooks/useSchedule"; // ✅ useSchedule 훅 임포트
+import { usePlanLiveUpdates } from "../hooks/usePlanLiveUpdates";
+import EditConflictPanel, { type EditConflictField } from "../components/common/EditConflictPanel";
 
 // Components
 import DayScheduleList from "../components/day/DayScheduleList";
@@ -19,6 +22,7 @@ import LoadErrorState from "../components/common/LoadErrorState";
 
 // Types & Utils
 import type { PlanDayDetailResponse } from "../types/planDay.ts";
+import type { PlanDayResponse } from "../types/planDay.ts";
 import type { DayScheduleResponse, ScheduleCreateRequest, ScheduleUpdateRequest } from "../types/schedule";
 import type { SpotCreateRequest } from "../types/spot";
 import type { DayRouteAuditLeg, DayRouteAuditResponse } from "../types/route";
@@ -147,6 +151,8 @@ function DayDetailContent() {
     } = useSchedule();
 
     const [dayDetail, setDayDetail] = useState<PlanDayDetailResponse | null>(null);
+    const [dayEditConflict, setDayEditConflict] = useState<{ original: { dayName: string; memo: string | null }; mine: { dayName: string; memo: string }; latest: PlanDayResponse } | null>(null);
+    const dayVersionRef = useRef<number>(0);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [loadAttempt, setLoadAttempt] = useState(0);
@@ -184,11 +190,15 @@ function DayDetailContent() {
     const [titleForm, setTitleForm] = useState("");
     const [memoForm, setMemoForm] = useState("");
     const [headerSaveState, setHeaderSaveState] = useState<'IDLE' | 'SAVING' | 'ERROR'>('IDLE');
+    const [remoteUpdatePending, setRemoteUpdatePending] = useState(false);
+    const liveRefreshRequestId = useRef(0);
     const [dirtySchedules, setDirtySchedules] = useState<Record<number, boolean>>({});
     const headerSaveQueue = useRef<Promise<void>>(Promise.resolve());
     const pendingHeaderSaves = useRef(0);
     const headerDirty = dayDetail != null && (titleForm !== dayDetail.dayName || memoForm !== (dayDetail.memo || ''));
     const isAnyDirty = headerDirty || headerSaveState === 'SAVING' || Object.values(dirtySchedules).some(Boolean);
+    const isAnyDirtyRef = useRef(isAnyDirty);
+    isAnyDirtyRef.current = isAnyDirty;
     const handleScheduleDirty = useCallback((scheduleId: number, dirty: boolean) => {
         setDirtySchedules(previous => previous[scheduleId] === dirty ? previous : { ...previous, [scheduleId]: dirty });
     }, []);
@@ -239,6 +249,7 @@ function DayDetailContent() {
 
     // ✅ 데이터 로드 (일차 정보 + 스케줄 목록)
     useEffect(() => {
+        liveRefreshRequestId.current += 1;
         let active = true;
         if (!dayId) {
             setLoadError('올바른 하루 일정 주소가 아닙니다.');
@@ -265,28 +276,112 @@ function DayDetailContent() {
         return () => { active = false; };
     }, [dayId, fetchSchedules, loadAttempt]);
 
+    const refreshForLiveUpdate = useCallback(async () => {
+        if (!dayDetail?.planId) return;
+        if (isAnyDirty) {
+            setRemoteUpdatePending(true);
+            return;
+        }
+        const requestId = ++liveRefreshRequestId.current;
+        try {
+            const [latestDay, latestSchedules] = await Promise.all([
+                getPlanDayDetail(dayId),
+                getSchedulesByDay(dayId),
+            ]);
+            if (requestId !== liveRefreshRequestId.current) return;
+            if (isAnyDirtyRef.current) {
+                setRemoteUpdatePending(true);
+                return;
+            }
+            replaceSchedules(latestSchedules);
+            setDayDetail(latestDay);
+            setTitleForm(latestDay.dayName);
+            setMemoForm(latestDay.memo || '');
+            setRouteAuditResult(null);
+            setRouteAuditOpen(false);
+            setRouteAuditCheckedAt(null);
+            auditedRouteFingerprintRef.current = null;
+            setRemoteUpdatePending(false);
+        } catch {
+            if (requestId !== liveRefreshRequestId.current) return;
+            setRemoteUpdatePending(true);
+        }
+    }, [dayDetail?.planId, dayId, isAnyDirty, replaceSchedules]);
+
+    const liveConnectionState = usePlanLiveUpdates(dayDetail?.planId, refreshForLiveUpdate);
+
+    useEffect(() => { if (dayDetail) dayVersionRef.current = dayDetail.version; }, [dayDetail?.version]);
+
+    useEffect(() => {
+        if (isAnyDirty) liveRefreshRequestId.current += 1;
+    }, [isAnyDirty]);
+
+    useEffect(() => {
+        if (!isAnyDirty && remoteUpdatePending) void refreshForLiveUpdate();
+    }, [isAnyDirty, refreshForLiveUpdate, remoteUpdatePending]);
+
     // ✅ 개별 헤더 정보 저장 (이름/메모)
     const handleUpdateDayInfo = async () => {
-        if (!dayId || !headerDirty) return;
+        if (!dayId || !dayDetail || !headerDirty) return;
         if (!titleForm.trim()) {
             setHeaderSaveState('ERROR');
             return;
         }
-        const snapshot = { dayName: titleForm, memo: memoForm };
+        const original = { dayName: dayDetail.dayName, memo: dayDetail.memo };
+        const snapshot = { dayName: titleForm, memo: memoForm, expectedVersion: dayVersionRef.current };
         pendingHeaderSaves.current += 1;
         setHeaderSaveState('SAVING');
         headerSaveQueue.current = headerSaveQueue.current.then(async () => {
             try {
-                await updatePlanDay(dayId, snapshot);
-                setDayDetail(previous => previous?.id === dayId ? { ...previous, ...snapshot } : previous);
+                const updatedDay = await updatePlanDay(dayId, snapshot);
+                dayVersionRef.current = updatedDay.version;
+                setDayDetail(previous => previous?.id === dayId ? { ...previous, dayName: snapshot.dayName, memo: snapshot.memo, version: updatedDay.version } : previous);
                 setHeaderSaveState(pendingHeaderSaves.current > 1 ? 'SAVING' : 'IDLE');
-            } catch {
+            } catch (error) {
+                if (error instanceof PlanDayEditConflictError && error.latestDay) {
+                    setDayEditConflict({ original, mine: { dayName: snapshot.dayName, memo: snapshot.memo }, latest: error.latestDay });
+                }
                 setHeaderSaveState(pendingHeaderSaves.current > 1 ? 'SAVING' : 'ERROR');
             } finally {
                 pendingHeaderSaves.current -= 1;
             }
         });
         await headerSaveQueue.current;
+    };
+
+    const dayConflictFields: EditConflictField[] = dayEditConflict ? [
+        { key: 'dayName', label: '일차 이름', original: dayEditConflict.original.dayName, mine: dayEditConflict.mine.dayName, latest: dayEditConflict.latest.dayName },
+        { key: 'memo', label: '메모', original: dayEditConflict.original.memo || '', mine: dayEditConflict.mine.memo || '', latest: dayEditConflict.latest.memo || '' },
+    ] : [];
+
+    const applyDayConflictMerge = async (values: Record<string, string | null>) => {
+        if (!dayEditConflict) return;
+        try {
+            const updated = await updatePlanDay(dayEditConflict.latest.id, {
+                dayName: values.dayName ?? '', memo: values.memo ?? '', expectedVersion: dayEditConflict.latest.version,
+            });
+            dayVersionRef.current = updated.version;
+            setDayDetail(previous => previous?.id === updated.id ? { ...previous, dayName: updated.dayName, memo: updated.memo, version: updated.version } : previous);
+            setTitleForm(updated.dayName);
+            setMemoForm(updated.memo || '');
+            setDayEditConflict(null);
+            setHeaderSaveState('IDLE');
+        } catch (error) {
+            if (error instanceof PlanDayEditConflictError && error.latestDay) {
+                setDayEditConflict({ original: { dayName: dayEditConflict.latest.dayName, memo: dayEditConflict.latest.memo }, mine: { dayName: values.dayName ?? '', memo: values.memo ?? '' }, latest: error.latestDay });
+            }
+            setHeaderSaveState('ERROR');
+        }
+    };
+
+    const useLatestDayValues = () => {
+        if (!dayEditConflict) return;
+        dayVersionRef.current = dayEditConflict.latest.version;
+        setDayDetail(previous => previous?.id === dayEditConflict.latest.id ? { ...previous, dayName: dayEditConflict.latest.dayName, memo: dayEditConflict.latest.memo, version: dayEditConflict.latest.version } : previous);
+        setTitleForm(dayEditConflict.latest.dayName);
+        setMemoForm(dayEditConflict.latest.memo || '');
+        setDayEditConflict(null);
+        setHeaderSaveState('IDLE');
     };
 
     // ✅ Export 핸들러
@@ -380,8 +475,11 @@ function DayDetailContent() {
     const handleConfirmScheduleOnly = async () => {
         if (!tempSelectedSpot || !pickingTarget) return;
         const { scheduleId } = pickingTarget;
+        const scheduleVersion = schedules.find(schedule => schedule.id === scheduleId)?.version;
+        if (scheduleVersion == null) return showToast({ message: '최신 일정 정보를 확인하지 못했습니다. 다시 불러와 주세요.', type: 'error' });
 
         const updateReq: ScheduleUpdateRequest = {
+            expectedVersion: scheduleVersion,
             spotUserId: 0,
             spotName: tempSelectedSpot.spotName,
             lat: tempSelectedSpot.lat,
@@ -394,6 +492,32 @@ function DayDetailContent() {
             setTempSelectedSpot(null); setPickingTarget(null);
             if (window.innerWidth < 768) setMobileViewMode('LIST');
         } catch (error) {
+            if (error instanceof ScheduleEditConflictError) {
+                let latest = error.latestSchedule;
+                if (!latest) {
+                    try { latest = (await getSchedulesByDay(dayId)).find(schedule => schedule.id === scheduleId) ?? null; }
+                    catch { latest = null; }
+                }
+                if (latest) {
+                    const original = schedules.find(schedule => schedule.id === scheduleId);
+                    const applyMine = await confirm({
+                        title: '일정 위치 수정 충돌',
+                        message: `처음 장소: ${original?.spotName || '없음'} (${original?.lat ?? '위치 없음'}, ${original?.lng ?? '위치 없음'})\n내 선택: ${updateReq.spotName} (${updateReq.lat}, ${updateReq.lng})\n최신 저장값: ${latest.spotName || '없음'} (${latest.lat ?? '위치 없음'}, ${latest.lng ?? '위치 없음'})\n\n확인을 누르면 내 위치를 최신 일정에 적용하고, 취소하면 최신 저장값을 사용합니다.`,
+                        confirmLabel: '내 위치 적용',
+                    });
+                    if (applyMine) {
+                        try { await updateSchedule(scheduleId, { ...updateReq, expectedVersion: latest.version }); }
+                        catch (retryError) {
+                            showToast({ message: retryError instanceof Error ? retryError.message : '최신 일정에 내 위치를 적용하지 못했습니다.', type: 'error' });
+                            return;
+                        }
+                    }
+                    await refreshForLiveUpdate();
+                    setTempSelectedSpot(null); setPickingTarget(null);
+                    if (window.innerWidth < 768) setMobileViewMode('LIST');
+                    return;
+                }
+            }
             showToast({ message: error instanceof Error ? error.message : "일정에 장소를 추가하지 못했습니다.", type: 'error' });
         }
     };
@@ -402,9 +526,13 @@ function DayDetailContent() {
     const handleConfirmRegister = async () => {
         if (!tempSelectedSpot || !pickingTarget) return;
         const { scheduleId } = pickingTarget;
+        const scheduleVersion = schedules.find(schedule => schedule.id === scheduleId)?.version;
+        if (scheduleVersion == null) return showToast({ message: '최신 일정 정보를 확인하지 못했습니다. 다시 불러와 주세요.', type: 'error' });
+        let updateReq: ScheduleUpdateRequest | null = null;
         try {
             const savedSpot = await createSpot(tempSelectedSpot);
-            const updateReq: ScheduleUpdateRequest = {
+            updateReq = {
+                expectedVersion: scheduleVersion,
                 spotUserId: savedSpot.id,
                 spotName: savedSpot.displayName?.trim() || savedSpot.spotName,
                 lat: savedSpot.lat,
@@ -416,6 +544,32 @@ function DayDetailContent() {
             if (window.innerWidth < 768) setMobileViewMode('LIST');
             showToast({ message: "내 장소에 등록하고 일정에 선택했습니다.", type: 'success' });
         } catch (error) {
+            if (error instanceof ScheduleEditConflictError && updateReq) {
+                let latest = error.latestSchedule;
+                if (!latest) {
+                    try { latest = (await getSchedulesByDay(dayId)).find(schedule => schedule.id === scheduleId) ?? null; }
+                    catch { latest = null; }
+                }
+                if (latest) {
+                    const original = schedules.find(schedule => schedule.id === scheduleId);
+                    const applyMine = await confirm({
+                        title: '일정 위치 수정 충돌',
+                        message: `처음 장소: ${original?.spotName || '없음'} (${original?.lat ?? '위치 없음'}, ${original?.lng ?? '위치 없음'})\n내 선택: ${updateReq.spotName} (${updateReq.lat}, ${updateReq.lng})\n최신 저장값: ${latest.spotName || '없음'} (${latest.lat ?? '위치 없음'}, ${latest.lng ?? '위치 없음'})\n\n확인을 누르면 내 장소 연결을 최신 일정에 적용하고, 취소하면 최신 저장값을 사용합니다.`,
+                        confirmLabel: '내 장소 연결 적용',
+                    });
+                    if (applyMine) {
+                        try { await updateSchedule(scheduleId, { ...updateReq, expectedVersion: latest.version }); }
+                        catch (retryError) {
+                            showToast({ message: retryError instanceof Error ? retryError.message : '최신 일정에 내 장소 연결을 적용하지 못했습니다.', type: 'error' });
+                            return;
+                        }
+                    }
+                    await refreshForLiveUpdate();
+                    setTempSelectedSpot(null); setPickingTarget(null);
+                    if (window.innerWidth < 768) setMobileViewMode('LIST');
+                    return;
+                }
+            }
             showToast({ message: error instanceof Error ? error.message : "장소 등록에 실패했습니다.", type: 'error' });
         }
     };
@@ -614,7 +768,14 @@ function DayDetailContent() {
                             <div className="flex flex-wrap items-center gap-2">
                                 <SaveStatusIndicator isDirty={isAnyDirty} statusOverride={headerSaveState === 'ERROR' ? 'ERROR' : headerSaveState === 'SAVING' ? 'SAVING' : undefined} className="shrink-0" />
                                 <span className="text-xs text-slate-500">입력 후 다른 곳을 누르면 자동 저장됩니다.</span>
+                                {dayDetail.planId != null && <span role="status" className={`text-xs ${liveConnectionState === 'connected' ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                    {liveConnectionState === 'connected' ? '● 실시간 동기화 중' : liveConnectionState === 'unavailable' ? '실시간 연결을 사용할 수 없습니다' : '실시간 연결 중…'}
+                                </span>}
                             </div>
+                            {remoteUpdatePending && <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                                <span>{isAnyDirty ? '공동 편집자가 일정을 바꿨습니다. 현재 편집을 저장하면 최신 내용으로 동기화합니다.' : '공동 편집자가 일정을 바꿨습니다. 최신 내용을 불러옵니다.'}</span>
+                                <button type="button" disabled={isAnyDirty} onClick={() => void refreshForLiveUpdate()} className="min-h-9 rounded-md bg-white px-3 font-semibold text-blue-700 disabled:opacity-50">최신 내용 불러오기</button>
+                            </div>}
                             {headerSaveState === 'ERROR' && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-red-700">
                                 <span>{titleForm.trim() ? '변경사항을 저장하지 못했습니다. 입력한 내용은 유지됩니다.' : '일정 제목을 입력해 주세요.'}</span>
                                 <button type="button" onClick={() => void handleUpdateDayInfo()} disabled={!titleForm.trim()} className="min-h-11 rounded-lg bg-red-50 px-3 font-semibold disabled:opacity-50">저장 다시 시도</button>
@@ -661,6 +822,7 @@ function DayDetailContent() {
                                 <DayScheduleList
                                     variant="card"
                                     schedules={schedules} // ✅ 훅의 실시간 상태 연결
+                                    onRefresh={() => fetchSchedules(dayId)}
                                     showInjury={showInjury}
                                     onUpdate={updateSchedule} // ✅ 훅 함수 직접 전달
                                     onItemDirtyChange={handleScheduleDirty}
@@ -689,6 +851,13 @@ function DayDetailContent() {
                     </div>
                 </div>
             </div>
+            {dayEditConflict && <EditConflictPanel
+                title="하루 일정 정보 충돌"
+                fields={dayConflictFields}
+                onApply={values => void applyDayConflictMerge(values)}
+                onUseLatest={useLatestDayValues}
+                onCancel={() => setDayEditConflict(null)}
+            />}
         </>
     );
 }

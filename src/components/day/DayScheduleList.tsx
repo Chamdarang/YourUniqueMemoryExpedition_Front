@@ -11,7 +11,8 @@ interface Props {
     selectedScheduleId?: number | null;
     showInjury: boolean;
     onSelect?: (id: number) => void;
-    onUpdate: (id: number, req: ScheduleUpdateRequest) => Promise<void>;
+    onUpdate: (id: number, req: ScheduleUpdateRequest) => Promise<void | DayScheduleResponse[]>;
+    onRefresh?: () => Promise<unknown>;
     onToggleVisit: (id: number) => void;
     canToggleVisit?: boolean;
     onDelete: (id: number) => void;
@@ -35,6 +36,7 @@ export default function DayScheduleList({
                                             showInjury,
                                             onSelect,
                                             onUpdate,
+                                            onRefresh,
                                             onToggleVisit,
                                             canToggleVisit = true,
                                             onDelete,
@@ -81,6 +83,7 @@ export default function DayScheduleList({
                             <SimpleScheduleRow
                                 schedule={schedule}
                                 onUpdate={onUpdate}
+                                onRefresh={onRefresh}
                                 onDelete={onDelete}
                                 onToggleVisit={onToggleVisit}
                                 canToggleVisit={canToggleVisit}
@@ -146,6 +149,7 @@ export default function DayScheduleList({
                                     index={index}
                                     showInjury={showInjury}
                                     onUpdate={onUpdate}
+                                    onRefresh={onRefresh}
                                     onDelete={onDelete}
                                     onInsert={onInsert}
                                     onToggleVisit={onToggleVisit}

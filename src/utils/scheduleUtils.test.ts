@@ -9,6 +9,7 @@ const schedule = (
   movingDuration = 0,
 ): DayScheduleResponse => ({
   id,
+  version: 0,
   dayId: 1,
   scheduleOrder: id,
   spotUserId: id,

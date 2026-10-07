@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 // API
-import { getPlans, deletePlan, importPlanData, updatePlan, createPlan, type GetPlansParams } from '../api/planApi';
+import { getPlans, deletePlan, importPlanData, updatePlan, createPlan, PlanEditConflictError, type GetPlansParams } from '../api/planApi';
 import { acceptPlanInvitation, declinePlanInvitation, getPlanInvitations, getSharedPlans } from '../api/planMemberApi';
 
 // Types & Utils
@@ -17,6 +17,7 @@ import Pagination from '../components/common/Pagination'; // ✅ 페이지네이
 import { useFeedback } from '../components/common/useFeedback';
 import LoadErrorState from '../components/common/LoadErrorState';
 import { useDialogFocus } from '../hooks/useDialogFocus';
+import EditConflictPanel, { type EditConflictField } from '../components/common/EditConflictPanel';
 
 interface ImportCompletionReport {
   plan: PlanResponse;
@@ -72,6 +73,7 @@ export default function PlanListPage() {
   // 수정 팝업 상태
   const [editingPlan, setEditingPlan] = useState<PlanResponse | null>(null);
   const [editForm, setEditForm] = useState({ planName: '', planStartDate: '', planEndDate: '', planMemo: '' });
+  const [editConflict, setEditConflict] = useState<{ original: PlanResponse; mine: typeof editForm; latest: PlanResponse } | null>(null);
 
   const editDialogRef = useDialogFocus(editingPlan !== null, () => setEditingPlan(null));
   const importReportRef = useDialogFocus(importCompletion !== null, () => setImportCompletion(null));
@@ -199,13 +201,49 @@ export default function PlanListPage() {
       // PlanHeader와 동일 로직: planDays 포함하여 전송
       await updatePlan(editingPlan.id, {
         ...editForm,
-        planDays: info.days
+        planDays: info.days,
+        expectedVersion: editingPlan.version,
       });
 
       setEditingPlan(null);
       showToast({ message: '여행 정보를 수정했습니다.', type: 'success' });
       fetchPlans(undefined, page); // 목록 갱신
-    } catch { showToast({ message: "여행 정보를 수정하지 못했습니다.", type: 'error' }); }
+    } catch (err) {
+      if (err instanceof PlanEditConflictError && err.latestPlan) {
+        setEditConflict({ original: editingPlan, mine: editForm, latest: err.latestPlan });
+      } else showToast({ message: "여행 정보를 수정하지 못했습니다.", type: 'error' });
+    }
+  };
+
+  const conflictFields: EditConflictField[] = editConflict ? [
+    { key: 'planName', label: '여행 이름', original: editConflict.original.planName, mine: editConflict.mine.planName, latest: editConflict.latest.planName },
+    { key: 'planStartDate', label: '시작일', original: editConflict.original.planStartDate, mine: editConflict.mine.planStartDate, latest: editConflict.latest.planStartDate },
+    { key: 'planEndDate', label: '종료일', original: editConflict.original.planEndDate, mine: editConflict.mine.planEndDate, latest: editConflict.latest.planEndDate },
+    { key: 'planMemo', label: '메모', original: editConflict.original.planMemo || '', mine: editConflict.mine.planMemo || '', latest: editConflict.latest.planMemo || '' },
+  ] : [];
+
+  const applyConflictMerge = async (values: Record<string, string | null>) => {
+    if (!editConflict) return;
+    const merged = { planName: values.planName ?? '', planStartDate: values.planStartDate ?? '', planEndDate: values.planEndDate ?? '', planMemo: values.planMemo ?? '' };
+    const duration = getDurationInfo(merged.planStartDate, merged.planEndDate);
+    if (!duration.valid) return showToast({ message: duration.msg, type: 'info' });
+    try {
+      await updatePlan(editConflict.latest.id, { ...merged, planDays: duration.days, expectedVersion: editConflict.latest.version });
+      setEditConflict(null);
+      setEditingPlan(null);
+      showToast({ message: '변경 내용을 병합해 저장했습니다.', type: 'success' });
+      await fetchPlans(undefined, page);
+    } catch (err) {
+      if (err instanceof PlanEditConflictError && err.latestPlan) setEditConflict({ original: editConflict.latest, mine: merged, latest: err.latestPlan });
+      else showToast({ message: '병합한 여행 정보를 저장하지 못했습니다. 최신 내용을 다시 불러와 주세요.', type: 'error' });
+    }
+  };
+
+  const useLatestPlan = () => {
+    if (!editConflict) return;
+    setEditingPlan(editConflict.latest);
+    setEditForm({ planName: editConflict.latest.planName, planStartDate: editConflict.latest.planStartDate, planEndDate: editConflict.latest.planEndDate, planMemo: editConflict.latest.planMemo || '' });
+    setEditConflict(null);
   };
 
   const durationInfo = getDurationInfo(editForm.planStartDate, editForm.planEndDate);
@@ -621,6 +659,13 @@ export default function PlanListPage() {
             </div>
           </div>
         )}
+        {editConflict && <EditConflictPanel
+          title="여행 정보 충돌"
+          fields={conflictFields}
+          onApply={values => void applyConflictMerge(values)}
+          onUseLatest={useLatestPlan}
+          onCancel={() => setEditConflict(null)}
+        />}
       </div>
   );
 }

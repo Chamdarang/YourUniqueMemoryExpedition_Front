@@ -6,13 +6,14 @@ import { useSensor, useSensors, PointerSensor, DndContext, closestCenter, type D
 // Types & API
 import type { DayScheduleResponse, ScheduleCreateRequest, ScheduleUpdateRequest } from "../../types/schedule";
 import type { PlanDayResponse } from "../../types/planDay.ts";
-import { deleteDay, detachPlanDay, updatePlanDay } from "../../api/dayApi";
+import { deleteDay, detachPlanDay, PlanDayEditConflictError, updatePlanDay } from "../../api/dayApi";
 
 // ✅ 훅 기반 개별 작업 전환
 import { useSchedule } from "../../hooks/useSchedule";
 import DayScheduleList from "../day/DayScheduleList";
 import { useFeedback } from "../common/useFeedback";
 import LoadErrorState from '../common/LoadErrorState';
+import EditConflictPanel, { type EditConflictField } from '../common/EditConflictPanel';
 
 interface Props {
     id: number | string;
@@ -23,7 +24,7 @@ interface Props {
     showInjury: boolean;
     isOwner: boolean;
     onRefresh: () => void;
-    onUpdateDayInfo: (dayId: number, newName: string, newMemo: string) => void;
+    onUpdateDayInfo: (day: PlanDayResponse) => void;
     onSchedulesChange: (dayId: number, schedules: DayScheduleResponse[]) => void;
     refreshVersion: number;
     setDirty: (id: string, isDirty: boolean) => void;
@@ -71,6 +72,7 @@ export default function PlanDayItem({
     const [loadAttempt, setLoadAttempt] = useState(0);
 
     const [isEditingInfo, setIsEditingInfo] = useState(false);
+    const [editConflict, setEditConflict] = useState<{ original: PlanDayResponse; mine: { dayName: string; memo: string }; latest: PlanDayResponse } | null>(null);
     const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
     const [isDayActionPending, setIsDayActionPending] = useState(false);
     const [editTitle, setEditTitle] = useState(data?.dayName || "");
@@ -166,11 +168,44 @@ export default function PlanDayItem({
         e.stopPropagation();
         if (!data) return;
         try {
-            await updatePlanDay(data.id, { dayName: editTitle, memo: editMemo });
+            const updated = await updatePlanDay(data.id, { dayName: editTitle, memo: editMemo, expectedVersion: data.version });
             setIsEditingInfo(false);
-            onUpdateDayInfo(data.id, editTitle, editMemo);
+            onUpdateDayInfo(updated);
             showToast({ message: '일차 정보를 수정했습니다.', type: 'success' });
-        } catch { showToast({ message: "일차 정보를 수정하지 못했습니다.", type: 'error' }); }
+        } catch (error) {
+            if (error instanceof PlanDayEditConflictError && error.latestDay) setEditConflict({ original: data, mine: { dayName: editTitle, memo: editMemo }, latest: error.latestDay });
+            else showToast({ message: "일차 정보를 수정하지 못했습니다.", type: 'error' });
+        }
+    };
+
+    const conflictFields: EditConflictField[] = editConflict ? [
+        { key: 'dayName', label: '일차 이름', original: editConflict.original.dayName, mine: editConflict.mine.dayName, latest: editConflict.latest.dayName },
+        { key: 'memo', label: '메모', original: editConflict.original.memo || '', mine: editConflict.mine.memo || '', latest: editConflict.latest.memo || '' },
+    ] : [];
+
+    const applyConflictMerge = async (values: Record<string, string | null>) => {
+        if (!editConflict) return;
+        try {
+            const updated = await updatePlanDay(editConflict.latest.id, { dayName: values.dayName ?? '', memo: values.memo ?? '', expectedVersion: editConflict.latest.version });
+            setEditConflict(null);
+            setIsEditingInfo(false);
+            setEditTitle(updated.dayName);
+            setEditMemo(updated.memo || '');
+            onUpdateDayInfo(updated);
+            showToast({ message: '변경 내용을 병합해 저장했습니다.', type: 'success' });
+        } catch (error) {
+            if (error instanceof PlanDayEditConflictError && error.latestDay) setEditConflict({ original: editConflict.latest, mine: { dayName: values.dayName ?? '', memo: values.memo ?? '' }, latest: error.latestDay });
+            else showToast({ message: '병합한 하루 일정 정보를 저장하지 못했습니다. 최신 내용을 다시 불러와 주세요.', type: 'error' });
+        }
+    };
+
+    const useLatestDay = () => {
+        if (!editConflict) return;
+        setEditTitle(editConflict.latest.dayName);
+        setEditMemo(editConflict.latest.memo || '');
+        setIsEditingInfo(false);
+        setEditConflict(null);
+        onUpdateDayInfo(editConflict.latest);
     };
 
     const handleCancelEdit = (e: React.MouseEvent) => {
@@ -184,7 +219,7 @@ export default function PlanDayItem({
 
     // ✅ [변경] 훅을 통한 개별 업데이트 처리
     const handleItemUpdate = async (scheduleId: number, req: ScheduleUpdateRequest) => {
-        await updateSchedule(scheduleId, req);
+        return await updateSchedule(scheduleId, req);
     };
 
     const handleItemDelete = (scheduleId: number) => {
@@ -393,6 +428,7 @@ export default function PlanDayItem({
                             <DayScheduleList
                                 variant="card"
                                 schedules={schedules}
+                                onRefresh={() => fetchSchedules(data.id)}
                                 routeDate={routeDate}
                                 showInjury={showInjury}
                                 onUpdate={handleItemUpdate}
@@ -416,6 +452,13 @@ export default function PlanDayItem({
                     </div>
                 )}
             </div>
+            {editConflict && <EditConflictPanel
+                title="일차 정보 충돌"
+                fields={conflictFields}
+                onApply={values => void applyConflictMerge(values)}
+                onUseLatest={useLatestDay}
+                onCancel={() => setEditConflict(null)}
+            />}
         </div>
     );
 }

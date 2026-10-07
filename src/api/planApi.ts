@@ -78,9 +78,20 @@ export const updatePlan = async (planId: number, data: PlanUpdateRequest): Promi
     body: JSON.stringify(data),
   });
   const json: ApiResponse<PlanResponse> = await res.json();
+  if (res.status === 409) throw new PlanEditConflictError(json.message || '여행 계획이 동시에 수정되었습니다.', json.data);
   if (!json.success) throw new Error(json.message);
   return json.data;
 };
+
+export class PlanEditConflictError extends Error {
+  latestPlan: PlanResponse | null;
+
+  constructor(message: string, latestPlan: PlanResponse | null) {
+    super(message);
+    this.name = 'PlanEditConflictError';
+    this.latestPlan = latestPlan;
+  }
+}
 
 export const deletePlan = async (id: number): Promise<void> => {
     const res = await fetchWithAuth(`/api/plans/${id}`, {

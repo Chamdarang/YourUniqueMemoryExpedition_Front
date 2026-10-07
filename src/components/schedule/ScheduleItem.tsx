@@ -5,6 +5,7 @@ import { useMapsLibrary, useMap } from "@vis.gl/react-google-maps";
 
 // API & Utils
 import { createSpot, getMySpots } from "../../api/spotApi";
+import { getSchedulesByDay, ScheduleEditConflictError } from "../../api/scheduleApi";
 import { estimateRoute } from "../../api/routeApi";
 import { getSpotDisplayName, getSpotTypeInfo, mapGoogleTypeToSpotType } from "../../utils/spotUtils";
 import { decodeGooglePolyline } from "../../utils/polylineUtils";
@@ -15,6 +16,7 @@ import type {SpotType, Transportation} from "../../types/enums";
 import type { SpotResponse, SpotCreateRequest } from "../../types/spot";
 import type { RouteEstimateResponse } from "../../types/route";
 import { useFeedback } from '../common/useFeedback';
+import ScheduleConflictPanel from './ScheduleConflictPanel';
 
 const GOOGLE_TYPE_LABELS: Record<string, string> = {
     restaurant: '음식점',
@@ -54,7 +56,8 @@ interface Props {
     index: number;
     showInjury: boolean;
     // 훅에서 전달받는 개별 작업 핸들러들
-    onUpdate: (id: number, req: ScheduleUpdateRequest) => Promise<void>;
+    onUpdate: (id: number, req: ScheduleUpdateRequest) => Promise<void | DayScheduleResponse[]>;
+    onRefresh?: () => Promise<unknown>;
     onDelete: (id: number) => void;
     onInsert: (orderIndex: number) => void;
     onToggleVisit: (id: number) => void;
@@ -106,7 +109,7 @@ const subTimeStr = (startTime: string, duration: number) => {
 const INJURY_OPTIONS = [0, 5, 10, 15];
 
 export default function ScheduleItem({
-                                         schedule, previousSchedule, routeDate, index, showInjury, onUpdate, onDelete, onInsert, onToggleVisit, canToggleVisit = true, onRequestMapPick, isPickingMap, openEditRequestKey, onDirtyChange
+                                         schedule, previousSchedule, routeDate, index, showInjury, onUpdate, onRefresh, onDelete, onInsert, onToggleVisit, canToggleVisit = true, onRequestMapPick, isPickingMap, openEditRequestKey, onDirtyChange
                                      }: Props) {
     const { showToast, isUndoablePending } = useFeedback();
     const isDeletePending = isUndoablePending(`schedule-delete:${schedule.id}`);
@@ -132,7 +135,12 @@ export default function ScheduleItem({
     const [routeLoading, setRouteLoading] = useState(false);
     const [routeError, setRouteError] = useState("");
     const [spotFeedback, setSpotFeedback] = useState<{ type: 'success' | 'info' | 'error', message: string } | null>(null);
-    const [saveState, setSaveState] = useState<'IDLE' | 'SAVING' | 'SAVED' | 'ERROR'>('IDLE');
+    const [saveState, setSaveState] = useState<'IDLE' | 'SAVING' | 'SAVED' | 'ERROR' | 'CONFLICT'>('IDLE');
+    const [conflictState, setConflictState] = useState<{
+        base: DayScheduleResponse;
+        mine: ScheduleUpdateRequest;
+        latest: DayScheduleResponse;
+    } | null>(null);
 
     useEffect(() => {
         if (openEditRequestKey !== undefined) setEditMode('MAIN');
@@ -446,6 +454,7 @@ export default function ScheduleItem({
         if (!finalSpotInfo) return showToast({ message: "장소 위치 정보가 없습니다.", type: 'info' });
 
         const updatePayload: ScheduleUpdateRequest = {
+            expectedVersion: schedule.version,
             spotUserId: form.spotUserId,
             spotName: finalName,
             lat: finalSpotInfo.lat,
@@ -469,9 +478,61 @@ export default function ScheduleItem({
             setSaveState('SAVED');
             window.setTimeout(() => setSaveState('IDLE'), 1800);
         } catch (error) {
+            if (error instanceof ScheduleEditConflictError) {
+                let latestSchedule = error.latestSchedule;
+                if (!latestSchedule) {
+                    try {
+                        latestSchedule = (await getSchedulesByDay(schedule.dayId)).find(item => item.id === schedule.id) ?? null;
+                    } catch {
+                        latestSchedule = null;
+                    }
+                }
+                if (latestSchedule) {
+                    setConflictState({ base: schedule, mine: updatePayload, latest: latestSchedule });
+                    setSaveState('CONFLICT');
+                    return;
+                }
+            }
             setSaveState('ERROR');
             showToast({ message: error instanceof Error ? error.message : "일정을 수정하지 못했습니다.", type: 'error' });
         }
+    };
+
+    const handleConflictApply = async (request: ScheduleUpdateRequest) => {
+        if (!conflictState) return;
+        setSaveState('SAVING');
+        try {
+            await onUpdate(schedule.id, request);
+            setConflictState(null);
+            setEditMode('NONE');
+            setSaveState('SAVED');
+            window.setTimeout(() => setSaveState('IDLE'), 1800);
+        } catch (error) {
+            if (error instanceof ScheduleEditConflictError) {
+                let latestSchedule = error.latestSchedule;
+                if (!latestSchedule) {
+                    try {
+                        latestSchedule = (await getSchedulesByDay(schedule.dayId)).find(item => item.id === schedule.id) ?? null;
+                    } catch {
+                        latestSchedule = null;
+                    }
+                }
+                if (latestSchedule) {
+                    setConflictState(previous => previous ? { ...previous, latest: latestSchedule! } : previous);
+                    setSaveState('CONFLICT');
+                    return;
+                }
+            }
+            setSaveState('ERROR');
+            showToast({ message: error instanceof Error ? error.message : '병합한 일정을 저장하지 못했습니다.', type: 'error' });
+        }
+    };
+
+    const handleConflictCancel = async () => {
+        setConflictState(null);
+        setEditMode('NONE');
+        setSaveState('IDLE');
+        await onRefresh?.();
     };
 
     const handleCancel = () => {
@@ -654,7 +715,16 @@ export default function ScheduleItem({
                       ${editMode === 'MAIN' ? 'border-orange-400 ring-2 ring-orange-100 bg-white' : 'bg-white border-gray-200 hover:border-gray-300 cursor-pointer'}
                       ${isPickingMap ? 'ring-4 ring-green-400 border-green-500' : ''}`}
                          onClick={() => editMode === 'NONE' && setEditMode('MAIN')}>
-                        {editMode !== 'MAIN' ? (
+                        {conflictState ? (
+                            <ScheduleConflictPanel
+                                base={conflictState.base}
+                                mine={conflictState.mine}
+                                latest={conflictState.latest}
+                                busy={saveState === 'SAVING'}
+                                onApply={handleConflictApply}
+                                onCancel={handleConflictCancel}
+                            />
+                        ) : editMode !== 'MAIN' ? (
                             <div className="p-3 md:p-4">
                                 <div className="flex gap-3 md:gap-4 items-start">
                                     <div className="flex flex-col items-center gap-2 shrink-0 pt-1">

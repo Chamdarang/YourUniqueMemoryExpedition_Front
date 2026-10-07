@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 // API
-import { deletePlan, updatePlan } from "../../api/planApi";
-import { detachPlanDay } from "../../api/dayApi";
+import { deletePlan, getPlanDetail, PlanEditConflictError, updatePlan } from "../../api/planApi";
 
 // Types & Utils
-import type { PlanDetailResponse } from "../../types/plan";
+import type { PlanDetailResponse, PlanResponse } from "../../types/plan";
+import EditConflictPanel, { type EditConflictField } from "../common/EditConflictPanel";
 import { enforceFourDigitDateYear, getDurationInfo, limitDateYear, shiftDate } from "../../utils/timeUtils";
 import { useFeedback } from '../common/useFeedback';
 
@@ -29,6 +29,7 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
     planEndDate: "",
     planMemo: ""
   });
+  const [editConflict, setEditConflict] = useState<{ original: PlanResponse; mine: typeof editForm; latest: PlanDetailResponse } | null>(null);
 
   useEffect(() => {
     if (!onDirtyChange) return;
@@ -66,6 +67,7 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
     const newPlanDays = durationInfo.days;
 
     try {
+      let detachDayIds: number[] = [];
       if (plan.days && plan.days.length > 0) {
         const daysToDetach = plan.days.filter(day => day.dayOrder > newPlanDays);
         if (daysToDetach.length > 0) {
@@ -73,19 +75,77 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
           const dayNames = daysToDetach.map(d => `${d.dayOrder}일차`).join(', ');
           const confirmMsg = `여행 기간이 ${newPlanDays}일로 줄어들었습니다.\n\n범위를 벗어나는 [ ${dayNames} ] 일정은 삭제되지 않고\n'하루 코스 보관함'으로 안전하게 이동됩니다.\n\n저장하시겠습니까?`;
           if (!await confirm({ title: '여행 기간 단축', message: confirmMsg, confirmLabel: '보관함으로 이동' })) return;
-          await Promise.all(daysToDetach.map(day => detachPlanDay(day.id)));
+          detachDayIds = daysToDetach.map(day => day.id);
         }
       }
 
-      await updatePlan(plan.id, { ...editForm, planDays: newPlanDays });
+      await updatePlan(plan.id, { ...editForm, planDays: newPlanDays, expectedVersion: plan.version, detachDayIds });
 
       setIsEditing(false);
       onRefresh();
       showToast({ message: "여행 정보를 수정했습니다.", type: 'success' });
     } catch (err) {
+      if (err instanceof PlanEditConflictError && err.latestPlan) {
+        try {
+          const latest = await getPlanDetail(plan.id);
+          setEditConflict({ original: plan, mine: editForm, latest });
+          return;
+        } catch {
+          showToast({ message: '충돌 내용을 불러오지 못했습니다. 최신 여행 정보를 다시 열어 주세요.', type: 'error' });
+          return;
+        }
+      }
       console.error(err);
       showToast({ message: "여행 정보를 수정하지 못했습니다.", type: 'error' });
     }
+  };
+
+  const conflictFields: EditConflictField[] = editConflict ? [
+    { key: 'planName', label: '여행 이름', original: editConflict.original.planName, mine: editConflict.mine.planName, latest: editConflict.latest.planName },
+    { key: 'planStartDate', label: '시작일', original: editConflict.original.planStartDate, mine: editConflict.mine.planStartDate, latest: editConflict.latest.planStartDate },
+    { key: 'planEndDate', label: '종료일', original: editConflict.original.planEndDate, mine: editConflict.mine.planEndDate, latest: editConflict.latest.planEndDate },
+    { key: 'planMemo', label: '메모', original: editConflict.original.planMemo || '', mine: editConflict.mine.planMemo || '', latest: editConflict.latest.planMemo || '' },
+  ] : [];
+
+  const applyConflictMerge = async (values: Record<string, string | null>) => {
+    if (!editConflict) return;
+    const merged = { planName: values.planName ?? '', planStartDate: values.planStartDate ?? '', planEndDate: values.planEndDate ?? '', planMemo: values.planMemo ?? '' };
+    const duration = getDurationInfo(merged.planStartDate, merged.planEndDate);
+    if (!duration.valid) return showToast({ message: duration.msg, type: 'info' });
+    try {
+      const daysToDetach = editConflict.latest.days.filter(day => day.dayOrder > duration.days);
+      let detachDayIds: number[] = [];
+      if (daysToDetach.length > 0) {
+        const dayNames = daysToDetach.map(day => `${day.dayOrder}일차`).join(', ');
+        if (!isOwner) return showToast({ message: '일정이 등록된 범위보다 짧게 줄이려면 여행 소유자가 날짜를 먼저 정리해야 합니다.', type: 'info' });
+        const confirmed = await confirm({ title: '여행 기간 단축', message: `여행 기간을 ${duration.days}일로 줄이면 [ ${dayNames} ] 날짜가 하루 코스 보관함으로 이동됩니다. 계속할까요?`, confirmLabel: '보관함으로 이동' });
+        if (!confirmed) return;
+        detachDayIds = daysToDetach.map(day => day.id);
+      }
+      await updatePlan(plan.id, { ...merged, planDays: duration.days, expectedVersion: editConflict.latest.version, detachDayIds });
+      setEditConflict(null);
+      setIsEditing(false);
+      onRefresh();
+      showToast({ message: '변경 내용을 병합해 저장했습니다.', type: 'success' });
+    } catch (err) {
+      if (err instanceof PlanEditConflictError && err.latestPlan) {
+        try {
+          const latest = await getPlanDetail(plan.id);
+          setEditConflict({ original: editConflict.latest, mine: merged, latest });
+        } catch {
+          showToast({ message: '충돌 내용을 불러오지 못했습니다. 최신 여행 정보를 다시 열어 주세요.', type: 'error' });
+        }
+      }
+      else showToast({ message: '병합한 여행 정보를 저장하지 못했습니다. 최신 내용을 다시 불러와 주세요.', type: 'error' });
+    }
+  };
+
+  const useLatestPlan = () => {
+    if (!editConflict) return;
+    setEditForm({ planName: editConflict.latest.planName, planStartDate: editConflict.latest.planStartDate, planEndDate: editConflict.latest.planEndDate, planMemo: editConflict.latest.planMemo || '' });
+    setEditConflict(null);
+    setIsEditing(false);
+    onRefresh();
   };
 
   const handleDelete = async () => {
@@ -203,6 +263,13 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
             )}
           </div>
         </div>
+        {editConflict && <EditConflictPanel
+          title="여행 정보 충돌"
+          fields={conflictFields}
+          onApply={values => void applyConflictMerge(values)}
+          onUseLatest={useLatestPlan}
+          onCancel={() => setEditConflict(null)}
+        />}
       </div>
   );
 }

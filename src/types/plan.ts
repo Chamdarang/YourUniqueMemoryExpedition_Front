@@ -8,6 +8,7 @@ export interface PlanResponse{
     planEndDate: string;
     planDays: number;
     planMemo: string;
+    version: number;
 }
 
 export interface PlanDetailResponse extends PlanResponse{
@@ -55,6 +56,8 @@ export interface PlanUpdateRequest {
     planEndDate: string;
     planDays: number;
     planMemo: string;
+    expectedVersion: number;
+    detachDayIds?: number[];
 }
 
 export interface PlanTransferData {

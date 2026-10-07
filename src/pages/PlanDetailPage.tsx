@@ -7,7 +7,7 @@ import { APIProvider, useMapsLibrary, type MapMouseEvent } from "@vis.gl/react-g
 // API
 import { exportPlanData, getPlanDetail } from "../api/planApi";
 import { copyPlanDay, createDayInPlan, swapPlanDay } from "../api/dayApi";
-import { getSchedulesByDay, getUnlinkedSpotGroups, transferSchedule, updateSchedule as updateScheduleApi, type UnlinkedSpotGroup } from "../api/scheduleApi";
+import { getSchedulesByDay, getUnlinkedSpotGroups, ScheduleEditConflictError, transferSchedule, updateSchedule as updateScheduleApi, type UnlinkedSpotGroup } from "../api/scheduleApi";
 import { createSpot } from "../api/spotApi";
 import { applyDayRouteEstimates, auditDayRoute } from "../api/routeApi";
 // ✅ 지도 생성 API
@@ -30,7 +30,7 @@ import { usePlanRouteAudit } from "../hooks/usePlanRouteAudit";
 // Types & Utils
 import type { PlanDetailResponse } from "../types/plan";
 import type { PlanDayResponse, ScheduleMode } from "../types/planDay.ts";
-import type { DayScheduleResponse } from "../types/schedule";
+import type { DayScheduleResponse, ScheduleUpdateRequest } from "../types/schedule";
 import type { SpotCreateRequest } from "../types/spot";
 import type { DayRouteAuditLeg, DayRouteAuditResponse } from "../types/route";
 
@@ -42,6 +42,7 @@ import {
 import { useScheduleExport } from "../components/common/useScheduleExport";
 import { getStaticMapQuery, type ExportSection } from "../components/common/scheduleExportUtils";
 import { useDialogFocus } from '../hooks/useDialogFocus';
+import { usePlanLiveUpdates } from '../hooks/usePlanLiveUpdates';
 import { useFeedback } from "../components/common/useFeedback";
 import { saveOfflineTripSnapshot } from "../utils/offlineHomeStorage";
 
@@ -148,6 +149,8 @@ function PlanDetailContent() {
     const mapSchedulesMapRef = useRef<Record<number, DayScheduleResponse[]>>({});
     const [scheduleRefreshVersions, setScheduleRefreshVersions] = useState<Record<number, number>>({});
     const [dayOrderMap, setDayOrderMap] = useState<Record<number, number>>({});
+    const [remoteUpdatePending, setRemoteUpdatePending] = useState(false);
+    const liveRefreshRequestId = useRef(0);
 
     const [mapViewMode, setMapViewMode] = useState<'ALL' | 'PINS' | 'NONE'>('ALL');
     const [showInjury, setShowInjury] = useState(false);
@@ -206,6 +209,8 @@ function PlanDetailContent() {
 
     const [dirtyMap, setDirtyMap] = useState<Record<string | number, boolean>>({});
     const isAnyDirty = useMemo(() => Object.values(dirtyMap).some(Boolean), [dirtyMap]);
+    const isAnyDirtyRef = useRef(isAnyDirty);
+    isAnyDirtyRef.current = isAnyDirty;
     const blockerPromptActiveRef = useRef(false);
 
     const blocker = useBlocker(({ currentLocation, nextLocation }) => isAnyDirty && currentLocation.pathname !== nextLocation.pathname);
@@ -260,6 +265,7 @@ function PlanDetailContent() {
     }, [blocker, confirm]);
 
     useEffect(() => {
+        liveRefreshRequestId.current += 1;
         const preferences = readPlanWorkspacePreferences(planId);
         setWorkspaceReadyPlanId(null);
         setMapSchedulesMap({});
@@ -320,6 +326,56 @@ function PlanDetailContent() {
             setLoadError('여행 정보를 불러오지 못했습니다.');
         }).finally(() => setLoading(false));
     }, [planId]);
+
+    const refreshForLiveUpdate = useCallback(async () => {
+        if (isAnyDirty) {
+            setRemoteUpdatePending(true);
+            return;
+        }
+        const requestId = ++liveRefreshRequestId.current;
+        try {
+            const latestPlan = await getPlanDetail(planId);
+            const loadedDayIds = Object.keys(mapSchedulesMapRef.current).map(Number);
+            const validLoadedDayIds = loadedDayIds.filter(dayId => latestPlan.days.some(day => day.id === dayId));
+            const loadedSchedules = await Promise.all(validLoadedDayIds.map(async dayId => ({
+                dayId,
+                schedules: await getSchedulesByDay(dayId),
+            })));
+            if (requestId !== liveRefreshRequestId.current) return;
+            if (isAnyDirtyRef.current) {
+                setRemoteUpdatePending(true);
+                return;
+            }
+            const nextSchedulesMap: Record<number, DayScheduleResponse[]> = {};
+            loadedSchedules.forEach(({ dayId, schedules }) => { nextSchedulesMap[dayId] = schedules; });
+            mapSchedulesMapRef.current = nextSchedulesMap;
+            setMapSchedulesMap(nextSchedulesMap);
+            setPlan(latestPlan);
+            setDayOrderMap(Object.fromEntries(latestPlan.days.map(day => [day.id, day.dayOrder])));
+            setScheduleRefreshVersions(previous => {
+                const next = { ...previous };
+                validLoadedDayIds.forEach(dayId => { next[dayId] = (next[dayId] ?? 0) + 1; });
+                return next;
+            });
+            setCollaboratorsRefreshVersion(version => version + 1);
+            markPlanAuditStale();
+            setLoadError(null);
+            setRemoteUpdatePending(false);
+        } catch {
+            if (requestId !== liveRefreshRequestId.current) return;
+            setRemoteUpdatePending(true);
+        }
+    }, [getSchedulesByDay, isAnyDirty, markPlanAuditStale, planId]);
+
+    const liveConnectionState = usePlanLiveUpdates(planId, refreshForLiveUpdate);
+
+    useEffect(() => {
+        if (isAnyDirty) liveRefreshRequestId.current += 1;
+    }, [isAnyDirty]);
+
+    useEffect(() => {
+        if (!isAnyDirty && remoteUpdatePending) void refreshForLiveUpdate();
+    }, [isAnyDirty, refreshForLiveUpdate, remoteUpdatePending]);
 
     const savePlanForOffline = async () => {
         if (!plan) return;
@@ -631,15 +687,20 @@ function PlanDetailContent() {
     const handleConfirmRegister = async () => {
         if (!tempSelectedSpot || !pickingTarget) return;
         const { dayId, scheduleId } = pickingTarget;
+        const expectedVersion = mapSchedulesMapRef.current[dayId]?.find(schedule => schedule.id === scheduleId)?.version;
+        if (expectedVersion == null) return showToast({ message: '최신 일정 정보를 확인하지 못했습니다. 다시 불러와 주세요.', type: 'error' });
+        let updateRequest: ScheduleUpdateRequest | null = null;
         try {
             const savedSpot = await createSpot(tempSelectedSpot);
-            const updatedSchedules = await updateScheduleApi(scheduleId, {
+            updateRequest = {
+                expectedVersion,
                 spotUserId: savedSpot.id,
                 spotName: savedSpot.displayName?.trim() || savedSpot.spotName,
                 spotType: savedSpot.spotType,
                 lat: savedSpot.lat,
                 lng: savedSpot.lng,
-            });
+            };
+            const updatedSchedules = await updateScheduleApi(scheduleId, updateRequest);
             setMapSchedulesMap(prev => ({ ...prev, [dayId]: updatedSchedules }));
             setScheduleRefreshVersions(prev => ({ ...prev, [dayId]: (prev[dayId] || 0) + 1 }));
             markPlanAuditStale();
@@ -648,6 +709,41 @@ function PlanDetailContent() {
             if (window.innerWidth < 768) setMobileViewMode('LIST');
             showToast({ message: "내 장소에 등록하고 일정에 선택했습니다.", type: 'success' });
         } catch (error) {
+            if (error instanceof ScheduleEditConflictError && updateRequest) {
+                let latest = error.latestSchedule;
+                if (!latest) {
+                    try { latest = (await getSchedulesByDay(dayId)).find(schedule => schedule.id === scheduleId) ?? null; }
+                    catch { latest = null; }
+                }
+                if (latest) {
+                    const original = mapSchedulesMapRef.current[dayId]?.find(schedule => schedule.id === scheduleId);
+                    const applyMine = await confirm({
+                        title: '일정 위치 수정 충돌',
+                        message: `처음 장소: ${original?.spotName || '없음'} (${original?.lat ?? '위치 없음'}, ${original?.lng ?? '위치 없음'})\n내 선택: ${updateRequest.spotName} (${updateRequest.lat}, ${updateRequest.lng})\n최신 저장값: ${latest.spotName || '없음'} (${latest.lat ?? '위치 없음'}, ${latest.lng ?? '위치 없음'})\n\n확인을 누르면 내 장소 선택을 최신 일정에 적용하고, 취소하면 최신 저장값을 사용합니다.`,
+                        confirmLabel: '내 장소 선택 적용',
+                    });
+                    if (applyMine) {
+                        try {
+                            const updatedSchedules = await updateScheduleApi(scheduleId, { ...updateRequest, expectedVersion: latest.version });
+                            mapSchedulesMapRef.current = { ...mapSchedulesMapRef.current, [dayId]: updatedSchedules };
+                            setMapSchedulesMap(previous => ({ ...previous, [dayId]: updatedSchedules }));
+                            setScheduleRefreshVersions(previous => ({ ...previous, [dayId]: (previous[dayId] || 0) + 1 }));
+                            markPlanAuditStale();
+                            setTempSelectedSpot(null);
+                            setPickingTarget(null);
+                            if (window.innerWidth < 768) setMobileViewMode('LIST');
+                            return;
+                        } catch (retryError) {
+                            showToast({ message: retryError instanceof Error ? retryError.message : '최신 일정에 내 장소 선택을 적용하지 못했습니다.', type: 'error' });
+                            return;
+                        }
+                    }
+                    await refreshForLiveUpdate();
+                    setTempSelectedSpot(null);
+                    setPickingTarget(null);
+                    return;
+                }
+            }
             showToast({ message: error instanceof Error ? error.message : "장소를 등록하지 못했습니다.", type: 'error' });
         }
     };
@@ -655,21 +751,55 @@ function PlanDetailContent() {
     const handleConfirmScheduleOnly = async () => {
         if (!tempSelectedSpot || !pickingTarget) return;
         const { dayId, scheduleId } = pickingTarget;
+        const expectedVersion = mapSchedulesMapRef.current[dayId]?.find(schedule => schedule.id === scheduleId)?.version;
+        if (expectedVersion == null) return showToast({ message: '최신 일정 정보를 확인하지 못했습니다. 다시 불러와 주세요.', type: 'error' });
+        const updateRequest: ScheduleUpdateRequest = {
+            expectedVersion,
+            spotUserId: 0,
+            spotName: tempSelectedSpot.spotName,
+            spotType: tempSelectedSpot.spotType,
+            lat: tempSelectedSpot.lat,
+            lng: tempSelectedSpot.lng,
+        };
         try {
-            const updatedSchedules = await updateScheduleApi(scheduleId, {
-                spotUserId: 0,
-                spotName: tempSelectedSpot.spotName,
-                spotType: tempSelectedSpot.spotType,
-                lat: tempSelectedSpot.lat,
-                lng: tempSelectedSpot.lng,
-            });
+            const updatedSchedules = await updateScheduleApi(scheduleId, updateRequest);
             setMapSchedulesMap(prev => ({ ...prev, [dayId]: updatedSchedules }));
             setScheduleRefreshVersions(prev => ({ ...prev, [dayId]: (prev[dayId] || 0) + 1 }));
             markPlanAuditStale();
             setTempSelectedSpot(null);
             setPickingTarget(null);
             if (window.innerWidth < 768) setMobileViewMode('LIST');
-        } catch {
+        } catch (error) {
+            if (error instanceof ScheduleEditConflictError) {
+                let latest = error.latestSchedule;
+                if (!latest) {
+                    try { latest = (await getSchedulesByDay(dayId)).find(schedule => schedule.id === scheduleId) ?? null; }
+                    catch { latest = null; }
+                }
+                if (latest) {
+                    const original = mapSchedulesMapRef.current[dayId]?.find(schedule => schedule.id === scheduleId);
+                    const applyMine = await confirm({
+                        title: '일정 위치 수정 충돌',
+                        message: `처음 장소: ${original?.spotName || '없음'} (${original?.lat ?? '위치 없음'}, ${original?.lng ?? '위치 없음'})\n내 선택: ${updateRequest.spotName} (${updateRequest.lat}, ${updateRequest.lng})\n최신 저장값: ${latest.spotName || '없음'} (${latest.lat ?? '위치 없음'}, ${latest.lng ?? '위치 없음'})\n\n확인을 누르면 내 위치를 최신 일정에 적용하고, 취소하면 최신 저장값을 사용합니다.`,
+                        confirmLabel: '내 위치 적용',
+                    });
+                    if (applyMine) {
+                        try {
+                            const updatedSchedules = await updateScheduleApi(scheduleId, { ...updateRequest, expectedVersion: latest.version });
+                            mapSchedulesMapRef.current = { ...mapSchedulesMapRef.current, [dayId]: updatedSchedules };
+                            setMapSchedulesMap(previous => ({ ...previous, [dayId]: updatedSchedules }));
+                            setScheduleRefreshVersions(previous => ({ ...previous, [dayId]: (previous[dayId] || 0) + 1 }));
+                            markPlanAuditStale();
+                        } catch (retryError) {
+                            showToast({ message: retryError instanceof Error ? retryError.message : '최신 일정에 내 위치를 적용하지 못했습니다.', type: 'error' });
+                            return;
+                        }
+                    } else await refreshForLiveUpdate();
+                    setTempSelectedSpot(null);
+                    setPickingTarget(null);
+                    return;
+                }
+            }
             showToast({ message: "일정에 장소를 추가하지 못했습니다.", type: 'error' });
         }
     };
@@ -688,12 +818,12 @@ function PlanDetailContent() {
         }
     };
 
-    const handleDayInfoUpdate = (dayId: number, newName: string, newMemo: string) => {
+    const handleDayInfoUpdate = (updatedDay: PlanDayResponse) => {
         setPlan(prev => {
             if (!prev) return null;
             return {
                 ...prev,
-                days: prev.days.map(day => day.id === dayId ? { ...day, dayName: newName, memo: newMemo } : day)
+                days: prev.days.map(day => day.id === updatedDay.id ? updatedDay : day)
             };
         });
         markPlanAuditStale();
@@ -967,7 +1097,12 @@ function PlanDetailContent() {
                                     onRefresh={refreshPlanAfterMutation}
                                     onDirtyChange={handleHeaderDirty}
                                 />
-                                <PlanCollaboratorsBar planId={plan.id} refreshVersion={collaboratorsRefreshVersion} />
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <PlanCollaboratorsBar planId={plan.id} refreshVersion={collaboratorsRefreshVersion} />
+                                    <span role="status" className={`text-xs ${liveConnectionState === 'connected' ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                        {liveConnectionState === 'connected' ? '● 실시간 동기화 중' : liveConnectionState === 'unavailable' ? '실시간 연결을 사용할 수 없습니다' : '실시간 연결 중…'}
+                                    </span>
+                                </div>
                             </div>
                             <div className="md:hidden absolute bottom-0 left-0 w-full h-10 flex justify-center items-end pb-2 bg-gradient-to-t from-white via-white/90 to-transparent">
                                 <button onClick={() => setIsHeaderExpanded(!isHeaderExpanded)} className="text-[10px] font-bold text-gray-400 bg-white hover:bg-gray-50 px-3 py-1 rounded-full border border-gray-200 shadow-sm flex items-center gap-1 active:scale-95 transition-transform">{isHeaderExpanded ? '접기 ▲' : '상세 정보 ▼'}</button>
@@ -976,6 +1111,10 @@ function PlanDetailContent() {
 
                         <div className="flex-1 overflow-y-auto p-4 pb-24 bg-white scrollbar-hide">
                             {loadError && <LoadErrorState message={loadError} onRetry={fetchPlanDetail} retrying={loading} />}
+                            {remoteUpdatePending && <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                                <span>{isAnyDirty ? '공동 편집자가 일정을 바꿨습니다. 현재 편집을 저장하면 최신 내용으로 동기화합니다.' : '공동 편집자가 일정을 바꿨습니다. 최신 내용을 불러오세요.'}</span>
+                                <button type="button" disabled={isAnyDirty} onClick={() => void refreshForLiveUpdate()} className="min-h-9 rounded-md bg-white px-3 font-semibold text-blue-700 disabled:opacity-50">최신 내용 불러오기</button>
+                            </div>}
                             <div data-guide-target="plan-detail-schedules" className="relative mb-4 flex flex-col gap-3 px-1 md:flex-row md:items-center md:justify-between">
                                 <div className="flex items-center gap-2 md:shrink-0">
                                     <h2 className="text-xl font-bold text-gray-800">상세 일정</h2>

@@ -49,6 +49,7 @@ export const useSchedule = () => {
             setLoading(true);
             const data = await scheduleApi.updateSchedule(scheduleId, req); // ✅ API 호출
             setSchedules(data); // 반환된 최신 리스트로 갱신
+            return data;
         } finally {
             setLoading(false);
         }

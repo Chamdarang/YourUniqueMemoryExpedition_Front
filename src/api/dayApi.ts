@@ -62,13 +62,25 @@ export const getPlanDays = async (planId: number): Promise<PlanDayResponse[]> =>
 };
 
 // 5. 계획 수정 (이름 변경 등)
-export const updatePlanDay = async (dayId: number, req: PlanDayUpdateRequest): Promise<void> => {
+export class PlanDayEditConflictError extends Error {
+  latestDay: PlanDayResponse | null;
+
+  constructor(message: string, latestDay: PlanDayResponse | null) {
+    super(message);
+    this.name = 'PlanDayEditConflictError';
+    this.latestDay = latestDay;
+  }
+}
+
+export const updatePlanDay = async (dayId: number, req: PlanDayUpdateRequest): Promise<PlanDayResponse> => {
   const res = await fetchWithAuth(`/api/days/${dayId}`, {
     method: 'PATCH',
     body: JSON.stringify(req),
   });
-  const json: ApiResponse<void> = await res.json();
+  const json: ApiResponse<PlanDayResponse> = await res.json();
+  if (res.status === 409) throw new PlanDayEditConflictError(json.message || '하루 일정이 동시에 수정되었습니다.', json.data);
   if (!json.success) throw new Error(json.message);
+  return json.data;
 };
 
 // 6. 순서 변경

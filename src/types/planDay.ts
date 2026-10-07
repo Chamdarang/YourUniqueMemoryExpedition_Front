@@ -10,15 +10,18 @@ export interface PlanDayResponse {
   dayOrder: number;
   memo: string;
   scheduleMode: ScheduleMode;
+  version: number;
 }
 
 // 2. 상세 조회 응답 (PlanDayDetailResponse.java)
 export interface PlanDayDetailResponse {
   id: number;
+  planId: number | null;
   dayName: string;
   dayOrder: number;
   memo: string;
   scheduleMode: ScheduleMode;
+  version: number;
   schedules: DayScheduleResponse[];
 }
 
@@ -40,6 +43,7 @@ export interface PlanDayUpdateRequest {
   dayName: string;
   memo: string;
   scheduleMode?: ScheduleMode;
+  expectedVersion: number;
 }
 
 // 6. 순서 변경 요청 (PlanDaySwapRequest.java)

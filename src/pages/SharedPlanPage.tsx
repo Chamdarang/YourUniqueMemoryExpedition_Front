@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { APIProvider } from '@vis.gl/react-google-maps';
 import { acceptPlanShareLink, getPublicPlanShare } from '../api/planShareApi';
 import SharedPlanDayMap from '../components/plan/SharedPlanDayMap';
 import type { PublicPlanShare } from '../types/planShare';
+import { usePlanLiveUpdates } from '../hooks/usePlanLiveUpdates';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
@@ -27,6 +28,7 @@ export default function SharedPlanPage() {
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
   const [acceptError, setAcceptError] = useState('');
+  const refreshRequestId = useRef(0);
   const loggedIn = Boolean(localStorage.getItem('accessToken'));
 
   const continueToLogin = () => {
@@ -52,6 +54,7 @@ export default function SharedPlanPage() {
 
   useEffect(() => {
     let active = true;
+    refreshRequestId.current += 1;
     if (!token) {
       setError('공유 링크에 일정 접근 정보가 없습니다.');
       setLoading(false);
@@ -66,6 +69,32 @@ export default function SharedPlanPage() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [token]);
+
+  const refreshSharedPlan = useCallback(async () => {
+    if (!token) return;
+    const requestId = ++refreshRequestId.current;
+    try {
+      const latestPlan = await getPublicPlanShare(token);
+      if (requestId !== refreshRequestId.current) return;
+      setPlan(latestPlan);
+      setError('');
+    } catch (reason) {
+      if (requestId !== refreshRequestId.current) return;
+      setError(reason instanceof Error ? reason.message : '공유 일정을 새로 불러오지 못했습니다.');
+    }
+  }, [token]);
+  const handleLiveUpdateUnavailable = useCallback((status: number) => {
+    if (status !== 404 && status !== 410) return;
+    refreshRequestId.current += 1;
+    setPlan(null);
+    setError('공유 링크가 만료되었거나 더 이상 사용할 수 없습니다.');
+  }, []);
+  const liveConnectionState = usePlanLiveUpdates(
+    plan?.planId,
+    refreshSharedPlan,
+    token || undefined,
+    handleLiveUpdateUnavailable,
+  );
 
   if (loading) {
     return <main className="flex h-dvh items-center justify-center overflow-y-auto overscroll-y-contain bg-slate-50 px-4 text-sm font-bold text-slate-500">공유 일정을 불러오는 중…</main>;
@@ -88,7 +117,12 @@ export default function SharedPlanPage() {
     <main className="h-dvh overflow-y-auto overscroll-y-contain bg-slate-50 px-4 py-8 text-slate-800 md:py-12">
       <div className="mx-auto max-w-3xl">
         <header className="mb-8 rounded-3xl bg-gradient-to-br from-blue-700 to-indigo-800 p-6 text-white shadow-lg md:p-9">
-          <div className="text-xs font-black uppercase tracking-[0.25em] text-blue-100">YUME · Shared trip</div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-black uppercase tracking-[0.25em] text-blue-100">
+            <span>YUME · Shared trip</span>
+            <span role="status" className="normal-case tracking-normal">
+              {liveConnectionState === 'connected' ? '● 실시간 업데이트 중' : liveConnectionState === 'unavailable' ? '실시간 업데이트 연결 끊김' : '실시간 연결 중…'}
+            </span>
+          </div>
           <h1 className="mt-3 text-3xl font-black md:text-4xl">{plan.planName}</h1>
           {(plan.planStartDate || plan.planEndDate) && <p className="mt-3 text-sm font-semibold text-blue-100">{plan.planStartDate || '날짜 미정'} ~ {plan.planEndDate || '날짜 미정'}</p>}
           {plan.planMemo && <p className="mt-5 whitespace-pre-wrap rounded-2xl bg-white/10 p-4 text-sm leading-relaxed">{plan.planMemo}</p>}

@@ -43,6 +43,7 @@ export interface ScheduleQuickCreateFields {
 }
 
 export interface ScheduleUpdateRequest {
+  expectedVersion: number;
   spotUserId?: number | null;
   spotName?: string;
   lat?: number;
@@ -80,6 +81,7 @@ export interface ScheduleTransferResponse {
 
 export interface DayScheduleResponse {
   id: number;
+  version: number;
   dayId: number;
   scheduleOrder: number;
   spotUserId: number | null;

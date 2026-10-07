@@ -6,6 +6,16 @@ import type {
   ScheduleUpdateRequest, ScheduleTransferRequest, ScheduleTransferResponse
 } from "../types/schedule";
 
+export class ScheduleEditConflictError extends Error {
+  latestSchedule: DayScheduleResponse | null;
+
+  constructor(message: string, latestSchedule: DayScheduleResponse | null) {
+    super(message);
+    this.name = 'ScheduleEditConflictError';
+    this.latestSchedule = latestSchedule;
+  }
+}
+
 /** ✅ 1. 특정 날짜의 스케줄 목록 조회 */
 export const getSchedulesByDay = async (dayId: number): Promise<DayScheduleResponse[]> => {
   const res = await fetchWithAuth(`/api/schedules/day/${dayId}`, { method: 'GET' });
@@ -35,9 +45,13 @@ export const updateSchedule = async (scheduleId: number, req: ScheduleUpdateRequ
     body: JSON.stringify(req),
   });
 
-  const json: ApiResponse<DayScheduleResponse[]> = await res.json();
+  const json: ApiResponse<DayScheduleResponse[] | DayScheduleResponse | null> = await res.json();
+  if (res.status === 409) {
+    const latest = json.data && !Array.isArray(json.data) ? json.data : null;
+    throw new ScheduleEditConflictError(json.message || '일정이 동시에 수정되었습니다.', latest);
+  }
   if (!json.success) throw new Error(json.message);
-  return json.data.sort((a, b) => a.scheduleOrder - b.scheduleOrder);
+  return (json.data as DayScheduleResponse[]).sort((a, b) => a.scheduleOrder - b.scheduleOrder);
 };
 
 /** ✅ 4. 스케줄 삭제 (개별 작업) */
