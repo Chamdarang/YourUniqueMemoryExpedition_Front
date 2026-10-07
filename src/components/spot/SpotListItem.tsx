@@ -30,7 +30,7 @@ export default function SpotListItem({ spot, onDelete, onToggleVisit }: Props) {
 
             {/* 1. 유형 아이콘 (유틸리티 스타일 적용) */}
             <td className="px-6 py-4 whitespace-nowrap">
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black border uppercase tracking-tight ${info.color}`}>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black border uppercase tracking-tight ${info.color}`}>
                   {info.icon} {info.label}
                 </span>
             </td>
@@ -57,7 +57,7 @@ export default function SpotListItem({ spot, onDelete, onToggleVisit }: Props) {
                 </div>
 
                 {spot.description && (
-                    <p className="text-[10px] text-gray-400 mt-0.5 truncate italic">
+                    <p className="text-xs text-gray-500 mt-0.5 truncate italic">
                         {spot.description}
                     </p>
                 )}
@@ -74,10 +74,10 @@ export default function SpotListItem({ spot, onDelete, onToggleVisit }: Props) {
             <td className="px-6 py-4 whitespace-nowrap text-center">
                 <button
                     onClick={() => onToggleVisit && onToggleVisit(spot)}
-                    className={`inline-flex items-center justify-center gap-1 text-[10px] font-black px-2.5 py-1 rounded-full border transition-all active:scale-95 shadow-sm
+                    className={`min-h-11 min-w-11 inline-flex items-center justify-center gap-1 text-xs font-black px-2.5 py-1 rounded-full border transition-all active:scale-95 shadow-sm
             ${spot.isVisit
                         ? 'text-green-600 bg-green-50 border-green-100 hover:bg-green-100'
-                        : 'text-gray-400 bg-gray-50 border-gray-100 hover:bg-gray-200 hover:text-gray-600'
+                        : 'text-gray-500 bg-gray-50 border-gray-100 hover:bg-gray-200 hover:text-gray-600'
                     }`}
                 >
                     {spot.isVisit ? '✅ 방문함' : '⬜ 미방문'}
@@ -86,18 +86,18 @@ export default function SpotListItem({ spot, onDelete, onToggleVisit }: Props) {
 
             {/* 5. 관리 버튼 (무채색/미니멀 스타일) */}
             <td className="px-6 py-4 whitespace-nowrap text-right">
-                <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center justify-end gap-2">
                     <button
                         onClick={() => navigate(`/spots/${spot.id}`)}
-                        className="text-gray-400 hover:text-gray-900 text-sm font-black transition-colors"
-                        title="상세 정보"
+                        className="min-h-11 min-w-11 text-gray-500 hover:text-gray-900 text-sm font-black transition-colors"
+                        aria-label={`${getSpotDisplayName(spot)} 상세 정보`} title="상세 정보"
                     >
                         🔍
                     </button>
                     <button
                         onClick={() => onDelete(spot.id)}
-                        className="text-gray-400 hover:text-red-500 text-sm font-black transition-colors"
-                        title="삭제"
+                        className="min-h-11 min-w-11 text-gray-500 hover:text-red-500 text-sm font-black transition-colors"
+                        aria-label={`${getSpotDisplayName(spot)} 삭제`} title="삭제"
                     >
                         🗑️
                     </button>

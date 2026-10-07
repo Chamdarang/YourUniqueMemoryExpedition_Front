@@ -1,3 +1,4 @@
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { useEffect, useMemo, useState } from 'react';
 import { analyzePlanImportFile, importPlanData, previewGeneralPlanImport } from '../../api/planApi';
 import type {
@@ -129,6 +130,7 @@ export default function GeneralImportModal({ file, onClose, onImported }: Props)
     csvDelimiter: 'AUTO',
   });
 
+  const dialogRef = useDialogFocus(true, () => { if (!busy) onClose(); });
   useEffect(() => {
     let active = true;
     setBusy(true);
@@ -236,7 +238,7 @@ export default function GeneralImportModal({ file, onClose, onImported }: Props)
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="여행 파일 가져오기" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
         <div className="flex shrink-0 items-start justify-between gap-4 border-b px-6 py-5 md:px-8">
           <div>

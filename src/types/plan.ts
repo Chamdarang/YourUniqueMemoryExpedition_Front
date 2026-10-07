@@ -11,7 +11,34 @@ export interface PlanResponse{
 }
 
 export interface PlanDetailResponse extends PlanResponse{
+    accessRole: 'OWNER' | 'EDITOR';
     days: PlanDayResponse[];
+}
+
+export interface PlanMemberResponse {
+    id: number;
+    userId: number;
+    username: string;
+    status: 'PENDING' | 'ACCEPTED';
+    invitedAt: string;
+}
+
+export interface PlanCollaboratorResponse {
+    userId: number;
+    nickname: string;
+    role: 'OWNER' | 'EDITOR';
+}
+
+export interface PlanInvitationResponse {
+    id: number;
+    planId: number;
+    planName: string;
+    inviterUsername: string;
+    invitedAt: string;
+}
+
+export interface SharedPlanResponse extends PlanResponse {
+    ownerNickname: string;
 }
 
 export interface PlanCreateRequest{

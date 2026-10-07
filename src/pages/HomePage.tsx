@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary
 } from "@vis.gl/react-google-maps";
 
 // API
 import { getUpcomingPlan } from "../api/planApi";
+import { getSharedPlans } from "../api/planMemberApi";
 import { getPlanDays } from "../api/dayApi";
 import { getSchedulesByDay, toggleScheduleSkip, toggleScheduleVisit } from "../api/scheduleApi";
 
@@ -14,13 +15,16 @@ import { getSpotTypeInfo } from "../utils/spotUtils";
 import { getHomeScheduleState } from "../utils/homeScheduleUtils";
 
 // Types
-import type { PlanResponse } from "../types/plan";
+import type { PlanResponse, SharedPlanResponse } from "../types/plan";
 import type { DayScheduleResponse } from "../types/schedule";
 import type { Transportation } from "../types/enums";
 import { useFeedback } from "../components/common/useFeedback";
 import { getOfflineHomeSnapshot } from "../utils/offlineHomeStorage";
+import FirstVisitGuide from "../components/common/FirstVisitGuide";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+
+type HomePlan = PlanResponse & { isSharedPlan?: boolean; ownerNickname?: string };
 
 // 🛠️ [유틸] 헬퍼 함수들
 const cleanMemoTags = (memo: string | null | undefined) => {
@@ -124,9 +128,13 @@ function NumberedMarker({ number, color = "#3B82F6", active = false }: { number?
 }
 
 export default function HomePage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { showToast } = useFeedback();
   const username = localStorage.getItem('username') || '여행자';
-  const [upcomingPlan, setUpcomingPlan] = useState<PlanResponse | null>(null);
+  const displayName = localStorage.getItem('nickname') || username;
+  const [upcomingPlan, setUpcomingPlan] = useState<HomePlan | null>(null);
+  const [upcomingPlanIsShared, setUpcomingPlanIsShared] = useState(false);
   const [todaySchedules, setTodaySchedules] = useState<DayScheduleResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [scheduleLoading, setScheduleLoading] = useState(false);
@@ -142,6 +150,27 @@ export default function HomePage() {
   const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
   const [isUsingCachedData, setIsUsingCachedData] = useState(false);
   const [offlineDataSavedAt, setOfflineDataSavedAt] = useState<string | null>(null);
+  const [showFirstVisitGuide, setShowFirstVisitGuide] = useState(false);
+
+  useEffect(() => {
+    const state = location.state as { firstVisitGuide?: boolean } | null;
+    if (!state?.firstVisitGuide) return;
+
+    const guideKey = `yume:first-visit-guide:${username}`;
+    if (!localStorage.getItem(guideKey)) setShowFirstVisitGuide(true);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate, username]);
+
+  const closeFirstVisitGuide = () => {
+    try { localStorage.setItem(`yume:first-visit-guide:${username}`, 'done'); } catch { /* The guide can still be dismissed for this visit. */ }
+    setShowFirstVisitGuide(false);
+  };
+
+  useEffect(() => {
+    const openGuide = () => setShowFirstVisitGuide(true);
+    window.addEventListener('yume:open-page-guide', openGuide);
+    return () => window.removeEventListener('yume:open-page-guide', openGuide);
+  }, []);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -168,9 +197,24 @@ export default function HomePage() {
 
   useEffect(() => {
     const loadHomeData = async () => {
-      let plan: PlanResponse | null = null;
+      let plan: HomePlan | null = null;
       try {
-        plan = await getUpcomingPlan(); setUpcomingPlan(plan);
+        const [ownPlan, sharedPlans] = await Promise.all([
+          getUpcomingPlan(),
+          getSharedPlans().catch((): SharedPlanResponse[] => []),
+        ]);
+        const candidates: HomePlan[] = [
+          ...(ownPlan ? [{ ...ownPlan, isSharedPlan: false }] : []),
+          ...sharedPlans
+            .filter(shared => Boolean(shared.planStartDate && shared.planEndDate)
+              && calculateDaysDiff(shared.planEndDate) >= 0)
+            .map(shared => ({ ...shared, isSharedPlan: true })),
+        ].filter(candidate => Boolean(candidate.planStartDate && candidate.planEndDate)
+          && calculateDaysDiff(candidate.planEndDate) >= 0)
+          .sort((first, second) => first.planStartDate.localeCompare(second.planStartDate));
+        plan = candidates[0] ?? null;
+        setUpcomingPlan(plan);
+        setUpcomingPlanIsShared(Boolean(plan?.isSharedPlan));
         if (plan) {
           const dDay = calculateDaysDiff(plan.planStartDate);
           const endDiff = calculateDaysDiff(plan.planEndDate);
@@ -194,6 +238,7 @@ export default function HomePage() {
         const snapshot = owner ? await getOfflineHomeSnapshot(owner) : null;
         if (snapshot) {
           setUpcomingPlan(snapshot.plan);
+          setUpcomingPlanIsShared(false);
           setIsUsingCachedData(true);
           setOfflineDataSavedAt(snapshot.savedAt);
           if (snapshot.plan) {
@@ -313,11 +358,15 @@ export default function HomePage() {
           </div>
         )}
         <section className="pt-6 shrink-0 bg-white z-20">
-          <h1 className="text-2xl font-bold text-gray-900">안녕하세요, {username}님.</h1>
-          <p className="text-gray-500 text-sm mt-1">{upcomingPlan ? '여행 일정과 현재 상황을 확인하세요.' : '새로운 여행을 떠나보세요!'}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-gray-900">안녕하세요, {displayName}님.</h1>
+              <p className="text-gray-500 text-sm mt-1">{upcomingPlan ? '여행 일정과 현재 상황을 확인하세요.' : '새로운 여행을 떠나보세요!'}</p>
+            </div>
+          </div>
         </section>
 
-        <div className="flex-1 min-h-0 mt-3 overflow-hidden flex flex-col mb-4">
+        <div data-guide-target="home-plan" className="flex-1 min-h-0 mt-3 overflow-hidden flex flex-col mb-4">
           {!upcomingPlan ? (
               <div className="bg-white rounded-2xl p-8 border border-gray-200 text-center shadow-sm">
                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">☕</div>
@@ -333,6 +382,7 @@ export default function HomePage() {
                       <span className="text-xs font-bold text-blue-600 tracking-wide uppercase">ONGOING</span>
                     </div>
                     <h2 className="text-lg font-bold text-gray-900">{currentDayN}일차 여행 중 ✈️</h2>
+                    {upcomingPlanIsShared && <p className="mt-1 text-xs font-medium text-gray-500">{upcomingPlan.ownerNickname}님과 함께하는 여행</p>}
                   </div>
                   <Link to={`/plans/${upcomingPlan.id}`} className="text-sm text-blue-600 font-bold hover:underline">전체 일정</Link>
                 </div>
@@ -371,7 +421,7 @@ export default function HomePage() {
                         )}
                       </div>
 
-                      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-gray-50 scrollbar-hide relative" onWheel={handleManualScroll} onTouchStart={handleManualScroll}>
+                      <div data-guide-target="home-today-schedule" ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-gray-50 scrollbar-hide relative" onWheel={handleManualScroll} onTouchStart={handleManualScroll}>
                         <div className="p-4">
                           {/* ✅ 헤더 영역: 공간을 침범하지 않으면서 최대한 많이 노출하도록 보정 */}
                           <div className="sticky top-0 bg-gray-50 z-30 border-b border-gray-100/50 flex flex-col py-1">
@@ -410,7 +460,7 @@ export default function HomePage() {
                                 <button type="button" onClick={() => changeDelay(0)} disabled={delayMinutes === 0} className="rounded-lg px-2.5 py-1 text-xs font-bold text-gray-400 hover:bg-gray-100 disabled:opacity-30">초기화</button>
                               </div>
                             </div>
-                            <p className="text-[8px] text-orange-400 font-medium leading-none mt-0.5">※ 주황색 시간은 인저리 타임 포함</p>
+                            <p className="text-[8px] text-orange-400 font-medium leading-none mt-0.5">※ 주황색 시간은 여유시간 포함</p>
                           </div>
 
                           <div className="space-y-0 mt-2 pb-10 relative z-10">
@@ -491,6 +541,7 @@ export default function HomePage() {
                 <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-bold border border-white/30 mb-4 inline-block">{status}</span>
                 <h2 className="text-4xl font-bold mb-2">{status === 'UPCOMING' ? `D-${dDay}` : '여행 종료'}</h2>
                 <h3 className="text-xl font-medium opacity-95">{upcomingPlan.planName}</h3>
+                {upcomingPlanIsShared && <p className="mt-1 text-sm text-blue-100">{upcomingPlan.ownerNickname}님과 함께하는 여행</p>}
                 <div className="mt-4 text-right"><Link to={`/plans/${upcomingPlan.id}`} className="text-sm font-bold hover:underline">상세 보기 &rarr;</Link></div>
               </div>
           )}
@@ -498,8 +549,9 @@ export default function HomePage() {
 
         <div className="grid grid-cols-2 gap-4 pb-4 shrink-0 border-t border-gray-100 pt-4 bg-white">
           <Link to="/map" className="flex items-center justify-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition"><span className="text-xl">🗺️</span><span className="text-sm font-bold text-gray-700">장소 탐색</span></Link>
-          <Link to="/spots" className="flex items-center justify-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition"><span className="text-xl">📍</span><span className="text-sm font-bold text-gray-700">내 장소</span></Link>
+          <Link to="/spots" className="flex items-center justify-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition"><span className="text-xl">📍</span><span className="text-sm font-bold text-gray-700">장소 보관함</span></Link>
         </div>
+        {showFirstVisitGuide && <FirstVisitGuide onClose={closeFirstVisitGuide} />}
       </div>
   );
 }

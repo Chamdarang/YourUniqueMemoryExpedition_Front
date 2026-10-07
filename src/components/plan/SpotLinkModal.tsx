@@ -1,3 +1,4 @@
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { useEffect, useMemo, useState } from 'react';
 import { useMapsLibrary } from '@vis.gl/react-google-maps';
 import { createSpot, getMySpots } from '../../api/spotApi';
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export default function SpotLinkModal({ planId, groups, onClose, onChanged }: Props) {
+  const dialogRef = useDialogFocus(true, onClose);
   const placesLibrary = useMapsLibrary('places');
   const { showToast } = useFeedback();
   const [remaining, setRemaining] = useState(groups);
@@ -105,7 +107,7 @@ export default function SpotLinkModal({ planId, groups, onClose, onChanged }: Pr
   if (!current) return null;
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="일정의 장소 연결" className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-gray-100 p-5">
           <div>

@@ -7,6 +7,7 @@ import { getPlans } from "../../api/planApi";
 import type { PlanResponse } from "../../types/plan";
 import type { SwapMode } from "../../types/enums";
 import { useFeedback } from '../common/useFeedback';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 
 interface Props {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDayName }: Props) {
+  const dialogRef = useDialogFocus(isOpen, onClose);
   const { showToast } = useFeedback();
   const [plans, setPlans] = useState<PlanResponse[]>([]);
 
@@ -46,7 +48,7 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
   if (!isOpen) return null;
 
   return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="일정 이동 / 관리" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
         <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl animate-fade-in-up">
 
           {/* 헤더 */}
@@ -61,19 +63,19 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
               <div className="grid grid-cols-3 gap-2">
                 <button
                     onClick={() => setSwapMode('REPLACE')}
-                    className={`py-2 text-xs rounded-lg border font-bold transition ${swapMode === 'REPLACE' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                    className={`min-h-11 min-w-11 py-2 text-xs rounded-lg border font-bold transition ${swapMode === 'REPLACE' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}
                 >
                   덮어쓰기
                 </button>
                 <button
                     onClick={() => setSwapMode('SHIFT')}
-                    className={`py-2 text-xs rounded-lg border font-bold transition ${swapMode === 'SHIFT' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                    className={`min-h-11 min-w-11 py-2 text-xs rounded-lg border font-bold transition ${swapMode === 'SHIFT' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}
                 >
                   밀어내기
                 </button>
                 <button
                     onClick={() => setSwapMode('INDEPENDENT')}
-                    className={`py-2 text-xs rounded-lg border font-bold transition ${swapMode === 'INDEPENDENT' ? 'bg-orange-50 border-orange-500 text-orange-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                    className={`min-h-11 min-w-11 py-2 text-xs rounded-lg border font-bold transition ${swapMode === 'INDEPENDENT' ? 'bg-orange-50 border-orange-500 text-orange-700' : 'text-gray-500 hover:bg-gray-50'}`}
                 >
                   독립시키기
                 </button>
@@ -83,7 +85,7 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
               <p className="text-xs text-gray-500 mt-2 bg-gray-50 p-3 rounded-lg break-keep leading-relaxed border border-gray-100">
                 {swapMode === 'REPLACE' && '⚠️ 대상 위치에 원래 있던 일정을 완전히 삭제하고, 이 일정으로 덮어씁니다.'}
                 {swapMode === 'SHIFT' && '➡️ 대상 위치부터 뒤에 있는 일정들을 하루씩 뒤로 미룹니다.'}
-                {swapMode === 'INDEPENDENT' && '📦 대상 위치에 원래 있던 일정을 여행에서 빼내어 "보관함(내 계획)"으로 옮기고, 이 일정을 넣습니다.'}
+                {swapMode === 'INDEPENDENT' && '📦 대상 위치에 원래 있던 일정을 여행에서 빼내어 "하루 코스 보관함"으로 옮기고, 이 일정을 넣습니다.'}
               </p>
             </div>
 
@@ -91,8 +93,8 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
             <div className="animate-fade-in space-y-3 p-3 border border-gray-100 rounded-xl">
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">대상 여행</label>
-                <select
-                    className="w-full p-2 border rounded-lg text-sm bg-white outline-none focus:border-blue-500 transition"
+                <select aria-label="대상 여행"
+                    className="min-h-11 w-full p-2 border rounded-lg text-sm bg-white outline-none focus:border-blue-500 transition"
                     value={selectedPlanId}
                     onChange={(e) => { setSelectedPlanId(Number(e.target.value)); setTargetDayOrder(1); }}
                 >
@@ -104,8 +106,8 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
               {selectedPlan && (
                   <div className="animate-fade-in">
                     <label className="block text-xs font-bold text-gray-500 mb-1">날짜 (위치)</label>
-                    <select
-                        className="w-full p-2 border rounded-lg text-sm bg-white outline-none focus:border-blue-500 transition"
+                    <select aria-label="날짜 위치"
+                        className="min-h-11 w-full p-2 border rounded-lg text-sm bg-white outline-none focus:border-blue-500 transition"
                         value={targetDayOrder}
                         onChange={(e) => setTargetDayOrder(Number(e.target.value))}
                     >
@@ -122,13 +124,13 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
           <div className="flex gap-2 mt-6">
             <button
                 onClick={onClose}
-                className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition"
+                className="min-h-11 min-w-11 flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition"
             >
               취소
             </button>
             <button
                 onClick={handleSubmit}
-                className="flex-[2] py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 shadow-md transition"
+                className="min-h-11 min-w-11 flex-[2] py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 shadow-md transition"
             >
               확인
             </button>

@@ -4,21 +4,20 @@ import type { SpotResponse } from "../../types/spot";
 // Components
 import SpotListItem from "./SpotListItem";
 import SpotCard from "./SpotCard"; // ✅ 공통 카드 컴포넌트 임포트
+import EmptyListState from '../common/EmptyListState';
 
 interface Props {
   spots: SpotResponse[];
+  filtered?: boolean;
+  onReset?: () => void;
   onDelete: (id: number) => void;
   onToggleVisit?: (spot: SpotResponse) => void;
 }
 
-export default function SpotList({ spots, onDelete, onToggleVisit }: Props) {
+export default function SpotList({ spots, onDelete, onToggleVisit, filtered, onReset }: Props) {
 
   if (!spots || spots.length === 0) {
-    return (
-        <div className="text-center py-20 bg-white rounded-xl border-2 border-gray-100 shadow-sm">
-          <p className="text-gray-400 text-sm font-bold italic">조건에 맞는 장소가 없습니다.</p>
-        </div>
-    );
+    return <EmptyListState item="장소" filtered={filtered} onReset={onReset} createHref="/map" createLabel="장소 탐색하기" />;
   }
 
   return (
@@ -53,11 +52,11 @@ export default function SpotList({ spots, onDelete, onToggleVisit }: Props) {
 
               <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">유형</th>
-                <th className="px-6 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">장소명</th>
-                <th className="px-4 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">주소</th>
-                <th className="px-4 py-4 text-center text-[11px] font-black text-gray-400 uppercase tracking-widest">방문여부</th>
-                <th className="px-6 py-4 text-right text-[11px] font-black text-gray-400 uppercase tracking-widest">관리</th>
+                <th className="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">유형</th>
+                <th className="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">장소명</th>
+                <th className="px-4 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">주소</th>
+                <th className="px-4 py-4 text-center text-xs font-black text-gray-500 uppercase tracking-widest">방문여부</th>
+                <th className="px-6 py-4 text-right text-xs font-black text-gray-500 uppercase tracking-widest">관리</th>
               </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-50">

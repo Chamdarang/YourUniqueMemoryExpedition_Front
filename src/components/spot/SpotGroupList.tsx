@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // API
 import { getAllGroups, getGroupById, updateGroup, removeSpotFromGroup, deleteGroup } from "../../api/groupApi";
@@ -10,6 +10,7 @@ import type { SpotGroupResponse } from "../../types/groups";
 // Components
 import SpotList from "./SpotList";
 import { useFeedback } from '../common/useFeedback';
+import LoadErrorState from '../common/LoadErrorState';
 
 interface Props {
   initialGroupName?: string; // URL 타고 들어왔을 때 자동 진입용
@@ -22,6 +23,9 @@ export default function SpotGroupList({ initialGroupName }: Props) {
   // ----------------------------------------------------------------
   const [groups, setGroups] = useState<SpotGroupResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const requestVersion = useRef(0);
 
   // 선택된 그룹 상태 (Detail View)
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
@@ -36,58 +40,68 @@ export default function SpotGroupList({ initialGroupName }: Props) {
   // ⚙️ Effects & Data Fetching
   // ----------------------------------------------------------------
 
-  // 그룹 목록 로드
-  const fetchGroups = async () => {
+  const fetchGroups = useCallback(async () => {
+    const version = ++requestVersion.current;
+    setLoading(true);
     try {
-      setLoading(true);
       const data = await getAllGroups();
+      if (version !== requestVersion.current) return null;
       setGroups(data);
-
-      // URL 파라미터가 있고, 아직 선택된 그룹이 없다면 자동 진입
-      if (initialGroupName && !selectedGroupId) {
-        const target = data.find(g => g.groupName === initialGroupName);
-        if (target) {
-          handleGroupClick(target.id, target.groupName);
-        }
-      }
-    } catch (err) {
-      console.error(err);
+      setListError(null);
+      return data;
+    } catch {
+      if (version === requestVersion.current) setListError('그룹 목록을 불러오지 못했습니다.');
+      return null;
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
+  }, []);
+
+  const loadGroup = useCallback(async (groupId: number) => {
+    const version = ++requestVersion.current;
+    setLoading(true);
+    try {
+      const data = await getGroupById(groupId);
+      if (version !== requestVersion.current) return;
+      setGroupSpots(data.spots);
+      setSelectedGroupName(data.groupName);
+      setDetailError(null);
+    } catch {
+      if (version === requestVersion.current) setDetailError('그룹의 장소를 불러오지 못했습니다.');
+    } finally {
+      if (version === requestVersion.current) setLoading(false);
+    }
+  }, []);
+
+  const handleGroupClick = (groupId: number, groupName: string) => {
+    setSelectedGroupId(groupId);
+    setSelectedGroupName(groupName);
+    setGroupSpots([]);
+    setDetailError(null);
+    setIsEditing(false);
+    void loadGroup(groupId);
   };
 
   useEffect(() => {
-    fetchGroups();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ----------------------------------------------------------------
-  // 🎮 Handlers
-  // ----------------------------------------------------------------
-
-  // 그룹 상세 진입
-  const handleGroupClick = async (groupId: number, groupName: string) => {
-    try {
-      setLoading(true);
-      const data = await getGroupById(groupId);
-      setGroupSpots(data.spots);
-      setSelectedGroupName(groupName);
-      setSelectedGroupId(groupId);
-      setIsEditing(false);
-    } catch {
-      showToast({ message: "그룹 정보를 불러오지 못했습니다.", type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  };
+    let active = true;
+    void fetchGroups().then(data => {
+      const target = data?.find(group => group.groupName === initialGroupName);
+      if (!active || !target) return;
+      setSelectedGroupId(target.id);
+      setSelectedGroupName(target.groupName);
+      void loadGroup(target.id);
+    });
+    const versionRef = requestVersion;
+    return () => { active = false; versionRef.current++; };
+  }, [fetchGroups, loadGroup, initialGroupName]);
 
   // 목록으로 돌아가기
   const handleBack = () => {
     setSelectedGroupId(null);
     setGroupSpots([]);
+    setDetailError(null);
     setIsEditing(false);
-    fetchGroups(); // 그룹별 장소 개수 등 최신화
+    void fetchGroups(); // 그룹별 장소 개수 등 최신화
   };
 
   // 그룹 이름 수정 시작
@@ -144,19 +158,22 @@ export default function SpotGroupList({ initialGroupName }: Props) {
   // ----------------------------------------------------------------
 
   // 로딩 중이면서 데이터가 없을 때
-  if (loading && !selectedGroupId && groups.length === 0) {
-    return <div className="text-center p-20 text-gray-400">그룹 로딩 중... 📂</div>;
+  if (loading && !listError && !selectedGroupId && groups.length === 0) {
+    return <div role="status" className="text-center p-12 text-gray-600">그룹을 불러오는 중...</div>;
   }
 
   return (
-      <div className="animate-fade-in">
+      <div className="animate-fade-in" aria-busy={loading}>
+        {listError && <LoadErrorState message={listError} retrying={loading} onRetry={() => void fetchGroups()} />}
+        {detailError && selectedGroupId && <LoadErrorState message={detailError} retrying={loading} onRetry={() => void loadGroup(selectedGroupId)} />}
+        {loading && <p role="status" className="mb-4 text-sm text-gray-600">그룹 정보를 불러오는 중...</p>}
 
         {selectedGroupId ? (
             // 🅰️ [상세 뷰] 그룹 내부 (장소 목록)
             <div>
               <button
                   onClick={handleBack}
-                  className="mb-4 flex items-center text-sm font-bold text-gray-500 hover:text-blue-600 transition"
+                  className="min-h-11 mb-4 flex items-center text-sm font-bold text-gray-500 hover:text-blue-600 transition"
               >
                 ← 📂 그룹 목록으로 돌아가기
               </button>
@@ -169,16 +186,16 @@ export default function SpotGroupList({ initialGroupName }: Props) {
                     <span className="text-3xl">🏷️</span>
 
                     {isEditing ? (
-                        <div className="flex gap-2 w-full md:w-auto">
+                        <div className="flex flex-wrap gap-2 w-full md:w-auto min-w-0">
                           <input
-                              type="text"
-                              className="px-3 py-2 border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-800"
+                              type="text" aria-label="그룹 이름"
+                              className="min-h-11 min-w-0 w-full px-3 py-2 border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-800"
                               value={editName}
                               onChange={e => setEditName(e.target.value)}
                               autoFocus
                           />
-                          <button onClick={handleRenameGroup} className="bg-blue-600 text-white px-3 py-2 rounded-lg font-bold text-sm whitespace-nowrap hover:bg-blue-700">저장</button>
-                          <button onClick={() => setIsEditing(false)} className="bg-white text-gray-600 border border-gray-300 px-3 py-2 rounded-lg font-bold text-sm whitespace-nowrap hover:bg-gray-50">취소</button>
+                          <button onClick={handleRenameGroup} className="min-h-11 bg-blue-600 text-white px-3 py-2 rounded-lg font-bold text-sm whitespace-nowrap hover:bg-blue-700">저장</button>
+                          <button onClick={() => setIsEditing(false)} className="min-h-11 bg-white text-gray-600 border border-gray-300 px-3 py-2 rounded-lg font-bold text-sm whitespace-nowrap hover:bg-gray-50">취소</button>
                         </div>
                     ) : (
                         <div>
@@ -193,13 +210,13 @@ export default function SpotGroupList({ initialGroupName }: Props) {
                       <div className="flex gap-2">
                         <button
                             onClick={startEditing}
-                            className="px-3 py-2 bg-white border border-blue-200 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-50 transition"
+                            className="min-h-11 px-3 py-2 bg-white border border-blue-200 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-50 transition"
                         >
                           ✏️ 이름 변경
                         </button>
                         <button
                             onClick={handleDeleteGroup}
-                            className="px-3 py-2 bg-white border border-red-200 text-red-500 rounded-lg text-sm font-bold hover:bg-red-50 transition"
+                            className="min-h-11 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-lg text-sm font-bold hover:bg-red-50 transition"
                         >
                           🗑️ 그룹 삭제
                         </button>
@@ -210,11 +227,11 @@ export default function SpotGroupList({ initialGroupName }: Props) {
 
               {/* 장소 리스트 */}
               <div className="bg-white rounded-xl border border-gray-100 p-1">
-                {groupSpots.length === 0 ? (
+                {groupSpots.length === 0 ? (!loading && !detailError && (
                     <div className="text-center py-12">
                       <p className="text-gray-400">이 그룹에 저장된 장소가 없습니다.</p>
                     </div>
-                ) : (
+                )) : (
                     <SpotList
                         spots={groupSpots}
                         onDelete={handleRemoveSpotFromGroup}
@@ -225,17 +242,17 @@ export default function SpotGroupList({ initialGroupName }: Props) {
         ) : (
             // 🅱️ [목록 뷰] 그룹 리스트 (폴더 아이콘)
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {groups.length === 0 ? (
+              {groups.length === 0 ? (!listError && (
                   <div className="col-span-full text-center py-20 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-                    <p className="text-gray-400">생성된 그룹이 없습니다.</p>
-                    <p className="text-xs text-gray-400 mt-2">장소 상세화면에서 태그를 추가하면 그룹이 생성됩니다.</p>
+                    <p className="text-gray-400">만든 그룹이 아직 없습니다.</p>
+                    <p className="text-xs text-gray-400 mt-2">장소 상세의 그룹 관리에서 그룹을 추가할 수 있습니다.</p>
                   </div>
-              ) : (
+              )) : (
                   groups.map(group => (
-                      <div
+                      <button type="button" aria-label={`${group.groupName} 그룹 열기`}
                           key={group.id}
                           onClick={() => handleGroupClick(group.id, group.groupName)}
-                          className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 cursor-pointer transition group relative overflow-hidden"
+                          className="text-left min-h-11 focus-visible:ring-2 focus-visible:ring-blue-500 bg-white p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 cursor-pointer transition group relative overflow-hidden"
                       >
                         <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition">
                           <span className="text-6xl">📂</span>
@@ -250,7 +267,7 @@ export default function SpotGroupList({ initialGroupName }: Props) {
                             <span className="font-bold text-blue-600">{group.spotCount}</span>개의 장소
                           </p>
                         </div>
-                      </div>
+                      </button>
                   ))
               )}
             </div>

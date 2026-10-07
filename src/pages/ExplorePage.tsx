@@ -392,7 +392,7 @@ function ExploreMapContent() {
                 </div>
             </div>
             <button onClick={() => setShowList(!showList)} className={`hidden md:flex absolute top-1/2 z-30 bg-white border border-gray-300 shadow-md rounded-r-lg py-4 px-1 items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-gray-50 transition-all duration-300 ease-in-out ${showList ? 'left-96' : 'left-0'}`} style={{ transform: 'translateY(-50%)' }}>{showList ? '◀' : '▶'}</button>
-            <div className="absolute inset-0 w-full h-full z-0">
+            <div data-guide-target="explore-map" className="absolute inset-0 w-full h-full z-0">
                 <MapCameraHandler target={cameraTarget} />
                 <Map defaultCenter={initialState.center} defaultZoom={initialState.zoom} mapId="EXPLORE_MAP_ID" disableDefaultUI={true} className="w-full h-full" onIdle={(ev) => handleMapIdle(ev.map)} onClick={(e) => { if (e.detail.placeId) { e.stop(); handlePoiClick(e.detail.placeId); } else if (e.detail.latLng) { handleReverseGeocode(e.detail.latLng.lat, e.detail.latLng.lng); } }}>
                     <MapController mode={mode} onModeChange={handleModeChange} onSearchStart={handleBackToList} onSpotsFound={(spots) => { setMySpots(spots); if(spots.length > 0) setShowList(true); }} onGoogleFound={(results) => { setGoogleResults(results); if(results.length > 0) setShowList(true); }} showList={showList} />
@@ -422,9 +422,12 @@ interface SearchBoxProps { mode: SearchMode; onModeChange: (mode: SearchMode) =>
 function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onMySpotSearch, showList }: SearchBoxProps) {
     const { showToast } = useFeedback();
     const [keyword, setKeyword] = useState("");
+    const [activeSuggestion, setActiveSuggestion] = useState(-1);
     const [suggestions, setSuggestions] = useState<google.maps.places.AutocompleteSuggestion[]>([]);
     const placesLibrary = useMapsLibrary("places");
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const selectedKeyword = useRef<string | null>(null);
+    const suggestionRequest = useRef(0);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -435,6 +438,9 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
     }, []);
 
     useEffect(() => {
+        let active = true;
+        const request = ++suggestionRequest.current;
+        if (keyword === selectedKeyword.current) return;
         if (mode === 'GOOGLE' && keyword && placesLibrary) {
             const timer = setTimeout(async () => {
                 if(keyword.length > 0) {
@@ -442,11 +448,11 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
                         const { suggestions } = await placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions({
                             input: keyword, locationBias: map?.getCenter(),
                         });
-                        setSuggestions(suggestions.filter(s => s.placePrediction));
-                    } catch (e) { console.error("Autocomplete Error", e); setSuggestions([]); }
+                        if (active && request === suggestionRequest.current) { setSuggestions(suggestions.filter(s => s.placePrediction)); setActiveSuggestion(-1); }
+                    } catch (e) { console.error("Autocomplete Error", e); if (active) setSuggestions([]); }
                 }
             }, 300);
-            return () => clearTimeout(timer);
+            return () => { active = false; clearTimeout(timer); };
         }
     }, [keyword, mode, placesLibrary, map]);
 
@@ -497,6 +503,7 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
                 types: place.types || [],
                 websiteURI: place.websiteURI || undefined
             };
+            selectedKeyword.current = result.name;
             onGoogleSearch([result]); setSuggestions([]); setKeyword(result.name);
         } catch (error) { console.error("Place Detail Error:", error); }
     };
@@ -511,38 +518,50 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
     };
 
     return (
-        <div ref={wrapperRef} className={`absolute top-4 right-4 z-10 flex flex-col gap-2 md:w-96 transition-all duration-300 ease-in-out left-4 ${showList ? 'md:left-[25rem]' : 'md:left-4'}`}>
+        <div data-guide-target="explore-search" ref={wrapperRef} className={`absolute top-4 right-4 z-10 flex flex-col gap-2 md:w-96 transition-all duration-300 ease-in-out left-4 ${showList ? 'md:left-[25rem]' : 'md:left-4'}`}>
             <div className="bg-white rounded-xl shadow-lg p-2 flex items-center gap-2">
-                <button onClick={() => { onModeChange(mode === 'GOOGLE' ? 'MINE' : 'GOOGLE'); setKeyword(""); setSuggestions([]); }} className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition shrink-0 border ${mode === 'GOOGLE' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
+                <button data-guide-target="explore-mode" onClick={() => { onModeChange(mode === 'GOOGLE' ? 'MINE' : 'GOOGLE'); setKeyword(""); setSuggestions([]); }} className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition shrink-0 border ${mode === 'GOOGLE' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
                     {mode === 'GOOGLE' ? (
                         <><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg><span>구글</span></>
                     ) : (
                         <><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><span>내 장소</span></>
                     )}
                 </button>
-                <input type="text" className="flex-1 outline-none text-sm font-medium text-gray-700 min-w-0" placeholder={mode === 'GOOGLE' ? "장소, 주소 검색 (엔터)" : "이름 검색 (엔터)"} value={keyword} onChange={e => {
+                <input aria-label="장소명 또는 주소 검색" role="combobox" aria-autocomplete="list" aria-expanded={mode === 'GOOGLE' && suggestions.length > 0} aria-controls="explore-suggestions" aria-activedescendant={suggestions[activeSuggestion] ? `explore-suggestion-${activeSuggestion}` : undefined} data-guide-target="explore-query" type="text" className="flex-1 outline-none text-sm font-medium text-gray-700 min-w-0" placeholder={mode === 'GOOGLE' ? "장소, 주소 검색 (엔터)" : "이름 검색 (엔터)"} value={keyword} onChange={e => {
+                    selectedKeyword.current = null;
                     setKeyword(e.target.value);
-                    if (!e.target.value) setSuggestions([]);
+                    setSuggestions([]); setActiveSuggestion(-1);
                 }} onKeyDown={(e) => {
+                    if (e.nativeEvent.isComposing) return;
+                    if (e.key === 'Escape') { suggestionRequest.current++; setSuggestions([]); setActiveSuggestion(-1); return; }
+                    if (suggestions.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+                        e.preventDefault();
+                        const next = e.key === 'ArrowDown' ? (activeSuggestion + 1) % suggestions.length : (activeSuggestion <= 0 ? suggestions.length - 1 : activeSuggestion - 1);
+                        setActiveSuggestion(next);
+                        document.getElementById(`explore-suggestion-${next}`)?.scrollIntoView({ block: 'nearest' });
+                        return;
+                    }
                     if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (mode === 'GOOGLE' && suggestions[activeSuggestion]) { void handleGoogleSelectSuggestion(suggestions[activeSuggestion]); setSuggestions([]); return; }
                         if (mode === 'GOOGLE') void handleGoogleTextSearch();
                         else void handleMySpotSearch();
                     }
                 }} />
-                <button onClick={mode === 'GOOGLE' ? handleGoogleTextSearch : handleMySpotSearch} className="text-gray-400 hover:text-blue-600 p-2">
+                <button aria-label="장소 검색 실행" onClick={mode === 'GOOGLE' ? handleGoogleTextSearch : handleMySpotSearch} className="text-gray-400 hover:text-blue-600 p-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
                 </button>
             </div>
             {mode === 'GOOGLE' && suggestions.length > 0 && (
-                <div className="bg-white rounded-xl shadow-xl overflow-hidden animate-fade-in-down max-h-60 overflow-y-auto border border-gray-100">
-                    {suggestions.map((suggestion) => {
+                <div id="explore-suggestions" role="listbox" aria-label="장소 검색 추천" className="bg-white rounded-xl shadow-xl overflow-hidden animate-fade-in-down max-h-60 overflow-y-auto border border-gray-100">
+                    {suggestions.map((suggestion, index) => {
                         const placePrediction = suggestion.placePrediction;
                         if (!placePrediction) return null;
                         return (
-                            <div key={placePrediction.placeId} onClick={() => handleGoogleSelectSuggestion(suggestion)} className="p-3 border-b hover:bg-blue-50 cursor-pointer flex flex-col gap-0.5">
+                            <button type="button" role="option" aria-selected={activeSuggestion === index} id={`explore-suggestion-${index}`} key={placePrediction.placeId} onClick={() => void handleGoogleSelectSuggestion(suggestion)} className={`w-full text-left p-3 border-b hover:bg-blue-50 flex flex-col gap-0.5 ${activeSuggestion === index ? 'bg-blue-50' : ''}`}>
                                 <span className="text-sm font-bold text-gray-800">{placePrediction.mainText?.text || placePrediction.text.text || "이름 없음" }</span>
                                 <span className="text-[10px] text-gray-400">{placePrediction.secondaryText?.text || ""}</span>
-                            </div>
+                            </button>
                         );
                     })}
                 </div>

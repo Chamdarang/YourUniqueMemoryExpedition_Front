@@ -1,21 +1,21 @@
 import type { SpotPurchaseResponse } from "../../types/purchase";
 import PurchaseCard from "./PurchaseCard";
 import PurchaseListItem from "./PurchaseListItem";
+import EmptyListState from '../common/EmptyListState';
 
 interface Props {
     purchases: SpotPurchaseResponse[];
+    filtered?: boolean;
+    onReset?: () => void;
+    onCreate?: () => void;
     onToggleStatus: (item: SpotPurchaseResponse) => void;
     onEdit: (item: SpotPurchaseResponse) => void;
     onDelete: (id: number) => void;
 }
 
-export default function PurchaseList({ purchases, onToggleStatus, onEdit, onDelete }: Props) {
+export default function PurchaseList({ purchases, onToggleStatus, onEdit, onDelete, filtered, onReset, onCreate }: Props) {
     if (!purchases || purchases.length === 0) {
-        return (
-            <div className="text-center py-20 bg-white rounded-xl border border-gray-100 shadow-sm">
-                <p className="text-gray-400 text-lg font-bold italic tracking-tight">등록된 기념품이 없습니다.</p>
-            </div>
-        );
+        return <EmptyListState item="기념품" filtered={filtered} onReset={onReset} onCreate={onCreate} createLabel="기념품 추가하기" />;
     }
 
     return (
@@ -47,12 +47,12 @@ export default function PurchaseList({ purchases, onToggleStatus, onEdit, onDele
                         </colgroup>
                         <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">유형</th>
-                            <th className="px-6 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">아이템명</th>
-                            <th className="px-6 py-4 text-center text-[11px] font-black text-gray-400 uppercase tracking-widest">상태</th>
-                            <th className="px-6 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">가격</th>
-                            <th className="px-6 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">수량</th>
-                            <th className="px-6 py-4 text-right text-[11px] font-black text-gray-400 uppercase tracking-widest">관리</th>
+                            <th className="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">유형</th>
+                            <th className="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">아이템명</th>
+                            <th className="px-6 py-4 text-center text-xs font-black text-gray-500 uppercase tracking-widest">상태</th>
+                            <th className="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">가격</th>
+                            <th className="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">수량</th>
+                            <th className="px-6 py-4 text-right text-xs font-black text-gray-500 uppercase tracking-widest">관리</th>
                         </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-100 font-sans">

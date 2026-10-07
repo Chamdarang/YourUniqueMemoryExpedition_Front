@@ -1,115 +1,126 @@
-import { useEffect, useState } from "react";
-import type { DayScheduleResponse, ScheduleUpdateRequest } from "../../types/schedule";
-import { useFeedback } from "../common/useFeedback";
+import { useEffect, useRef, useState } from 'react';
+import type { DayScheduleResponse, ScheduleUpdateRequest } from '../../types/schedule';
+import { useFeedback } from '../common/useFeedback';
 
 interface Props {
     schedule: DayScheduleResponse;
     onUpdate: (id: number, request: ScheduleUpdateRequest) => Promise<void>;
     onDelete: (id: number) => void;
     onToggleVisit: (id: number) => void;
+    canToggleVisit?: boolean;
     onDirtyChange?: (scheduleId: number, isDirty: boolean) => void;
     onTransfer?: (schedule: DayScheduleResponse) => void;
 }
 
-export default function SimpleScheduleRow({ schedule, onUpdate, onDelete, onToggleVisit, onDirtyChange, onTransfer }: Props) {
+const fieldsFrom = (schedule: DayScheduleResponse) => ({
+    startTime: schedule.startTime?.slice(0, 5) || '',
+    spotName: schedule.spotName || '',
+    memo: schedule.memo || '',
+});
+
+export default function SimpleScheduleRow({ schedule, onUpdate, onDelete, onToggleVisit, canToggleVisit = true, onDirtyChange, onTransfer }: Props) {
     const { isUndoablePending } = useFeedback();
     const isDeletePending = isUndoablePending(`schedule-delete:${schedule.id}`);
-    const [startTime, setStartTime] = useState(schedule.startTime?.slice(0, 5) || "");
-    const [spotName, setSpotName] = useState(schedule.spotName || "");
-    const [memo, setMemo] = useState(schedule.memo || "");
+    const [draft, setDraft] = useState(() => fieldsFrom(schedule));
     const [saveState, setSaveState] = useState<'IDLE' | 'SAVING' | 'SAVED' | 'ERROR'>('IDLE');
-    const isDirty = startTime !== (schedule.startTime?.slice(0, 5) || "")
-        || spotName !== (schedule.spotName || "")
-        || memo !== (schedule.memo || "");
+    const [validationError, setValidationError] = useState('');
+    const previousFields = useRef(fieldsFrom(schedule));
+    const saveQueue = useRef<Promise<void>>(Promise.resolve());
+    const pendingSaves = useRef(0);
+    const original = fieldsFrom(schedule);
+    const isDirty = draft.startTime !== original.startTime || draft.spotName !== original.spotName || draft.memo !== original.memo;
+
+    // Keep newer edits when saved values arrive from the server.
+    useEffect(() => {
+        const next = {
+            startTime: schedule.startTime?.slice(0, 5) || '',
+            spotName: schedule.spotName || '',
+            memo: schedule.memo || '',
+        };
+        const previous = previousFields.current;
+        setDraft(current => ({
+            startTime: current.startTime === previous.startTime ? next.startTime : current.startTime,
+            spotName: current.spotName === previous.spotName ? next.spotName : current.spotName,
+            memo: current.memo === previous.memo ? next.memo : current.memo,
+        }));
+        previousFields.current = next;
+    }, [schedule.startTime, schedule.spotName, schedule.memo]);
 
     useEffect(() => {
-        onDirtyChange?.(schedule.id, isDirty);
-    }, [isDirty, onDirtyChange, schedule.id]);
-
+        onDirtyChange?.(schedule.id, isDirty || saveState === 'SAVING');
+    }, [isDirty, saveState, onDirtyChange, schedule.id]);
     useEffect(() => () => onDirtyChange?.(schedule.id, false), [onDirtyChange, schedule.id]);
 
-    const save = async (request: ScheduleUpdateRequest) => {
-        setSaveState('SAVING');
-        try {
-            await onUpdate(schedule.id, request);
-            setSaveState('SAVED');
-            window.setTimeout(() => setSaveState('IDLE'), 1500);
-        } catch {
+    const save = () => {
+        if (!isDirty || isDeletePending) return;
+        if (!draft.spotName.trim()) {
+            setValidationError('장소명을 입력해 주세요.');
             setSaveState('ERROR');
-        }
-    };
-
-    const saveTime = () => {
-        const original = schedule.startTime?.slice(0, 5) || "";
-        if (startTime && startTime !== original) {
-            void save({ startTime, fixedStartTime: true });
-        }
-    };
-
-    const saveName = () => {
-        const trimmed = spotName.trim();
-        if (!trimmed) {
-            setSpotName(schedule.spotName || "");
             return;
         }
-        if (trimmed !== schedule.spotName) void save({ spotName: trimmed });
-    };
-
-    const saveMemo = () => {
-        if (memo !== (schedule.memo || "")) void save({ memo });
+        if (!draft.startTime && original.startTime) {
+            setValidationError('시작 시간을 입력해 주세요.');
+            setSaveState('ERROR');
+            return;
+        }
+        setValidationError('');
+        const snapshot = { ...draft, spotName: draft.spotName.trim() };
+        const request: ScheduleUpdateRequest = {};
+        if (snapshot.spotName !== original.spotName) request.spotName = snapshot.spotName;
+        if (snapshot.memo !== original.memo) request.memo = snapshot.memo;
+        if (snapshot.startTime && snapshot.startTime !== original.startTime) {
+            request.startTime = snapshot.startTime;
+            request.fixedStartTime = schedule.fixedStartTime || snapshot.startTime !== original.startTime;
+        }
+        pendingSaves.current += 1;
+        setSaveState('SAVING');
+        saveQueue.current = saveQueue.current.then(async () => {
+            try {
+                await onUpdate(schedule.id, request);
+                setDraft(current => current.spotName.trim() === snapshot.spotName ? { ...current, spotName: snapshot.spotName } : current);
+                setSaveState(pendingSaves.current > 1 ? 'SAVING' : 'SAVED');
+            } catch {
+                setSaveState(pendingSaves.current > 1 ? 'SAVING' : 'ERROR');
+            } finally {
+                pendingSaves.current -= 1;
+            }
+        });
     };
 
     return (
-        <div aria-busy={isDeletePending} className={`rounded-xl border p-3 shadow-sm transition ${isDeletePending ? "border-amber-300 bg-amber-50/70 opacity-70" : schedule.isChecked ? "border-green-200 bg-green-50/40" : "border-gray-100 bg-white"}`}>
-            <div className="flex items-start gap-2">
-                <button
-                    type="button"
-                    onClick={() => onToggleVisit(schedule.id)}
-                    className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-black ${schedule.isChecked ? "border-green-500 bg-green-500 text-white" : "border-gray-300 text-transparent hover:border-green-400"}`}
-                    aria-label={schedule.isChecked ? "방문 완료 취소" : "방문 완료"}
-                >
-                    ✓
-                </button>
-                <input
-                    type="time"
-                    value={startTime}
-                    onChange={(event) => setStartTime(event.target.value)}
-                    onBlur={saveTime}
-                    className="w-[7.5rem] min-w-[7.5rem] shrink-0 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm font-bold text-blue-700 outline-none focus:border-blue-400"
-                />
-                <div className="min-w-0 flex-1">
-                    <input
-                        value={spotName}
-                        maxLength={200}
-                        onChange={(event) => setSpotName(event.target.value)}
-                        onBlur={saveName}
-                        onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-                        className="w-full border-0 bg-transparent px-1 py-1 text-sm font-extrabold text-gray-900 outline-none focus:bg-blue-50"
-                    />
-                    <input
-                        value={memo}
-                        maxLength={500}
-                        placeholder="메모"
-                        onChange={(event) => setMemo(event.target.value)}
-                        onBlur={saveMemo}
-                        onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-                        className="mt-0.5 w-full border-0 bg-transparent px-1 py-1 text-xs text-gray-500 outline-none placeholder:text-gray-300 focus:bg-blue-50"
-                    />
-                    {schedule.lat != null && schedule.lng != null && (
-                        <span className="ml-1 text-[10px] font-bold text-blue-500">📍 지도 연결</span>
-                    )}
-                    {saveState !== 'IDLE' && (
-                        <span className={`ml-2 text-[10px] font-bold ${saveState === 'ERROR' ? 'text-red-500' : saveState === 'SAVED' ? 'text-green-600' : 'text-gray-400'}`}>
-                            {saveState === 'SAVING' ? '저장 중...' : saveState === 'SAVED' ? '저장됨' : '저장 실패'}
-                        </span>
-                    )}
+        <div aria-busy={saveState === 'SAVING' || isDeletePending} className={`rounded-xl border p-3 shadow-sm ${isDeletePending ? 'border-amber-300 bg-amber-50/70' : schedule.isChecked ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-white'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    {canToggleVisit && <button type="button" disabled={isDeletePending} onClick={() => onToggleVisit(schedule.id)} aria-pressed={schedule.isChecked} aria-label={schedule.isChecked ? '방문 완료 취소' : '방문 완료'} className="flex h-11 w-11 items-center justify-center rounded-lg focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50">
+                        <span aria-hidden="true" className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-bold ${schedule.isChecked ? 'border-green-600 bg-green-600 text-white' : 'border-gray-400 text-transparent'}`}>✓</span>
+                    </button>}
+                    <input type="time" aria-label="시작 시간" disabled={isDeletePending} value={draft.startTime} onChange={event => setDraft(current => ({ ...current, startTime: event.target.value }))} onBlur={save} className="min-h-11 w-36 rounded-lg border border-gray-200 bg-gray-50 px-2 text-sm font-semibold text-blue-700 focus-visible:outline-blue-400" />
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                    {onTransfer && <button type="button" onClick={() => onTransfer(schedule)} className="rounded-lg px-2 py-1 text-[10px] font-bold text-violet-500 hover:bg-violet-50">이동·복사</button>}
-                    <button type="button" disabled={isDeletePending} onClick={() => onDelete(schedule.id)} className="rounded-lg px-2 py-1 text-xs font-bold text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:bg-amber-100 disabled:text-amber-600" aria-label={isDeletePending ? "일정 삭제 대기 중" : "일정 삭제"}>
-                        {isDeletePending ? '삭제 대기 중…' : '삭제'}
-                    </button>
-                </div>
+                <details className="relative shrink-0">
+                    <summary aria-label="일정 작업" className="flex h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-lg px-3 text-slate-600 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-400">⋯</summary>
+                    <div className="absolute right-0 z-50 mt-1 w-40 rounded-xl border border-gray-200 bg-white p-1 shadow-lg">
+                        {onTransfer && <button type="button" disabled={isDeletePending} onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); onTransfer(schedule); }} className="min-h-11 w-full rounded-lg px-3 text-left text-sm text-violet-700 hover:bg-violet-50">이동·복사</button>}
+                        <button type="button" disabled={isDeletePending} onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); onDelete(schedule.id); }} className="min-h-11 w-full rounded-lg px-3 text-left text-sm text-red-700 hover:bg-red-50 disabled:opacity-50" aria-label={isDeletePending ? '일정 삭제 대기 중' : '일정 삭제'}>{isDeletePending ? '삭제 대기 중…' : '삭제'}</button>
+                    </div>
+                </details>
+            </div>
+            <div className="mt-2 space-y-2">
+                <label className="block">
+                    <span className="sr-only">장소명</span>
+                    <input value={draft.spotName} maxLength={200} disabled={isDeletePending} onChange={event => setDraft(current => ({ ...current, spotName: event.target.value }))} onBlur={save} onKeyDown={event => event.key === 'Enter' && event.currentTarget.blur()} className="min-h-11 w-full rounded-lg border border-gray-200 px-3 text-base font-semibold text-gray-900 focus-visible:outline-blue-400" />
+                </label>
+                <label className="block">
+                    <span className="sr-only">일정 메모</span>
+                    <textarea aria-label="일정 메모" rows={2} value={draft.memo} maxLength={500} placeholder="메모" disabled={isDeletePending} onChange={event => setDraft(current => ({ ...current, memo: event.target.value }))} onBlur={save} className="w-full resize-y rounded-lg border border-gray-200 px-3 py-2 text-sm leading-relaxed text-gray-700 focus-visible:outline-blue-400" />
+                </label>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                {schedule.lat != null && schedule.lng != null && <span className="text-blue-600">📍 지도 연결</span>}
+                {isDeletePending && <span className="text-amber-700">삭제 대기 중…</span>}
+                <span role="status" className={saveState === 'ERROR' ? 'text-red-700' : isDirty ? 'text-amber-700' : 'text-slate-500'}>
+                    {saveState === 'SAVING' ? '저장 중…' : saveState === 'ERROR' ? validationError || '저장 실패 · 입력한 내용은 유지됩니다.' : isDirty ? '저장되지 않은 변경사항' : saveState === 'SAVED' ? '저장됨' : '다른 곳을 누르면 자동 저장'}
+                </span>
+                {saveState === 'ERROR' && <button type="button" onClick={save} className="min-h-11 rounded-lg bg-red-50 px-3 font-semibold text-red-700">저장 다시 시도</button>}
             </div>
         </div>
     );

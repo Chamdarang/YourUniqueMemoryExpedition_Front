@@ -11,6 +11,7 @@ export interface SignupRequest {
 export interface LoginResponse{
     token: string;
     username: string;
+    nickname: string;
     expiryDate: string;
 }
 

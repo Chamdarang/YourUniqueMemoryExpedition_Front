@@ -6,15 +6,19 @@ export interface PlanShareStatus {
   updatedAt: string | null;
   expiresAt: string | null;
   token: string | null;
+  accessMode: 'VIEW' | 'EDIT';
 }
 
 export interface PlanShareLink {
   token: string;
   createdAt: string;
   expiresAt: string | null;
+  accessMode: 'VIEW' | 'EDIT';
 }
 
 export interface PublicPlanShare {
+  planId: number;
+  accessMode: 'VIEW' | 'EDIT';
   planName: string;
   planStartDate: string | null;
   planEndDate: string | null;

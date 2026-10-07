@@ -10,8 +10,8 @@ export interface SpotPurchaseResponse {
   itemName: string;
   status: PurchaseStatus;
   quantity: number;
-  price: number;
-  currency: string;
+  price: number | null;
+  currency: string | null;
   acquiredDate: string;
   note: string;
 }
@@ -21,8 +21,8 @@ export interface SpotPurchaseSaveRequest {
   kind: PurchaseKind;
   category: string;
   itemName: string;
-  price: number;
-  currency: string;
+  price: number | null;
+  currency: string | null;
   status: PurchaseStatus;
   quantity: number;
   acquiredDate: string; // "YYYY-MM-DD"
@@ -38,8 +38,8 @@ export interface SpotPurchaseResponse {
   itemName: string;
   status: PurchaseStatus;
   quantity: number;
-  price: number;
-  currency: string;
+  price: number | null;
+  currency: string | null;
   acquiredDate: string;
   note: string;
 }

@@ -114,7 +114,7 @@ export default function PlanCreatePage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* 여행 이름 */}
-          <div>
+          <div data-guide-target="plan-create-name">
             <label className="block text-sm font-bold text-gray-700 mb-1">여행 제목</label>
             <input
                 name="planName"
@@ -127,7 +127,7 @@ export default function PlanCreatePage() {
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-4" data-guide-target="plan-create-dates">
             {/* 시작일 */}
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">가는 날</label>
@@ -143,7 +143,7 @@ export default function PlanCreatePage() {
             </div>
 
             {/* 기간 (자동 계산 + 직접 입력 가능) */}
-            <div>
+            <div data-guide-target="plan-create-duration">
               <label className="block text-sm font-bold text-gray-700 mb-1">기간 (일)</label>
               <div className="relative">
                 <input
@@ -174,7 +174,7 @@ export default function PlanCreatePage() {
           </div>
 
           {/* 메모 */}
-          <div>
+          <div data-guide-target="plan-create-memo">
             <label className="block text-sm font-bold text-gray-700 mb-1">간단 메모</label>
             <textarea
                 name="planMemo"
@@ -187,6 +187,7 @@ export default function PlanCreatePage() {
           </div>
 
           <button
+              data-guide-target="plan-create-submit"
               type="submit"
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition transform active:scale-95"
           >

@@ -15,12 +15,15 @@ import { makeStaticGoogleMap } from "../api/mapApi";
 
 // Components
 import PlanHeader from "../components/plan/PlanHeader";
+import PlanCollaboratorsBar from "../components/plan/PlanCollaboratorsBar";
 import PlanShareModal from "../components/plan/PlanShareModal";
 import PlanDayItem from "../components/plan/PlanDayItem";
 import SpotLinkModal from "../components/plan/SpotLinkModal";
 import PlanRouteAuditModal from "../components/plan/PlanRouteAuditModal";
 import EmptyPlanDaySlot from "../components/plan/EmptyPlanDaySlot";
 import PlanMapPanel from "../components/plan/PlanMapPanel";
+import SaveStatusIndicator from "../components/common/SaveStatusIndicator";
+import LoadErrorState from "../components/common/LoadErrorState";
 import DayRouteAuditModal from "../components/day/DayRouteAuditModal";
 import { usePlanRouteAudit } from "../hooks/usePlanRouteAudit";
 
@@ -38,12 +41,13 @@ import {
 } from "../components/common/ScheduleExport";
 import { useScheduleExport } from "../components/common/useScheduleExport";
 import { getStaticMapQuery, type ExportSection } from "../components/common/scheduleExportUtils";
+import { useDialogFocus } from '../hooks/useDialogFocus';
 import { useFeedback } from "../components/common/useFeedback";
 import { saveOfflineTripSnapshot } from "../utils/offlineHomeStorage";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const scrollbarHideStyle = `.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`;
-const planToolbarButtonClass = "inline-flex h-9 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-wait disabled:opacity-50 sm:w-auto";
+const planToolbarButtonClass = "inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-wait disabled:opacity-50 sm:w-auto";
 
 type PlanWorkspacePreferences = {
     mapViewMode: 'ALL' | 'PINS' | 'NONE';
@@ -134,10 +138,12 @@ function PlanDetailContent() {
     const [plan, setPlan] = useState<PlanDetailResponse | null>(null);
     const [offlineSaveLoading, setOfflineSaveLoading] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [collaboratorsRefreshVersion, setCollaboratorsRefreshVersion] = useState(0);
     const simpleDayIds = useMemo(() => new Set(
         plan?.days.filter(day => day.scheduleMode === 'SIMPLE').map(day => day.id) ?? []
     ), [plan?.days]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [mapSchedulesMap, setMapSchedulesMap] = useState<Record<number, DayScheduleResponse[]>>({});
     const mapSchedulesMapRef = useRef<Record<number, DayScheduleResponse[]>>({});
     const [scheduleRefreshVersions, setScheduleRefreshVersions] = useState<Record<number, number>>({});
@@ -172,6 +178,10 @@ function PlanDetailContent() {
     const [scheduleTransferAtStart, setScheduleTransferAtStart] = useState(false);
     const [scheduleTransferLoading, setScheduleTransferLoading] = useState(false);
     const [spotLinkGroups, setSpotLinkGroups] = useState<UnlinkedSpotGroup[] | null>(null);
+    const exportDialogRef = useDialogFocus(isExportMenuOpen, () => setIsExportMenuOpen(false), () => planToolsMenuRef.current?.querySelector('summary') ?? null);
+    const copyDialogRef = useDialogFocus(copySourceDay !== null, () => { if (!copyingDay) setCopySourceDay(null); });
+    const transferDialogRef = useDialogFocus(scheduleTransferSource !== null, () => { if (!scheduleTransferLoading) setScheduleTransferSource(null); });
+    const linkedDialogRef = useDialogFocus(spotLinkGroups?.length === 0, () => setSpotLinkGroups(null));
     const [spotLinksLoading, setSpotLinksLoading] = useState(false);
     const [dayOpenRequest, setDayOpenRequest] = useState<{ dayId: number; key: number } | null>(null);
     const [scheduleFocusRequest, setScheduleFocusRequest] = useState<{ dayId: number; scheduleId: number; key: number; openEditor: boolean } | null>(null);
@@ -302,9 +312,12 @@ function PlanDetailContent() {
         setLoading(true);
         getPlanDetail(planId).then(data => {
             setPlan(data);
+            setLoadError(null);
             const map: Record<number, number> = {};
             data.days.forEach(d => { map[d.id] = d.dayOrder; });
             setDayOrderMap(map);
+        }).catch(() => {
+            setLoadError('여행 정보를 불러오지 못했습니다.');
         }).finally(() => setLoading(false));
     }, [planId]);
 
@@ -853,7 +866,7 @@ function PlanDetailContent() {
         if (applicable.length === 0) return;
         if (applicable.length > 1 && !await confirm({
             title: '예상 이동시간 전체 적용',
-            message: `계산된 ${applicable.length}개 구간의 이동시간을 반영할까요?\n각 구간의 이동 인저리타임은 그대로 유지됩니다.`,
+            message: `계산된 ${applicable.length}개 구간의 이동시간을 반영할까요?\n각 구간의 이동 여유시간은 그대로 유지됩니다.`,
             confirmLabel: '전체 적용',
         })) return;
 
@@ -881,7 +894,9 @@ function PlanDetailContent() {
         }
     };
 
-    if (loading || !plan) return <div className="text-center py-20">로딩 중...</div>;
+    if (!plan || plan.id !== planId) return <div className="p-4">{loadError
+        ? <LoadErrorState message={loadError} onRetry={fetchPlanDetail} retrying={loading} backTo="/plans" />
+        : <div role="status" className="text-center py-20">로딩 중...</div>}</div>;
 
     return (
         <>
@@ -913,10 +928,12 @@ function PlanDetailContent() {
                 <PlanShareModal
                     planId={plan.id}
                     planName={plan.planName}
-                    onClose={() => setIsShareModalOpen(false)}
+                    onClose={() => {
+                        setIsShareModalOpen(false);
+                        setCollaboratorsRefreshVersion(version => version + 1);
+                    }}
                 />
             )}
-
             <div className="flex flex-col h-full w-full relative overflow-hidden bg-white">
                 <div className="flex w-full h-full relative">
                     <PlanMapPanel
@@ -943,13 +960,14 @@ function PlanDetailContent() {
                     />
                     <div className={`flex flex-col w-full h-full bg-white md:w-1/2 relative z-10 transition-transform duration-300 ${mobileViewMode === 'MAP' ? 'translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
                         {/* 헤더 영역 (모바일 접기/펼치기 적용) */}
-                        <div className={`relative bg-white z-30 flex-shrink-0 border-b border-gray-100 transition-all duration-300 ease-in-out ${!isHeaderExpanded ? 'max-h-[190px] overflow-hidden' : ''} md:max-h-none md:overflow-visible`}>
+                        <div data-guide-target="plan-detail-header" className={`relative bg-white z-30 flex-shrink-0 border-b border-gray-100 transition-all duration-300 ease-in-out ${!isHeaderExpanded ? 'max-h-[190px] overflow-hidden' : ''} md:max-h-none md:overflow-visible`}>
                             <div className="px-5 py-4 pb-8">
                                 <PlanHeader
                                     plan={plan}
                                     onRefresh={refreshPlanAfterMutation}
                                     onDirtyChange={handleHeaderDirty}
                                 />
+                                <PlanCollaboratorsBar planId={plan.id} refreshVersion={collaboratorsRefreshVersion} />
                             </div>
                             <div className="md:hidden absolute bottom-0 left-0 w-full h-10 flex justify-center items-end pb-2 bg-gradient-to-t from-white via-white/90 to-transparent">
                                 <button onClick={() => setIsHeaderExpanded(!isHeaderExpanded)} className="text-[10px] font-bold text-gray-400 bg-white hover:bg-gray-50 px-3 py-1 rounded-full border border-gray-200 shadow-sm flex items-center gap-1 active:scale-95 transition-transform">{isHeaderExpanded ? '접기 ▲' : '상세 정보 ▼'}</button>
@@ -957,26 +975,26 @@ function PlanDetailContent() {
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-4 pb-24 bg-white scrollbar-hide">
-                            <div className="relative mb-4 flex flex-col gap-3 px-1 md:flex-row md:items-center md:justify-between">
+                            {loadError && <LoadErrorState message={loadError} onRetry={fetchPlanDetail} retrying={loading} />}
+                            <div data-guide-target="plan-detail-schedules" className="relative mb-4 flex flex-col gap-3 px-1 md:flex-row md:items-center md:justify-between">
                                 <div className="flex items-center gap-2 md:shrink-0">
                                     <h2 className="text-xl font-bold text-gray-800">상세 일정</h2>
-                                    <span className={`rounded-full px-2 py-1 text-[10px] font-black transition ${isAnyDirty ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-600'}`}>
-                                        {isAnyDirty ? '● 저장되지 않은 변경사항' : '✓ 저장 완료'}
-                                    </span>
+                                    {plan.accessRole === 'EDITOR' && <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">공동 편집</span>}
+                                    <SaveStatusIndicator isDirty={isAnyDirty} />
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center md:justify-end">
-                                    <button
+                                    {plan.accessRole === 'OWNER' && <button
                                         type="button"
                                         onClick={() => setIsShareModalOpen(true)}
                                         className={planToolbarButtonClass}
-                                        title="읽기 전용 일정 공유 링크 관리"
+                                        title="보기 전용 또는 편집 가능 링크 관리"
                                     >
-                                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-violet-600">
+                                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-blue-600">
                                             <path d="M10 13a5 5 0 0 0 7.07 0l3-3A5 5 0 0 0 13 2.93l-1.72 1.72" />
                                             <path d="M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21.07l1.72-1.72" />
                                         </svg>
-                                        일정 공유
-                                    </button>
+                                        공유
+                                    </button>}
                                     <button
                                         type="button"
                                         disabled={offlineSaveLoading}
@@ -998,13 +1016,13 @@ function PlanDetailContent() {
                                         type="button"
                                         onClick={() => setShowInjury(!showInjury)}
                                         className={`${planToolbarButtonClass} ${showInjury ? 'border-orange-200 bg-orange-50' : ''}`}
-                                        title="일정에 기록된 인저리 정보 표시 여부"
+                                        title="일정에 기록된 여유시간 정보 표시 여부"
                                         aria-pressed={showInjury}
                                     >
                                         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={`h-3.5 w-3.5 ${showInjury ? 'text-orange-600' : 'text-slate-400'}`}>
                                             {showInjury ? <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></> : <><path d="m3 3 18 18M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.1 3.9M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 0 0 4-.8" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></>}
                                         </svg>
-                                        인저리 표시
+                                        여유시간 표시
                                         <span className={`rounded px-1 py-0.5 text-[9px] font-bold ${showInjury ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>{showInjury ? 'ON' : 'OFF'}</span>
                                     </button>
                                     <details
@@ -1021,7 +1039,7 @@ function PlanDetailContent() {
                                         <summary
                                             aria-label="더 많은 일정 도구"
                                             title="더 많은 일정 도구"
-                                            className="inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 [&::-webkit-details-marker]:hidden"
+                                            className="inline-flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 [&::-webkit-details-marker]:hidden"
                                         >
                                             <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5 text-slate-500">
                                                 <circle cx="5" cy="12" r="1.7" />
@@ -1045,6 +1063,7 @@ function PlanDetailContent() {
                                                 </svg>
                                                 내보내기
                                             </button>
+                                            {plan.accessRole === 'OWNER' && <>
                                             <div className="my-1 border-t border-slate-100" />
                                             <button
                                                 type="button"
@@ -1066,6 +1085,7 @@ function PlanDetailContent() {
                                                 )}
                                                 {spotLinksLoading ? '장소 확인 중…' : '장소 연결'}
                                             </button>
+                                            </>}
                                             <button
                                                 type="button"
                                                 disabled={planAuditLoading && !planAuditResult}
@@ -1104,6 +1124,7 @@ function PlanDetailContent() {
                                             item.data ? (
                                                 <PlanDayItem
                                                     key={item.id} id={item.id} dayOrder={item.dayOrder} data={item.data}
+                                                    isOwner={plan.accessRole === 'OWNER'}
                                                     routeDate={getPlanDayDate(plan.planStartDate, item.dayOrder)}
                                                     showInjury={showInjury}
                                                     onSchedulesChange={handleSchedulesChange}
@@ -1148,14 +1169,14 @@ function PlanDetailContent() {
             </div>
 
             {isExportMenuOpen && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}>
+                <div ref={exportDialogRef} role="dialog" aria-modal="true" aria-label="계획 내보내기" tabIndex={-1} className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}>
                     <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={event => event.stopPropagation()}>
                         <div className="mb-5 flex items-center justify-between">
                             <div>
                                 <div className="text-xs font-black text-blue-500">PLAN EXPORT</div>
                                 <h3 className="mt-1 text-xl font-black text-gray-900">계획 내보내기</h3>
                             </div>
-                            <button type="button" onClick={() => setIsExportMenuOpen(false)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100" aria-label="내보내기 창 닫기">✕</button>
+                            <button type="button" onClick={() => setIsExportMenuOpen(false)} className="min-h-11 min-w-11 rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="내보내기 창 닫기">✕</button>
                         </div>
                         <div className="space-y-2">
                             <button
@@ -1181,7 +1202,7 @@ function PlanDetailContent() {
             )}
 
             {copySourceDay && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+                <div ref={copyDialogRef} role="dialog" aria-modal="true" aria-label="하루 일정 복제" tabIndex={-1} className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
                     <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
                         <div className="mb-5">
                             <div className="text-xs font-black text-violet-500">하루 일정 복제</div>
@@ -1208,7 +1229,7 @@ function PlanDetailContent() {
             )}
 
             {scheduleTransferSource && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+                <div ref={transferDialogRef} role="dialog" aria-modal="true" aria-label="세부일정 이동·복사" tabIndex={-1} className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
                     <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
                         <div className="mb-5 flex items-start justify-between gap-4">
                             <div>
@@ -1216,7 +1237,7 @@ function PlanDetailContent() {
                                 <h3 className="mt-1 text-xl font-black text-gray-900">{scheduleTransferSource.schedule.spotName || '장소명 없음'}</h3>
                                 <p className="mt-1 text-xs text-gray-400">{scheduleTransferSource.sourceDay.dayName}에서 다른 일차로 옮깁니다.</p>
                             </div>
-                            <button type="button" disabled={scheduleTransferLoading} onClick={() => setScheduleTransferSource(null)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100" aria-label="이동·복사 창 닫기">✕</button>
+                            <button type="button" disabled={scheduleTransferLoading} onClick={() => setScheduleTransferSource(null)} className="min-h-11 min-w-11 rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="이동·복사 창 닫기">✕</button>
                         </div>
 
                         <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1">
@@ -1258,7 +1279,7 @@ function PlanDetailContent() {
                 />
             )}
             {spotLinkGroups && spotLinkGroups.length === 0 && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+                <div ref={linkedDialogRef} role="dialog" aria-modal="true" aria-label="장소 연결 결과" tabIndex={-1} className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
                     <div className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-2xl">
                         <div className="text-4xl">✅</div>
                         <h2 className="mt-3 text-xl font-black text-gray-900">연결할 장소가 없습니다</h2>

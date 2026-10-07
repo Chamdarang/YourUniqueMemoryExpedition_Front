@@ -20,6 +20,7 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
   const { confirm, runUndoable, isUndoablePending, showToast } = useFeedback();
   const navigate = useNavigate();
   const isPlanDeletePending = isUndoablePending(`plan-delete:${plan.id}`);
+  const isOwner = plan.accessRole === 'OWNER';
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -68,8 +69,9 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
       if (plan.days && plan.days.length > 0) {
         const daysToDetach = plan.days.filter(day => day.dayOrder > newPlanDays);
         if (daysToDetach.length > 0) {
+          if (!isOwner) return showToast({ message: '일정이 등록된 범위보다 짧게 줄이려면 여행 소유자가 날짜를 먼저 정리해야 합니다.', type: 'info' });
           const dayNames = daysToDetach.map(d => `${d.dayOrder}일차`).join(', ');
-          const confirmMsg = `여행 기간이 ${newPlanDays}일로 줄어들었습니다.\n\n범위를 벗어나는 [ ${dayNames} ] 일정은 삭제되지 않고\n'내 계획(보관함)'으로 안전하게 이동됩니다.\n\n저장하시겠습니까?`;
+          const confirmMsg = `여행 기간이 ${newPlanDays}일로 줄어들었습니다.\n\n범위를 벗어나는 [ ${dayNames} ] 일정은 삭제되지 않고\n'하루 코스 보관함'으로 안전하게 이동됩니다.\n\n저장하시겠습니까?`;
           if (!await confirm({ title: '여행 기간 단축', message: confirmMsg, confirmLabel: '보관함으로 이동' })) return;
           await Promise.all(daysToDetach.map(day => detachPlanDay(day.id)));
         }
@@ -121,9 +123,9 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
     const day = String(d.getDate()).padStart(2, '0');
     const today = `${year}-${month}-${day}`; // "2026-02-07"
 
-    if (plan.planStartDate > today) return { text: "UPCOMING", color: "bg-blue-100 text-blue-600" };
-    if (plan.planEndDate < today) return { text: "DONE", color: "bg-gray-100 text-gray-500" };
-    return { text: "NOW ✈️", color: "bg-orange-100 text-orange-600" };
+    if (plan.planStartDate > today) return { text: "예정", color: "bg-blue-100 text-blue-600" };
+    if (plan.planEndDate < today) return { text: "완료", color: "bg-gray-100 text-gray-500" };
+    return { text: "여행 중 ✈️", color: "bg-orange-100 text-orange-600" };
   };
 
   const status = getStatusLabel();
@@ -194,9 +196,9 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                     <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">메모</label>
                     <textarea className="w-full bg-white border border-gray-300 rounded-xl p-4 text-sm text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none resize-none transition shadow-sm" rows={5} value={editForm.planMemo} onChange={(e) => setEditForm({ ...editForm, planMemo: e.target.value })} placeholder="여행에 대한 메모를 자유롭게 남겨보세요." />
                   </div>
-                  <div className="pt-4 border-t border-gray-100 flex justify-center">
+                  {isOwner && <div className="pt-4 border-t border-gray-100 flex justify-center">
                     <button disabled={isPlanDeletePending} onClick={handleDelete} className="rounded px-3 py-1.5 text-xs font-bold text-red-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:bg-amber-50 disabled:text-amber-600">{isPlanDeletePending ? '⏳ 삭제 대기 중…' : '🗑️ 이 여행 계획 삭제하기'}</button>
-                  </div>
+                  </div>}
                 </div>
             )}
           </div>

@@ -23,6 +23,7 @@ export default function LoginPage() {
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         const id = username.trim();
+        const isNewSignup = mode === "signup";
 
         if (!/^[A-Za-z0-9_]{3,30}$/.test(id)) {
             setError("아이디는 영문, 숫자, 밑줄을 사용해 3~30자로 입력해 주세요.");
@@ -40,15 +41,24 @@ export default function LoginPage() {
         setLoading(true);
         setError("");
         try {
-            if (mode === "signup") {
+            if (isNewSignup) {
                 await signupApi({ username: id, password });
             }
 
             const data = await loginApi({ username: id, password });
             localStorage.setItem("accessToken", data.token);
             localStorage.setItem("username", data.username);
+            localStorage.setItem("nickname", data.nickname || data.username);
             localStorage.setItem("tokenExpiry", data.expiryDate);
-            navigate("/", { replace: true });
+            let pendingEditShare = '';
+            try {
+                pendingEditShare = sessionStorage.getItem('yume:pending-edit-share-token') || '';
+                sessionStorage.removeItem('yume:pending-edit-share-token');
+            } catch { /* Continue to the home page if browser storage is unavailable. */ }
+            navigate(pendingEditShare ? `/shared#${pendingEditShare}` : "/", {
+                replace: true,
+                state: isNewSignup && !pendingEditShare ? { firstVisitGuide: true } : null,
+            });
         } catch (caught) {
             setError(caught instanceof Error ? caught.message : "요청 처리 중 오류가 발생했습니다.");
         } finally {
@@ -167,11 +177,6 @@ export default function LoginPage() {
                         </button>
                     </form>
 
-                    {mode === "signup" && (
-                        <p className="mt-4 text-center text-xs leading-relaxed text-slate-400">
-                            가입 후 바로 로그인되어 홈 화면으로 이동합니다.
-                        </p>
-                    )}
                 </div>
             </div>
         </div>

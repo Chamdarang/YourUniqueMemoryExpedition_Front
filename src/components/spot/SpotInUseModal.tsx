@@ -1,3 +1,4 @@
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export default function SpotInUseModal({ isOpen, onClose, usageList, onSpotDeleteRetry }: Props) {
+  const dialogRef = useDialogFocus(isOpen, onClose);
     const { confirm, showToast } = useFeedback();
     const [removedScheduleIds, setRemovedScheduleIds] = useState<Set<number>>(new Set());
     const conflicts = usageList.filter(conflict => !removedScheduleIds.has(conflict.scheduleId));
@@ -50,7 +52,7 @@ export default function SpotInUseModal({ isOpen, onClose, usageList, onSpotDelet
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+        <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="사용 중인 장소" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
             <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl p-6">
 
                 <div className="text-center mb-5">

@@ -8,6 +8,9 @@ export const PURCHASE_STATUS_KEYS: PurchaseStatus[] = [
 ];
 //todo: 백엔드에서 enum 목록 가져오기?
 
+export const formatPurchasePrice = (price: number | null, currency?: string | null) =>
+    price == null ? '가격 미입력' : `${price.toLocaleString()}${currency ? ` ${currency}` : ''}`;
+
 /**
  * 기념품 종류별 아이콘, 라벨, Tailwind 컬러 스타일을 반환합니다.
  */

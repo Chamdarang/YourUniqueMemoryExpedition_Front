@@ -56,9 +56,9 @@ export default function SpotFilter({ onSearch }: Props) {
             <div className="flex-1 relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
                 <input
-                    type="text"
+                    type="text" aria-label="장소명 또는 주소 검색"
                     placeholder="장소명 또는 주소 검색..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-gray-900 transition text-sm font-medium"
+                    className="min-h-11 w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-gray-900 transition text-sm font-medium"
                     value={params.keyword}
                     onChange={(e) => setParams({ ...params, keyword: e.target.value })}
                     onKeyDown={handleKeyDown}
@@ -66,8 +66,8 @@ export default function SpotFilter({ onSearch }: Props) {
             </div>
 
             {/* 2. 유형 필터 (공통 유틸리티 SPOT_TYPE_INFO 매핑) */}
-            <select
-                className="w-full md:w-40 px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-gray-900 bg-white text-sm font-bold cursor-pointer"
+            <select aria-label="장소 유형 필터"
+                className="min-h-11 w-full md:w-40 px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-gray-900 bg-white text-sm font-bold cursor-pointer"
                 value={params.type}
                 onChange={(e) => setParams({ ...params, type: e.target.value as SpotType | 'ALL' })}
             >
@@ -83,8 +83,8 @@ export default function SpotFilter({ onSearch }: Props) {
             </select>
 
             {/* 3. 방문 여부 필터 */}
-            <select
-                className="w-full md:w-32 px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-gray-900 bg-white text-sm font-bold cursor-pointer"
+            <select aria-label="방문 상태 필터"
+                className="min-h-11 w-full md:w-32 px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-gray-900 bg-white text-sm font-bold cursor-pointer"
                 value={params.isVisit}
                 onChange={(e) => setParams({ ...params, isVisit: e.target.value as 'ALL' | 'VISITED' | 'NOT_VISITED' })}
             >
@@ -96,7 +96,7 @@ export default function SpotFilter({ onSearch }: Props) {
             {/* 4. 조회 버튼 */}
             <button
                 onClick={handleSearch}
-                className="w-full md:w-auto bg-gray-900 hover:bg-black text-white font-black px-8 py-2 rounded-lg transition-all active:scale-95 text-sm"
+                className="min-h-11 w-full md:w-auto bg-gray-900 hover:bg-black text-white font-black px-8 py-2 rounded-lg transition-all active:scale-95 text-sm"
             >
                 조회
             </button>

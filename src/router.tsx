@@ -7,7 +7,6 @@ const HomePage = lazy(() => import("./pages/HomePage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const ExplorePage = lazy(() => import("./pages/ExplorePage"));
 const PlanListPage = lazy(() => import("./pages/PlanListPage"));
-const PlanCreatePage = lazy(() => import("./pages/PlanCreatePage"));
 const PlanDetailPage = lazy(() => import("./pages/PlanDetailPage"));
 const DayListPage = lazy(() => import("./pages/DayListPage"));
 const DayDetailPage = lazy(() => import("./pages/DayDetailPage"));
@@ -15,6 +14,7 @@ const SpotListPage = lazy(() => import("./pages/SpotListPage"));
 const SpotDetailPage = lazy(() => import("./pages/SpotDetailPage"));
 const SpotDataUpdater = lazy(() => import("./pages/SpotDataUpdater"));
 const SharedPlanPage = lazy(() => import("./pages/SharedPlanPage"));
+const AccountSettingsPage = lazy(() => import("./pages/AccountSettingsPage"));
 
 // Components
 import Layout from "./components/common/Layout";
@@ -49,7 +49,7 @@ export const router = createBrowserRouter([
 
             // 여행 계획
             { path: "/plans", element: <PlanListPage /> },
-            { path: "/plans/create", element: <PlanCreatePage /> },
+            { path: "/plans/create", element: <PlanListPage /> },
             { path: "/plans/:id", element: <PlanDetailPage /> },
 
             // 하루 일정
@@ -60,6 +60,9 @@ export const router = createBrowserRouter([
             { path: "/spots", element: <SpotListPage /> },
             { path: "/spots/test/renew", element: <SpotDataUpdater /> },
             { path: "/spots/:id", element: <SpotDetailPage /> },
+
+            // 계정 관리
+            { path: "/account", element: <AccountSettingsPage /> },
         ],
     },
     {

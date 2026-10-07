@@ -1,3 +1,4 @@
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import type { DayRouteAuditLeg, PlanRouteAuditResponse } from '../../types/route';
 
 interface Props {
@@ -25,13 +26,14 @@ const routeIssues = (legs: DayRouteAuditLeg[]) => legs.filter(
 );
 
 export default function PlanRouteAuditModal({ result, loading, checkedAt, stale, progress, onCalculateRoutes, onCancelCalculation, onRefresh, onOpenDay, onOpenIssue, onAuditDay, onClose }: Props) {
+  const dialogRef = useDialogFocus(true, onClose);
   const issueDays = result.days.filter(day => day.issueCount > 0);
   const cleanDays = result.days.filter(day => day.issueCount === 0);
   const routeCalculationAllowed = result.totalLegs <= result.maxRouteCalculationLegs;
   const calculatingRoutes = loading && progress != null;
 
   return (
-    <div className="fixed inset-0 z-[18000] flex items-end justify-center bg-black/45 md:items-center md:p-6" onClick={onClose}>
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="여행 일정 점검" className="fixed inset-0 z-[18000] flex items-end justify-center bg-black/45 md:items-center md:p-6" onClick={onClose}>
       <section className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-t-3xl bg-white shadow-2xl md:rounded-3xl" onClick={event => event.stopPropagation()}>
         <header className="flex items-start justify-between border-b border-gray-100 p-5 md:p-6">
           <div>

@@ -13,6 +13,7 @@ interface Props {
     onSelect?: (id: number) => void;
     onUpdate: (id: number, req: ScheduleUpdateRequest) => Promise<void>;
     onToggleVisit: (id: number) => void;
+    canToggleVisit?: boolean;
     onDelete: (id: number) => void;
     onInsert: (index: number) => void;
     onQuickAdd: (request: ScheduleCreateRequest) => Promise<boolean>;
@@ -35,6 +36,7 @@ export default function DayScheduleList({
                                             onSelect,
                                             onUpdate,
                                             onToggleVisit,
+                                            canToggleVisit = true,
                                             onDelete,
                                             onInsert,
                                             onQuickAdd,
@@ -71,7 +73,7 @@ export default function DayScheduleList({
                     )}
                     {schedules.map((schedule) => (
                         <div
-                            key={`${schedule.id}-${schedule.startTime}-${schedule.spotName}-${schedule.memo}`}
+                            key={schedule.id}
                             data-schedule-id={schedule.id}
                             className={`scroll-mt-24 rounded-xl transition ${selectedScheduleId === schedule.id ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
                             onClick={() => onSelect?.(schedule.id)}
@@ -81,6 +83,7 @@ export default function DayScheduleList({
                                 onUpdate={onUpdate}
                                 onDelete={onDelete}
                                 onToggleVisit={onToggleVisit}
+                                canToggleVisit={canToggleVisit}
                                 onDirtyChange={onItemDirtyChange}
                                 onTransfer={onTransfer}
                             />
@@ -146,6 +149,7 @@ export default function DayScheduleList({
                                     onDelete={onDelete}
                                     onInsert={onInsert}
                                     onToggleVisit={onToggleVisit}
+                                    canToggleVisit={canToggleVisit}
                                     onRequestMapPick={() => {
                                         if (setPickingTarget && dayId) {
                                             if (pickingTarget?.scheduleId === schedule.id) setPickingTarget(null);
@@ -155,7 +159,6 @@ export default function DayScheduleList({
                                     isPickingMap={pickingTarget?.scheduleId === schedule.id}
                                     openEditRequestKey={focusRequest?.scheduleId === schedule.id && focusRequest.openEditor ? focusRequest.key : undefined}
                                     onDirtyChange={onItemDirtyChange}
-                                    onTransfer={onTransfer}
                                 />
                             </div>
                         );

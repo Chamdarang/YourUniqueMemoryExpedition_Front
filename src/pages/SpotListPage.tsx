@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 // API
@@ -19,6 +19,8 @@ import SpotGroupList from "../components/spot/SpotGroupList";
 import Pagination from "../components/common/Pagination";
 import SpotInUseModal from "../components/spot/SpotInUseModal.tsx";
 import { useFeedback } from "../components/common/useFeedback";
+import LoadErrorState from '../components/common/LoadErrorState';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 // ❌ PURCHASE_KIND_KEYS 등 기념품 유틸 임포트는 PurchaseFilter 내부로 이동했으므로 여기서 삭제했습니다.
 
@@ -27,10 +29,11 @@ type AdminMode = 'SPOT' | 'GROUP' | 'PURCHASE';
 export default function SpotListPage() {
     const { confirm, showToast } = useFeedback();
     const [searchParams, setSearchParams] = useSearchParams();
-    const modeFromUrl = (searchParams.get('mode') as AdminMode) || 'SPOT';
-
-    const [viewMode, setViewMode] = useState<AdminMode>(modeFromUrl);
+    const modeFromUrl = searchParams.get('mode');
+    const viewMode: AdminMode = modeFromUrl === 'GROUP' || modeFromUrl === 'PURCHASE' ? modeFromUrl : 'SPOT';
     const [loading, setLoading] = useState(true); // ✅ 로딩 상태
+    const requestVersion = useRef(0);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [spots, setSpots] = useState<SpotResponse[]>([]);
     const [purchases, setPurchases] = useState<SpotPurchaseResponse[]>([]);
 
@@ -39,6 +42,8 @@ export default function SpotListPage() {
     const [totalElements, setTotalElements] = useState(0);
 
     const [activePFilter, setActivePFilter] = useState<PurchaseSearchParams>({});
+    const [spotFilterVersion, setSpotFilterVersion] = useState(0);
+    const [purchaseFilterVersion, setPurchaseFilterVersion] = useState(0);
     const [spotFilter, setSpotFilter] = useState<SpotSearchParams>({
         keyword: '',
         type: 'ALL',
@@ -50,6 +55,7 @@ export default function SpotListPage() {
     const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
     const [duplicateCandidates, setDuplicateCandidates] = useState<SpotDuplicateCandidate[] | null>(null);
     const [mergingSpots, setMergingSpots] = useState(false);
+    const duplicateDialogRef = useDialogFocus(duplicateCandidates !== null, () => { if (!mergingSpots) setDuplicateCandidates(null); });
 
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -60,17 +66,24 @@ export default function SpotListPage() {
     });
 
     const fetchPurchasesData = useCallback(async (pageNum = 0) => {
+        const version = ++requestVersion.current;
         try {
             setLoading(true); // ✅ 로딩 시작
             const data = await getAllPurchases({ page: pageNum, size: 20, ...activePFilter });
+            if (version !== requestVersion.current) return;
             setPurchases(data.content);
             setTotalPages(data.totalPages);
             setTotalElements(data.totalElements);
             setPage(data.number);
-        } finally { setLoading(false); } // ✅ 로딩 종료
+            setLoadError(null);
+        } catch {
+            if (version !== requestVersion.current) return;
+            setLoadError('기념품 목록을 불러오지 못했습니다.');
+        } finally { if (version === requestVersion.current) setLoading(false); } // ✅ 로딩 종료
     }, [activePFilter]);
 
     const fetchSpotsData = useCallback(async (pageNum = 0, currentFilter = spotFilter) => {
+        const version = ++requestVersion.current;
         try {
             setLoading(true); // ✅ 로딩 시작
             const data = await getMySpots({
@@ -80,23 +93,31 @@ export default function SpotListPage() {
                 spotType: currentFilter.type === 'ALL' ? undefined : currentFilter.type,
                 isVisit: currentFilter.isVisit === 'ALL' ? undefined : currentFilter.isVisit
             });
+            if (version !== requestVersion.current) return;
             setSpots(data.content);
+            setLoadError(null);
             if (viewMode === 'SPOT') {
                 setTotalPages(data.totalPages);
                 setTotalElements(data.totalElements);
                 setPage(data.number);
             }
-        } finally { setLoading(false); } // ✅ 로딩 종료
+        } catch {
+            if (version !== requestVersion.current) return;
+            setLoadError('장소 목록을 불러오지 못했습니다.');
+        } finally { if (version === requestVersion.current) setLoading(false); } // ✅ 로딩 종료
     }, [spotFilter, viewMode]);
 
     useEffect(() => {
         if (viewMode === 'PURCHASE') {
             fetchPurchasesData(0);
-            fetchSpotsData(0);
         }
         else if (viewMode === 'SPOT') {
             fetchSpotsData(0, spotFilter);
+        } else {
+            setLoading(false);
         }
+        const versionRef = requestVersion;
+        return () => { versionRef.current++; };
     }, [viewMode, activePFilter, spotFilter, fetchPurchasesData, fetchSpotsData]);
 
     const handleSpotSearch = (newParams: SpotSearchParams) => {
@@ -135,11 +156,9 @@ export default function SpotListPage() {
         } catch { showToast({ message: "방문 상태를 바꾸지 못했습니다.", type: 'error' }); }
     };
 
-    const handleSavePurchase = async () => {
-        if (!formPurchase.itemName) return showToast({ message: "아이템 이름을 입력해 주세요.", type: 'info' });
-        if (formPurchase.spotUserId === 0) return showToast({ message: "장소를 선택해 주세요.", type: 'info' });
+    const handleSavePurchase = async (data: SpotPurchaseSaveRequest & { spotUserId: number }) => {
         try {
-            const { spotUserId, ...requestBody } = formPurchase;
+            const { spotUserId, ...requestBody } = data;
             if (editingId) {
                 await updatePurchase(editingId, { ...requestBody, spotUserId });
                 showToast({ message: "기념품 정보를 수정했습니다. ✨", type: 'success' });
@@ -157,7 +176,7 @@ export default function SpotListPage() {
             fetchPurchasesData(0);
         } catch (error) {
             console.error(error);
-            showToast({ message: "기념품 정보를 처리하지 못했습니다.", type: 'error' });
+            throw error;
         }
     };
 
@@ -170,10 +189,16 @@ export default function SpotListPage() {
             note: item.note, spotUserId: item.spotUserId
         });
         setIsAdding(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleModeChange = (newMode: AdminMode) => { setViewMode(newMode); setSearchParams({ mode: newMode }); };
+    const handleModeChange = (newMode: AdminMode) => {
+        setLoadError(null);
+        setSearchParams(current => {
+            const next = new URLSearchParams(current);
+            next.set('mode', newMode);
+            return next;
+        });
+    };
 
     const openDuplicateCandidates = async () => {
         try {
@@ -240,8 +265,8 @@ export default function SpotListPage() {
         <div className="max-w-7xl mx-auto p-4 md:p-6 pb-20 font-sans relative">
 
             {/* ✅ 전역 로딩 오버레이 추가 */}
-            {loading && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-[1px]">
+            {loading && viewMode !== 'GROUP' && (
+                <div role="status" aria-label="목록 불러오는 중" className="fixed inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-[1px]">
                     <div className="w-8 h-8 border-4 border-gray-900 border-t-transparent rounded-full animate-spin"></div>
                 </div>
             )}
@@ -249,15 +274,16 @@ export default function SpotListPage() {
             <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 border-b border-gray-100 pb-6">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-black text-gray-900">{viewMode === 'PURCHASE' ? '기념품 장부' : '내 장소'}</h1>
-                    <p className="text-gray-400 text-xs mt-1 font-bold">총 {totalElements}개의 항목 관리 중</p>
+                    <p className="text-gray-500 text-xs mt-1 font-bold">{viewMode === 'GROUP' ? '그룹으로 장소를 모아 관리하세요.' : loadError ? '목록을 다시 불러와 주세요.' : `총 ${totalElements}개의 항목 관리 중`}</p>
                 </div>
-                <div className="flex bg-gray-100 p-1 rounded-2xl shadow-inner border border-gray-100">
-                    <button onClick={() => handleModeChange('SPOT')} className={`px-5 py-2 rounded-xl text-sm font-black transition-all ${viewMode === 'SPOT' ? 'bg-white text-blue-600 shadow-sm scale-105' : 'text-gray-500'}`}>📍 스팟</button>
-                    <button onClick={() => handleModeChange('GROUP')} className={`px-5 py-2 rounded-xl text-sm font-black transition-all ${viewMode === 'GROUP' ? 'bg-white text-orange-600 shadow-sm scale-105' : 'text-gray-500'}`}>📂 그룹</button>
-                    <button onClick={() => handleModeChange('PURCHASE')} className={`px-5 py-2 rounded-xl text-sm font-black transition-all ${viewMode === 'PURCHASE' ? 'bg-white text-pink-600 shadow-sm scale-105' : 'text-gray-500'}`}>🎁 기념품</button>
+                <div data-guide-target="spots-tabs" className="flex bg-gray-100 p-1 rounded-2xl shadow-inner border border-gray-100">
+                    <button aria-pressed={viewMode === 'SPOT'} data-guide-target="spots-tab-spot" data-guide-state={viewMode === 'SPOT' ? 'selected' : 'unselected'} onClick={() => handleModeChange('SPOT')} className={`px-5 py-2 rounded-xl text-sm font-black transition-all ${viewMode === 'SPOT' ? 'bg-white text-blue-600 shadow-sm scale-105' : 'text-gray-500'}`}>📍 장소</button>
+                    <button aria-pressed={viewMode === 'GROUP'} data-guide-target="spots-tab-group" data-guide-state={viewMode === 'GROUP' ? 'selected' : 'unselected'} onClick={() => handleModeChange('GROUP')} className={`px-5 py-2 rounded-xl text-sm font-black transition-all ${viewMode === 'GROUP' ? 'bg-white text-orange-600 shadow-sm scale-105' : 'text-gray-500'}`}>📂 그룹</button>
+                    <button aria-pressed={viewMode === 'PURCHASE'} data-guide-target="spots-tab-purchase" data-guide-state={viewMode === 'PURCHASE' ? 'selected' : 'unselected'} onClick={() => handleModeChange('PURCHASE')} className={`px-5 py-2 rounded-xl text-sm font-black transition-all ${viewMode === 'PURCHASE' ? 'bg-white text-pink-600 shadow-sm scale-105' : 'text-gray-500'}`}>🎁 기념품</button>
                 </div>
             </div>
 
+            <div data-guide-target="spots-content">
             {viewMode === 'SPOT' && (
                 <div className="animate-in fade-in duration-300">
                     <div className="mb-4 flex justify-end">
@@ -269,8 +295,11 @@ export default function SpotListPage() {
                             🧹 중복 장소 확인
                         </button>
                     </div>
-                    <SpotFilter onSearch={handleSpotSearch} />
-                    <SpotList spots={spots} onDelete={handleDeleteSpot} onToggleVisit={handleToggleVisit} />
+                    <SpotFilter key={spotFilterVersion} onSearch={handleSpotSearch} />
+                    {loadError && <LoadErrorState message={loadError} retrying={loading} onRetry={() => void fetchSpotsData(page, spotFilter)} />}
+                    {(!loadError || spots.length > 0) && <SpotList spots={spots} onDelete={handleDeleteSpot} onToggleVisit={handleToggleVisit}
+                        filtered={Boolean(spotFilter.keyword.trim() || spotFilter.type !== 'ALL' || spotFilter.isVisit !== 'ALL')}
+                        onReset={() => { setSpotFilter({ keyword: '', type: 'ALL', isVisit: 'ALL' }); setSpotFilterVersion(version => version + 1); }} />}
                     <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => fetchSpotsData(p, spotFilter)} />
                 </div>
             )}
@@ -280,7 +309,8 @@ export default function SpotListPage() {
             {viewMode === 'PURCHASE' && (
                 <div className="animate-in fade-in duration-300 space-y-6">
                     <PurchaseFilter
-                        spots={spots}
+                        key={purchaseFilterVersion}
+                        selectedSpotName={purchases.find(purchase => purchase.id === editingId)?.spotName ?? undefined}
                         onSearch={setActivePFilter}
                         onSave={handleSavePurchase}
                         isAdding={isAdding}
@@ -291,16 +321,21 @@ export default function SpotListPage() {
                         setFormPurchase={setFormPurchase}
                     />
 
-                    <PurchaseList
+                    {loadError && <LoadErrorState message={loadError} retrying={loading} onRetry={() => void fetchPurchasesData(page)} />}
+                    {(!loadError || purchases.length > 0) && <PurchaseList
                         purchases={purchases}
+                        filtered={Boolean(activePFilter.keyword?.trim() || activePFilter.category?.trim() || activePFilter.kind || activePFilter.status)}
+                        onReset={() => { setActivePFilter({}); setPurchaseFilterVersion(version => version + 1); }}
+                        onCreate={() => { setEditingId(null); setIsAdding(true); }}
                         onEdit={handleEditStart}
                         onToggleStatus={(purchase) => void handleTogglePurchaseStatus(purchase)}
                         onDelete={(purchaseId) => void handleDeletePurchase(purchaseId)}
-                    />
+                    />}
 
                     <Pagination currentPage={page} totalPages={totalPages} onPageChange={fetchPurchasesData} />
                 </div>
             )}
+            </div>
 
             <SpotInUseModal
                 isOpen={isInUseModalOpen}
@@ -310,7 +345,7 @@ export default function SpotListPage() {
             />
 
             {duplicateCandidates !== null && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+                <div ref={duplicateDialogRef} role="dialog" aria-modal="true" aria-label="중복 장소 정리" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
                     <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl md:p-8">
                         <div className="mb-6 flex items-start justify-between gap-4">
                             <div>
@@ -321,7 +356,8 @@ export default function SpotListPage() {
                                 type="button"
                                 disabled={mergingSpots}
                                 onClick={() => setDuplicateCandidates(null)}
-                                className="text-xl text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                                aria-label="중복 장소 정리 닫기"
+                                className="min-h-11 min-w-11 text-xl text-gray-400 hover:text-gray-600 disabled:opacity-50"
                             >
                                 ✕
                             </button>

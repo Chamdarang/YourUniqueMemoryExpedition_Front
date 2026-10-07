@@ -12,6 +12,7 @@ import { deleteDay, detachPlanDay, updatePlanDay } from "../../api/dayApi";
 import { useSchedule } from "../../hooks/useSchedule";
 import DayScheduleList from "../day/DayScheduleList";
 import { useFeedback } from "../common/useFeedback";
+import LoadErrorState from '../common/LoadErrorState';
 
 interface Props {
     id: number | string;
@@ -20,6 +21,7 @@ interface Props {
     data?: PlanDayResponse;
     // schedules Props 제거: 이제 훅이 직접 서버에서 가져오고 관리합니다.
     showInjury: boolean;
+    isOwner: boolean;
     onRefresh: () => void;
     onUpdateDayInfo: (dayId: number, newName: string, newMemo: string) => void;
     onSchedulesChange: (dayId: number, schedules: DayScheduleResponse[]) => void;
@@ -44,7 +46,7 @@ const DAY_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4
 const getDayColor = (dayOrder: number) => DAY_COLORS[(dayOrder - 1) % DAY_COLORS.length];
 
 export default function PlanDayItem({
-                                        id, dayOrder, routeDate, data, showInjury, onUpdateDayInfo,
+                                        id, dayOrder, routeDate, data, showInjury, isOwner, onUpdateDayInfo,
                                         onSchedulesChange, refreshVersion, onRefresh, onToggle, pickingTarget, setPickingTarget,
                                         onQuickMapPickStart, isVisibleOnMap, onToggleMapVisibility, onCopyDay, setDirty,
                                         openRequestKey, allOpenRequest, expanded, selectedScheduleId, focusRequest, onTransferSchedule
@@ -53,6 +55,7 @@ export default function PlanDayItem({
 
     // ✅ [변경] 개별 스케줄 작업용 훅 연결
     const {
+        loading: schedulesLoading,
         schedules,
         fetchSchedules,
         addSchedule,
@@ -64,6 +67,8 @@ export default function PlanDayItem({
 
     const [isExpanded, setIsExpanded] = useState(false);
     const [schedulesLoaded, setSchedulesLoaded] = useState(false);
+    const [scheduleLoadError, setScheduleLoadError] = useState(false);
+    const [loadAttempt, setLoadAttempt] = useState(0);
 
     const [isEditingInfo, setIsEditingInfo] = useState(false);
     const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
@@ -117,11 +122,13 @@ export default function PlanDayItem({
         if (isExpanded && data?.id) {
             let active = true;
             void fetchSchedules(data.id).then(success => {
-                if (active && success) setSchedulesLoaded(true);
+                if (!active) return;
+                setScheduleLoadError(!success);
+                if (success) setSchedulesLoaded(true);
             });
             return () => { active = false; };
         }
-    }, [isExpanded, data?.id, fetchSchedules, refreshVersion]);
+    }, [isExpanded, data?.id, fetchSchedules, refreshVersion, loadAttempt]);
 
     useEffect(() => {
         if (expanded !== undefined) setIsExpanded(expanded);
@@ -286,7 +293,7 @@ export default function PlanDayItem({
                             <div {...attributes} {...listeners} onClick={e => e.stopPropagation()} className="cursor-grab text-gray-300 text-xl px-1 hover:text-orange-500 mt-1 md:mt-0">⠿</div>
                         )}
                         <div className="w-12 h-12 rounded-xl flex flex-col items-center justify-center border shrink-0 text-white shadow-sm" style={{ backgroundColor: dayColor, borderColor: dayColor }}>
-                            <span className="text-[10px] uppercase font-bold opacity-80">Day</span>
+                            <span className="text-xs uppercase font-bold opacity-80">Day</span>
                             <span className="text-xl font-extrabold leading-none">{dayOrder}</span>
                         </div>
 
@@ -310,7 +317,7 @@ export default function PlanDayItem({
                                             setEditMemo(data.memo || "");
                                             setIsEditingInfo(true);
                                             setIsExpanded(true);
-                                        }} className="text-gray-300 hover:text-orange-500 opacity-0 group-hover:opacity-100 transition p-1">✎</button>
+                                        }} aria-label={`${data.dayName} 제목과 메모 수정`} className="min-h-11 min-w-11 text-gray-500 hover:text-orange-600 transition rounded-lg p-1 focus-visible:ring-2 focus-visible:ring-orange-400">✎</button>
                                     </div>
                                     <p className={`text-xs truncate mt-0.5 ${data.memo ? 'text-gray-500' : 'text-gray-300'}`}>{data.memo || "메모 없음"}</p>
                                 </div>
@@ -346,13 +353,13 @@ export default function PlanDayItem({
                                     </button>
                                     {isActionMenuOpen && (
                                         <div className="absolute right-0 top-11 z-50 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
-                                            <button type="button" onClick={handleDetachDay} className="block w-full px-4 py-2.5 text-left text-xs font-bold text-blue-700 hover:bg-blue-50">
+                                            {isOwner && <button type="button" onClick={handleDetachDay} className="block w-full px-4 py-2.5 text-left text-xs font-bold text-blue-700 hover:bg-blue-50">
                                                 여행에서 빼기
-                                                <span className="mt-0.5 block text-[10px] font-medium text-gray-400">내 하루 일정에 보관</span>
-                                            </button>
+                                                <span className="mt-0.5 block text-xs font-medium text-gray-400">내 하루 일정에 보관</span>
+                                            </button>}
                                             <button type="button" onClick={() => { setIsActionMenuOpen(false); onCopyDay(data); }} className="block w-full border-t border-gray-100 px-4 py-2.5 text-left text-xs font-bold text-violet-700 hover:bg-violet-50">
                                                 일정 복제
-                                                <span className="mt-0.5 block text-[10px] font-medium text-gray-400">다른 일차 또는 내 일정으로 복사</span>
+                                                <span className="mt-0.5 block text-xs font-medium text-gray-400">다른 일차 또는 내 일정으로 복사</span>
                                             </button>
                                             <button type="button" disabled={isDayDeletePending} onClick={handleDeleteDay} className="block w-full border-t border-gray-100 px-4 py-2.5 text-left text-xs font-bold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:bg-amber-50 disabled:text-amber-600">
                                                 {isDayDeletePending ? '삭제 대기 중…' : '완전히 삭제'}
@@ -379,6 +386,9 @@ export default function PlanDayItem({
 
                 {isExpanded && (
                     <div className="border-t border-gray-100 p-4 bg-gray-50/30">
+                        {scheduleLoadError && <LoadErrorState message="이 날짜의 일정을 불러오지 못했습니다." retrying={schedulesLoading} onRetry={() => setLoadAttempt(value => value + 1)} />}
+                        {!schedulesLoaded && !scheduleLoadError && <p role="status" className="py-6 text-center text-sm text-gray-500">일정 불러오는 중…</p>}
+                        {schedulesLoaded && <>
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                             <DayScheduleList
                                 variant="card"
@@ -387,6 +397,7 @@ export default function PlanDayItem({
                                 showInjury={showInjury}
                                 onUpdate={handleItemUpdate}
                                 onToggleVisit={toggleVisit}
+                                canToggleVisit
                                 onDelete={handleItemDelete}
                                 onInsert={handleItemInsert}
                                 onQuickAdd={handleQuickAdd}
@@ -401,6 +412,7 @@ export default function PlanDayItem({
                                 onTransfer={(schedule) => onTransferSchedule(data, schedule)}
                             />
                         </DndContext>
+                        </>}
                     </div>
                 )}
             </div>

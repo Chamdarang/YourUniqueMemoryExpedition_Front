@@ -1,27 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+import { useCallback, useEffect, useState } from 'react';
 import { createPlanShareLink, getPlanShareStatus, revokePlanShareLink } from '../../api/planShareApi';
+import { getPlanMembers, removePlanMember } from '../../api/planMemberApi';
+import type { PlanMemberResponse } from '../../types/plan';
 import type { PlanShareStatus } from '../../types/planShare';
 import { useFeedback } from '../common/useFeedback';
 
-interface Props {
-  planId: number;
-  planName: string;
-  onClose: () => void;
-}
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
+interface Props { planId: number; planName: string; onClose: () => void; }
+function formatDateTime(value: string) { return new Date(value).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }); }
 function clearCachedShareToken(planId: number) {
-  try {
-    window.localStorage.removeItem(`yume:plan-share-token:${planId}`);
-  } catch {
-    // Ignore storage cleanup failures; active tokens are now recovered from the server.
-  }
+  try { window.localStorage.removeItem(`yume:plan-share-token:${planId}`); } catch { /* Ignore storage cleanup failures. */ }
 }
 
 export default function PlanShareModal({ planId, planName, onClose }: Props) {
+  const dialogRef = useDialogFocus(true, onClose);
   const { confirm, showToast } = useFeedback();
   const [status, setStatus] = useState<PlanShareStatus | null>(null);
   const [shareUrl, setShareUrl] = useState('');
@@ -29,163 +21,115 @@ export default function PlanShareModal({ planId, planName, onClose }: Props) {
   const [statusReady, setStatusReady] = useState(false);
   const [error, setError] = useState('');
   const [expiresInDays, setExpiresInDays] = useState('never');
+  const [accessMode, setAccessMode] = useState<'VIEW' | 'EDIT'>('VIEW');
+  const [members, setMembers] = useState<PlanMemberResponse[]>([]);
+
+  const applyStatus = useCallback((value: PlanShareStatus) => {
+    setStatus(value);
+    setAccessMode(value.accessMode || 'VIEW');
+    clearCachedShareToken(planId);
+    setShareUrl(value.active && value.token ? `${window.location.origin}/shared#${value.token}` : '');
+    setStatusReady(true);
+  }, [planId]);
+
+  const refreshMembers = async () => {
+    try { setMembers((await getPlanMembers(planId)).filter(member => member.status === 'ACCEPTED')); } catch { /* Keep the current editor list if refresh fails. */ }
+  };
 
   useEffect(() => {
     let active = true;
     getPlanShareStatus(planId)
-      .then(value => {
-        if (!active) return;
-        setStatus(value);
-        clearCachedShareToken(planId);
-        setShareUrl(value.active && value.token ? `${window.location.origin}/shared#${value.token}` : '');
-        setStatusReady(true);
-      })
+      .then(value => { if (active) applyStatus(value); })
       .catch(reason => { if (active) setError(reason instanceof Error ? reason.message : '공유 상태를 불러오지 못했습니다.'); })
       .finally(() => { if (active) setBusy(false); });
+    getPlanMembers(planId).then(value => { if (active) setMembers(value.filter(member => member.status === 'ACCEPTED')); }).catch(() => {});
     return () => { active = false; };
-  }, [planId]);
+  }, [planId, applyStatus]);
 
   const retryStatus = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      const value = await getPlanShareStatus(planId);
-      setStatus(value);
-      clearCachedShareToken(planId);
-      setShareUrl(value.active && value.token ? `${window.location.origin}/shared#${value.token}` : '');
-      setStatusReady(true);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '공유 상태를 불러오지 못했습니다.');
-    } finally {
-      setBusy(false);
-    }
+    setBusy(true); setError('');
+    try { applyStatus(await getPlanShareStatus(planId)); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : '공유 상태를 불러오지 못했습니다.'); }
+    finally { setBusy(false); }
   };
 
   const issueLink = async () => {
     if (status?.active && !await confirm({
       title: '공유 링크 갱신',
-      message: '새 링크를 만들면 이전 링크는 바로 사용할 수 없게 됩니다. 계속할까요?',
+      message: '새 링크를 만들면 기존 링크와 이 링크로 참여한 편집 권한은 더 이상 사용할 수 없게 됩니다. 계속할까요?',
       confirmLabel: '새 링크 만들기',
     })) return;
-
-    setBusy(true);
-    setError('');
+    setBusy(true); setError('');
     try {
-      const result = await createPlanShareLink(planId, expiresInDays === 'never' ? null : Number(expiresInDays));
-      setShareUrl(`${window.location.origin}/shared#${result.token}`);
-      clearCachedShareToken(planId);
-      setStatus({ active: true, updatedAt: result.createdAt, expiresAt: result.expiresAt, token: result.token });
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '공유 링크를 만들지 못했습니다.');
-    } finally {
-      setBusy(false);
-    }
+      const result = await createPlanShareLink(planId, expiresInDays === 'never' ? null : Number(expiresInDays), accessMode);
+      const next: PlanShareStatus = { active: true, updatedAt: result.createdAt, expiresAt: result.expiresAt, token: result.token, accessMode: result.accessMode };
+      applyStatus(next);
+      await refreshMembers();
+      showToast({ message: '공유 링크를 만들었습니다.', type: 'success' });
+    } catch (reason) { setError(reason instanceof Error ? reason.message : '공유 링크를 만들지 못했습니다.'); }
+    finally { setBusy(false); }
   };
 
   const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      showToast({ message: '공유 링크를 복사했습니다.', type: 'success' });
-    } catch {
-      setError('자동 복사에 실패했습니다. 링크를 길게 눌러 복사해 주세요.');
-    }
+    try { await navigator.clipboard.writeText(shareUrl); showToast({ message: '공유 링크를 복사했습니다.', type: 'success' }); }
+    catch { setError('자동 복사에 실패했습니다. 링크를 직접 복사해 주세요.'); }
   };
 
   const revokeLink = async () => {
-    if (!await confirm({
-      title: '공유 중지',
-      message: '이 링크로 여행 일정을 더 이상 볼 수 없게 됩니다. 공유를 중지할까요?',
-      confirmLabel: '공유 중지',
-      danger: true,
-    })) return;
-
-    setBusy(true);
-    setError('');
+    if (!await confirm({ title: '공유 중지', message: '이 링크와 링크로 참여한 편집 권한을 모두 중지할까요?', confirmLabel: '공유 중지', danger: true })) return;
+    setBusy(true); setError('');
     try {
-      await revokePlanShareLink(planId);
-      clearCachedShareToken(planId);
-      setStatus({ active: false, updatedAt: status?.updatedAt ?? null, expiresAt: status?.expiresAt ?? null, token: null });
-      setShareUrl('');
-      showToast({ message: '공유를 중지했습니다.', type: 'success' });
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '공유를 중지하지 못했습니다.');
-    } finally {
-      setBusy(false);
-    }
+      await revokePlanShareLink(planId); clearCachedShareToken(planId);
+      setStatus({ active: false, updatedAt: status?.updatedAt ?? null, expiresAt: status?.expiresAt ?? null, token: null, accessMode: status?.accessMode ?? 'VIEW' });
+      setShareUrl(''); await refreshMembers(); showToast({ message: '공유를 중지했습니다.', type: 'success' });
+    } catch (reason) { setError(reason instanceof Error ? reason.message : '공유를 중지하지 못했습니다.'); }
+    finally { setBusy(false); }
+  };
+
+  const removeMember = async (member: PlanMemberResponse) => {
+    if (!await confirm({ title: '공동 편집자 제거', message: `${member.username}님을 이 여행에서 제거할까요?`, confirmLabel: '제거', danger: true })) return;
+    try { await removePlanMember(planId, member.id); setMembers(current => current.filter(item => item.id !== member.id)); }
+    catch (reason) { showToast({ message: reason instanceof Error ? reason.message : '편집자를 제거하지 못했습니다.', type: 'error' }); }
   };
 
   return (
-    <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="plan-share-title">
-      <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl md:p-8">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-widest text-blue-600">YUME · 일정 공유</p>
-            <h2 id="plan-share-title" className="mt-2 text-2xl font-black text-gray-900">{planName}</h2>
-          </div>
-          <button type="button" onClick={onClose} aria-label="닫기" className="rounded-lg px-2 text-2xl text-gray-400 hover:bg-gray-100">×</button>
-        </div>
+    <div ref={dialogRef} tabIndex={-1} className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="plan-share-title">
+      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl md:p-6">
+        <header className="flex items-start justify-between gap-4">
+          <div className="min-w-0"><h2 id="plan-share-title" className="text-xl font-bold text-slate-900">공유</h2><p className="mt-1 truncate text-sm text-slate-500">{planName}</p></div>
+          <button type="button" onClick={onClose} aria-label="닫기" className="rounded-md px-2 text-xl text-slate-400 hover:bg-slate-100">×</button>
+        </header>
 
-        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
-          링크를 가진 사람은 로그인 없이 여행 날짜, 장소, 일정과 메모를 볼 수 있습니다. 개인적인 내용이 없는지 확인한 뒤 공유하세요.
-        </div>
-
-        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <label htmlFor="share-expiry" className="block text-sm font-bold text-gray-800">새 링크 만료 기간</label>
-          <select
-            id="share-expiry"
-            value={expiresInDays}
-            onChange={event => setExpiresInDays(event.target.value)}
-            disabled={busy || !statusReady}
-            className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:opacity-60"
-          >
-            <option value="never">만료 없음</option>
-            <option value="1">1일 후</option>
-            <option value="7">7일 후</option>
-            <option value="30">30일 후</option>
-          </select>
-          <p className="mt-2 text-xs leading-relaxed text-gray-500">새 링크를 만들 때부터 선택한 기간이 적용됩니다. 활성 링크는 로그인 후 공유 창을 열면 다시 확인할 수 있습니다. 새 링크를 발급하면 기존 링크는 사용할 수 없게 됩니다.</p>
-        </div>
-
-        {status?.active && (
-          <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-bold text-green-800">
-            공유 링크가 활성화되어 있습니다{status.updatedAt ? ` · ${formatDateTime(status.updatedAt)}` : ''} · {status.expiresAt ? `${formatDateTime(status.expiresAt)} 만료` : '만료 없음'}.
+        <section className="mt-5 border-t border-slate-200 pt-5">
+          <h3 className="text-sm font-semibold text-slate-900">링크 권한</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">링크를 받은 사람은 여행을 볼 수 있습니다. 편집 링크는 YUME 로그인 후 참여를 수락해야 편집할 수 있습니다.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className={`cursor-pointer rounded-lg border p-3 ${accessMode === 'VIEW' ? 'border-blue-500 bg-blue-50' : 'border-slate-200'}`}>
+              <input type="radio" name="share-access" value="VIEW" checked={accessMode === 'VIEW'} onChange={() => setAccessMode('VIEW')} className="mr-2 accent-blue-600" />
+              <span className="text-sm font-semibold text-slate-800">보기 전용</span><span className="mt-1 block pl-5 text-xs text-slate-500">로그인 없이 일정을 볼 수 있어요.</span>
+            </label>
+            <label className={`cursor-pointer rounded-lg border p-3 ${accessMode === 'EDIT' ? 'border-blue-500 bg-blue-50' : 'border-slate-200'}`}>
+              <input type="radio" name="share-access" value="EDIT" checked={accessMode === 'EDIT'} onChange={() => setAccessMode('EDIT')} className="mr-2 accent-blue-600" />
+              <span className="text-sm font-semibold text-slate-800">편집 가능</span><span className="mt-1 block pl-5 text-xs text-slate-500">로그인하고 참여를 수락하면 함께 편집해요.</span>
+            </label>
           </div>
-        )}
 
-        {status?.active && !status.token && (
-          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900">
-            이 링크는 복구 가능한 토큰을 저장하기 전에 만들어져 다시 표시할 수 없습니다. 새 링크를 만들면 새 주소를 확인할 수 있고, 이전 링크는 사용할 수 없게 됩니다.
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label htmlFor="share-expiry" className="shrink-0 text-xs font-medium text-slate-600">링크 만료</label>
+            <select id="share-expiry" value={expiresInDays} onChange={event => setExpiresInDays(event.target.value)} disabled={busy || !statusReady} className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 disabled:opacity-60">
+              <option value="never">만료 없음</option><option value="1">1일 후</option><option value="7">7일 후</option><option value="30">30일 후</option>
+            </select>
+            <button type="button" disabled={busy || !statusReady} onClick={() => void issueLink()} className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{busy ? '처리 중…' : status?.active ? '새 링크 만들기' : '링크 만들기'}</button>
           </div>
-        )}
+          {status?.active && <p className="mt-3 text-xs text-slate-600">현재 링크 · {status.accessMode === 'EDIT' ? '편집 가능' : '보기 전용'} · {status.expiresAt ? `${formatDateTime(status.expiresAt)} 만료` : '만료 없음'}</p>}
+          {status?.active && !status.token && <p className="mt-2 text-xs leading-5 text-amber-700">현재 링크 주소를 복구할 수 없습니다. 새 링크를 만들면 기존 링크는 사용할 수 없게 됩니다.</p>}
+          {shareUrl && <div className="mt-3 flex gap-2"><input aria-label="공유 링크" readOnly value={shareUrl} onFocus={event => event.currentTarget.select()} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700" /><button type="button" onClick={() => void copyLink()} className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">복사</button></div>}
+          {status?.active && <button type="button" disabled={busy} onClick={() => void revokeLink()} className="mt-3 text-xs font-medium text-slate-500 hover:text-red-600 disabled:opacity-50">링크 공유 중지</button>}
+        </section>
 
-        {shareUrl && (
-          <div className="mt-4">
-            <label htmlFor="share-link" className="mb-2 block text-xs font-bold text-gray-500">공유 링크</label>
-            <div className="flex gap-2">
-              <input id="share-link" readOnly value={shareUrl} onFocus={event => event.currentTarget.select()} className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700" />
-              <button type="button" onClick={() => void copyLink()} className="rounded-xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700">복사</button>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="mt-3 flex items-center justify-between gap-3 text-sm font-semibold text-red-600">
-            <p role="alert">{error}</p>
-            {!statusReady && <button type="button" disabled={busy} onClick={() => void retryStatus()} className="shrink-0 underline disabled:opacity-50">다시 확인</button>}
-          </div>
-        )}
-
-        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-          <div>
-            {status?.active && <button type="button" disabled={busy} onClick={() => void revokeLink()} className="w-full rounded-xl border border-red-200 px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-50 sm:w-auto">공유 중지</button>}
-          </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 sm:flex-none">닫기</button>
-            <button type="button" disabled={busy || !statusReady} onClick={() => void issueLink()} className="flex-1 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50 sm:flex-none">
-              {busy ? '처리 중…' : !statusReady ? '상태 확인 필요' : status?.active ? '새 링크 만들기' : '공유 링크 만들기'}
-            </button>
-          </div>
-        </div>
+        {members.length > 0 && <section className="mt-5 border-t border-slate-200 pt-4"><h3 className="text-sm font-semibold text-slate-900">함께 편집 중</h3><ul className="mt-2 divide-y divide-slate-100">{members.map(member => <li key={member.id} className="flex items-center justify-between gap-3 py-2"><span className="truncate text-sm text-slate-700">{member.username}</span><button type="button" onClick={() => void removeMember(member)} className="shrink-0 px-2 py-1 text-xs text-slate-500 hover:text-red-600">제거</button></li>)}</ul></section>}
+        {error && <div className="mt-4 flex items-center justify-between gap-3 text-sm text-red-600"><p role="alert">{error}</p>{!statusReady && <button type="button" disabled={busy} onClick={() => void retryStatus()} className="shrink-0 underline disabled:opacity-50">다시 확인</button>}</div>}
+        <footer className="mt-5 flex justify-end border-t border-slate-100 pt-4"><button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">닫기</button></footer>
       </div>
     </div>
   );

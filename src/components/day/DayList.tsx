@@ -1,20 +1,22 @@
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import type { PlanDayResponse } from '../../types/planDay.ts';
 import { useFeedback } from '../common/useFeedback';
 
 interface Props {
     days: PlanDayResponse[];
     onDelete: (id: number) => void;
+    searchKeyword?: string;
+    onResetSearch?: () => void;
 }
 
-export default function DayList({ days, onDelete }: Props) {
-    const navigate = useNavigate();
+export default function DayList({ days, onDelete, searchKeyword, onResetSearch }: Props) {
     const { isUndoablePending } = useFeedback();
 
     if (days.length === 0) {
         return (
             <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-gray-200">
-                <p className="text-gray-400">등록된 하루 계획이 없습니다.</p>
+                <p className="text-gray-600">{searchKeyword ? `“${searchKeyword}”에 맞는 하루 코스가 없습니다.` : '등록된 하루 코스가 없습니다.'}</p>
+                {searchKeyword && onResetSearch && <button type="button" onClick={onResetSearch} className="mt-4 min-h-11 rounded-xl bg-blue-50 px-4 text-sm font-semibold text-blue-700">검색 초기화</button>}
             </div>
         );
     }
@@ -26,52 +28,44 @@ export default function DayList({ days, onDelete }: Props) {
                 return (
                 <div
                     key={day.id}
-                    onClick={() => navigate(`/days/${day.id}`)}
                     className={`
-            relative flex items-center justify-between
-            bg-white p-5 rounded-xl border border-gray-100 shadow-sm
+            flex items-start md:items-center justify-between gap-4
+            bg-white p-4 md:p-5 rounded-2xl border border-gray-200 shadow-sm
             transition-all duration-200 cursor-pointer group
-            hover:shadow-md hover:border-orange-300 hover:bg-orange-50/30 hover:-translate-y-0.5
-            overflow-hidden
+            hover:shadow-md hover:border-blue-300 hover:bg-blue-50/30 hover:-translate-y-0.5
             ${isDeletePending ? 'border-amber-300 bg-amber-50/70 opacity-70' : ''}
           `}
                 >
-                    {/* 🎨 배경 장식 (은은한 지도 아이콘) */}
-                    <div className="absolute right-16 top-1/2 -translate-y-1/2 text-9xl text-gray-50 opacity-[0.03] pointer-events-none group-hover:opacity-[0.07] transition-opacity">
-                        🗺️
-                    </div>
-
-                    {/* 🎨 왼쪽 컬러 하이라이트 바 (오렌지) */}
-                    <div className="absolute left-0 top-0 bottom-0 w-[6px] bg-orange-400 group-hover:bg-orange-500 transition-colors"></div>
-
-                    {/* 좌측 정보 */}
-                    <div className="flex flex-col gap-1.5 flex-1 min-w-0 pl-4 relative z-10">
-                        {/* 뱃지 & 제목 */}
-                        <div className="flex items-center gap-2">
-               <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-orange-100 text-orange-700 rounded border border-orange-200">
-                DAY PLAN
-              </span>
-                            <h3 className="text-lg md:text-xl font-bold text-gray-900 truncate group-hover:text-orange-600 transition-colors">
-                                {day.dayName}
-                            </h3>
+                    {/* 왼쪽 정보 */}
+                    <Link to={`/days/${day.id}`} className="rounded-lg focus-visible:outline-2 focus-visible:outline-blue-600 flex min-w-0 flex-1 items-start gap-3 md:items-center md:gap-4">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-xl text-blue-600 transition-colors group-hover:bg-blue-100">
+                            📅
                         </div>
-
-                        {/* 📝 [핵심] 메모 표시 영역 (휑함 해결!) */}
-                        {day.memo ? (
-                            <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed pr-4">
-                                {day.memo}
-                            </p>
-                        ) : (
-                            <p className="text-xs text-gray-400 flex items-center gap-1">
-                                <span>📝 메모가 없습니다. 클릭해서 내용을 추가해보세요.</span>
-                            </p>
-                        )}
-                    </div>
+                        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                <h3 className="truncate text-lg font-bold text-gray-900 transition-colors group-hover:text-blue-700 md:text-xl">
+                                    {day.dayName}
+                                </h3>
+                                <span className="shrink-0 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700">
+                                    {day.scheduleMode === 'DETAILED' ? '상세 일정' : '간편 일정'}
+                                </span>
+                            </div>
+                            {day.memo ? (
+                                <p className="line-clamp-2 text-sm leading-relaxed text-gray-600">
+                                    {day.memo}
+                                </p>
+                            ) : (
+                                <p className="flex items-center gap-1 text-xs text-gray-400">
+                                    <span>📝</span> 메모 없음 · 클릭해서 내용을 추가해보세요.
+                                </p>
+                            )}
+                        </div>
+                    </Link>
 
                     {/* 우측 액션 영역 */}
-                    <div className="flex items-center gap-3 pl-4 relative z-10">
+                    <div className="flex shrink-0 items-center gap-2 md:gap-3">
                         {/* 편집하러 가기 화살표 */}
-                        <div className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-gray-50 text-gray-300 group-hover:bg-orange-100 group-hover:text-orange-500 transition">
+                        <div className="hidden h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-400 transition group-hover:bg-blue-600 group-hover:text-white md:flex">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                             </svg>
@@ -84,7 +78,7 @@ export default function DayList({ days, onDelete }: Props) {
                                 e.stopPropagation();
                                 onDelete(day.id);
                             }}
-                            className="rounded-lg p-2 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:bg-amber-100 disabled:text-amber-600"
+                            className="rounded-xl border border-transparent p-2 text-gray-400 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:border-amber-100 disabled:bg-amber-100 disabled:text-amber-600"
                             title={isDeletePending ? "삭제 대기 중" : "삭제"}
                         >
                             {isDeletePending ? <span className="whitespace-nowrap text-xs font-bold">삭제 대기 중…</span> : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">

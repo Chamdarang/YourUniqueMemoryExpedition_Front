@@ -1,3 +1,4 @@
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { useState, useEffect } from "react";
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function SpotGroupModal({ isOpen, onClose, currentGroups, onSave }: Props) {
+  const dialogRef = useDialogFocus(isOpen, onClose);
   // ----------------------------------------------------------------
   // 🧠 State
   // ----------------------------------------------------------------
@@ -61,7 +63,7 @@ export default function SpotGroupModal({ isOpen, onClose, currentGroups, onSave 
   if (!isOpen) return null;
 
   return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="장소 그룹 편집" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
         <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl p-6">
 
           <h2 className="text-xl font-bold mb-4 text-gray-800">🏷️ 그룹/태그 편집</h2>

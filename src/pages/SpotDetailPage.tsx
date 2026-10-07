@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import type { PurchaseFormValue } from '../components/purchase/PurchaseForm';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import LoadErrorState from '../components/common/LoadErrorState';
+import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 
 // API
 import { getSpotDetail, updateSpot } from '../api/spotApi';
@@ -20,6 +22,15 @@ import { useFeedback } from '../components/common/useFeedback';
 
 // ❌ 기존에 중복 정의되어 있던 getStatusInfo 함수를 삭제했습니다.
 
+function toEditForm(data: SpotDetailResponse): SpotUpdateRequest {
+    return {
+                spotName: getSpotDisplayName(data), spotType: data.spotType, address: data.address,
+                shortAddress: data.shortAddress || '', website: data.website || '',
+                googleMapUrl: data.googleMapUrl || '', lat: data.lat, lng: data.lng,
+                isVisit: data.isVisit, description: data.description || '', metadata: data.metadata || {}
+            };
+}
+
 export default function SpotDetailPage() {
     const { confirm, showToast } = useFeedback();
     const { id } = useParams<{ id: string }>();
@@ -27,6 +38,16 @@ export default function SpotDetailPage() {
     const [spot, setSpot] = useState<SpotDetailResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [nameError, setNameError] = useState<string | null>(null);
+    const savingRef = useRef(false);
+    const nameInputRef = useRef<HTMLInputElement>(null);
+    const blockerPromptActive = useRef(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const requestVersion = useRef(0);
+    const editingRef = useRef(isEditing);
+    useEffect(() => { editingRef.current = isEditing; }, [isEditing]);
 
     // 쇼핑 아이템 관련 상태
     const [isAddingPurchase, setIsAddingPurchase] = useState(false);
@@ -53,61 +74,97 @@ export default function SpotDetailPage() {
         isVisit: false, description: '', metadata: {}
     });
 
+    const isDirty = isSaving || Boolean(isEditing && spot && (
+        editForm.spotName !== getSpotDisplayName(spot)
+        || editForm.spotType !== spot.spotType
+        || editForm.description !== (spot.description || '')
+    ));
+    const blocker = useBlocker(({ currentLocation, nextLocation }) => isDirty && currentLocation.pathname !== nextLocation.pathname);
+    useEffect(() => {
+        if (!isDirty) return;
+        const protectReload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+        window.addEventListener('beforeunload', protectReload);
+        return () => window.removeEventListener('beforeunload', protectReload);
+    }, [isDirty]);
+    useEffect(() => {
+        if (blocker.state !== 'blocked' || blockerPromptActive.current) return;
+        blockerPromptActive.current = true;
+        void confirm({ title: '저장되지 않은 변경사항', message: '저장되지 않았거나 저장 중인 장소 정보가 있습니다. 이 화면을 떠날까요?', confirmLabel: '화면 떠나기', danger: true })
+            .then(leave => { if (leave) blocker.proceed(); else blocker.reset(); })
+            .finally(() => { blockerPromptActive.current = false; });
+    }, [blocker, confirm]);
+
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
 
     const fetchDetail = useCallback(async () => {
-        if (!id) return;
+        const version = ++requestVersion.current;
         try {
             setLoading(true);
+            if (!id || !Number.isInteger(Number(id)) || Number(id) <= 0) throw new Error('invalid id');
             const data = await getSpotDetail(Number(id));
+            if (version !== requestVersion.current) return;
             setSpot(data);
-            setEditForm({
-                spotName: getSpotDisplayName(data), spotType: data.spotType, address: data.address,
-                shortAddress: data.shortAddress || '', website: data.website || '',
-                googleMapUrl: data.googleMapUrl || '', lat: data.lat, lng: data.lng,
-                isVisit: data.isVisit, description: data.description || '', metadata: data.metadata || {}
-            });
-        } catch { navigate('/spots'); } finally { setLoading(false); }
-    }, [id, navigate]);
+            setLoadError(null);
+            if (!editingRef.current) setEditForm(toEditForm(data));
+        } catch {
+            if (version === requestVersion.current) setLoadError('장소 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+        } finally { if (version === requestVersion.current) setLoading(false); }
+    }, [id]);
 
-    useEffect(() => { void fetchDetail(); }, [fetchDetail]);
+    useEffect(() => {
+        void fetchDetail();
+        const versionRef = requestVersion;
+        return () => { versionRef.current++; };
+    }, [fetchDetail]);
 
     const handleUpdateSpot = async () => {
-        if (!id) return;
+        if (!id || savingRef.current) return;
+        const spotName = editForm.spotName?.trim() || '';
+        if (!spotName) {
+            setNameError('장소 이름을 입력해 주세요.');
+            nameInputRef.current?.focus();
+            return;
+        }
+        const value: SpotUpdateRequest = { spotName, spotType: editForm.spotType, description: editForm.description };
+        savingRef.current = true;
+        setIsSaving(true);
+        setSaveError(null);
+        setNameError(null);
         try {
-            await updateSpot(Number(id), editForm);
+            await updateSpot(Number(id), value);
             setIsEditing(false);
-            fetchDetail();
+            await fetchDetail();
             showToast({ message: '장소 정보를 수정했습니다.', type: 'success' });
-        } catch { showToast({ message: "장소 정보를 수정하지 못했습니다.", type: 'error' }); }
+        } catch {
+            setSaveError('장소 정보를 저장하지 못했습니다. 입력은 유지되어 있으니 다시 시도해 주세요.');
+        } finally {
+            savingRef.current = false;
+            setIsSaving(false);
+        }
     };
 
     const handleToggleVisit = async () => {
         if (!spot || !id) return;
         try {
-            await updateSpot(Number(id), { ...editForm, isVisit: !spot.isVisit });
+            await updateSpot(Number(id), { isVisit: !spot.isVisit });
             fetchDetail();
         } catch { showToast({ message: "방문 상태를 바꾸지 못했습니다.", type: 'error' }); }
     };
 
-    const handleAddPurchase = async () => {
-        if (!id || !newPurchase.itemName.trim()) { showToast({ message: "아이템 이름을 입력해 주세요.", type: 'info' }); return; }
-        try {
-            await createPurchase(Number(id), newPurchase);
-            setIsAddingPurchase(false);
-            setNewPurchase(initialPurchaseState);
-            fetchDetail();
-            showToast({ message: '기념품을 추가했습니다.', type: 'success' });
-        } catch { showToast({ message: "기념품을 추가하지 못했습니다.", type: 'error' }); }
+    const handleAddPurchase = async (value: PurchaseFormValue) => {
+        if (!id) throw new Error('장소를 찾을 수 없습니다.');
+        await createPurchase(Number(id), value);
+        setIsAddingPurchase(false);
+        setNewPurchase(initialPurchaseState);
+        fetchDetail();
+        showToast({ message: '기념품을 추가했습니다.', type: 'success' });
     };
 
-    const handleUpdatePurchase = async (purchaseId: number) => {
-        try {
-            await updatePurchase(purchaseId, editPurchaseForm);
-            setEditingPurchaseId(null);
-            fetchDetail();
-            showToast({ message: '기념품 정보를 수정했습니다.', type: 'success' });
-        } catch { showToast({ message: "기념품 정보를 수정하지 못했습니다.", type: 'error' }); }
+    const handleUpdatePurchase = async (purchaseId: number, value: PurchaseFormValue) => {
+        await updatePurchase(purchaseId, value);
+        setEditingPurchaseId(null);
+        fetchDetail();
+        showToast({ message: '기념품 정보를 수정했습니다.', type: 'success' });
     };
 
     const handleDeletePurchase = async (purchaseId: number) => {
@@ -142,7 +199,11 @@ export default function SpotDetailPage() {
     };
 
     const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
-    if (loading || !spot) return <div className="text-center p-20 text-gray-500 font-bold">로딩 중...</div>;
+    if (!spot || spot.id !== Number(id)) return <div className="max-w-3xl mx-auto p-6 space-y-4">
+        {loadError ? <LoadErrorState message={loadError} retrying={loading} onRetry={() => void fetchDetail()} />
+            : <p role="status" className="text-center p-12 text-gray-600">장소 정보를 불러오는 중...</p>}
+        <button type="button" onClick={() => navigate('/spots')} className="min-h-11 rounded-xl border px-4 text-sm font-bold text-gray-700">장소 목록으로</button>
+    </div>;
 
     const currentTypeInfo = getSpotTypeInfo(spot.spotType);
     const googleMapsUrl = spot.googleMapUrl || `https://www.google.com/maps/search/?api=1&query=${spot.lat},${spot.lng}`;
@@ -150,32 +211,41 @@ export default function SpotDetailPage() {
     return (
         <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['maps', 'marker']} language="ko">
             <div className="max-w-6xl mx-auto p-4 md:p-8 pb-32 space-y-6 bg-gray-50/30 min-h-screen font-sans">
+                {loadError && <LoadErrorState message={loadError} retrying={loading} onRetry={() => void fetchDetail()} />}
 
                 {/* 🏠 메인 정보 카드 */}
-                <div className="bg-white rounded-[2rem] shadow-xl border border-white overflow-hidden flex flex-col lg:flex-row min-h-[450px]">
+                <div data-guide-target="spot-detail-main" className="bg-white rounded-[2rem] shadow-xl border border-white overflow-hidden flex flex-col lg:flex-row min-h-[450px]">
                     <div className="lg:w-2/3 p-6 md:p-10 space-y-6">
                         <div className="space-y-4">
                             <div className="flex items-center gap-4">
                                 <button onClick={() => navigate('/spots')} className="text-blue-500 font-bold text-sm hover:underline transition-all">← 목록</button>
-                                <button onClick={handleToggleVisit} className={`px-4 py-1.5 rounded-full text-[10px] font-black border transition-all ${spot.isVisit ? 'bg-green-500 text-white border-green-500 shadow-md' : 'bg-white text-orange-500 border-orange-200'}`}>
+                                <button disabled={isSaving} onClick={handleToggleVisit} className={`min-h-11 px-4 py-1.5 rounded-full text-xs font-black border transition-all ${spot.isVisit ? 'bg-green-500 text-white border-green-500 shadow-md' : 'bg-white text-orange-500 border-orange-200'}`}>
                                     {spot.isVisit ? '✓ 방문 완료' : '+ 방문 체크'}
                                 </button>
                             </div>
 
                             {isEditing ? (
-                                <div className="space-y-4 animate-in fade-in">
-                                    <input className="w-full text-3xl md:text-5xl font-black p-2 border-b-4 border-blue-100 focus:border-blue-500 outline-none bg-transparent" value={editForm.spotName} onChange={e => setEditForm({...editForm, spotName: e.target.value})} autoFocus />
-                                    <select className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none" value={editForm.spotType} onChange={e => setEditForm({...editForm, spotType: e.target.value as SpotType})}>
+                                <form aria-label="장소 정보 수정" noValidate onSubmit={event => { event.preventDefault(); void handleUpdateSpot(); }} className="space-y-4 animate-in fade-in">
+                                    <fieldset disabled={isSaving} className="space-y-4 disabled:opacity-70">
+                                    <label htmlFor="spot-edit-name" className="block text-sm font-bold text-gray-700">장소 이름 (필수)</label>
+                                    <input id="spot-edit-name" ref={nameInputRef} maxLength={200} aria-invalid={Boolean(nameError)} aria-describedby={nameError ? 'spot-name-error' : undefined} aria-label="장소 이름" className="w-full text-3xl md:text-5xl font-black p-2 border-b-4 border-blue-100 focus:border-blue-500 outline-none bg-transparent" value={editForm.spotName} onChange={e => setEditForm({...editForm, spotName: e.target.value})} autoFocus />
+                                    {nameError && <p id="spot-name-error" role="alert" className="text-sm text-red-700">{nameError}</p>}
+                                    <label htmlFor="spot-edit-type" className="block text-sm font-bold text-gray-700">장소 유형</label>
+                                    <select id="spot-edit-type" className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none" value={editForm.spotType} onChange={e => setEditForm({...editForm, spotType: e.target.value as SpotType})}>
                                         {Object.entries(SPOT_TYPE_INFO).map(([key, info]) => (
                                             <option key={key} value={key}>{info.icon} {info.label}</option>
                                         ))}
                                     </select>
-                                    <textarea className="w-full p-4 bg-gray-50 rounded-xl text-sm outline-none min-h-[100px] resize-none" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} placeholder="설명을 입력하세요." />
+                                    <label htmlFor="spot-edit-description" className="block text-sm font-bold text-gray-700">설명 (선택)</label>
+                                    <textarea id="spot-edit-description" className="w-full p-4 bg-gray-50 rounded-xl text-sm outline-none min-h-[100px] resize-none" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} placeholder="설명을 입력하세요." />
                                     <div className="flex gap-2">
-                                        <button onClick={handleUpdateSpot} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-blue-200">저장</button>
-                                        <button onClick={() => setIsEditing(false)} className="bg-gray-100 text-gray-500 px-6 py-2.5 rounded-xl font-bold text-sm">취소</button>
+                                        <button type="submit" className="min-h-11 bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-blue-200">{isSaving ? '저장 중…' : saveError ? '저장 다시 시도' : '저장'}</button>
+                                        <button type="button" onClick={() => { setIsEditing(false); setEditForm(toEditForm(spot)); setSaveError(null); setNameError(null); }} className="bg-gray-100 text-gray-500 px-6 py-2.5 rounded-xl font-bold text-sm">취소</button>
                                     </div>
-                                </div>
+                                    </fieldset>
+                                    {saveError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{saveError}</p>}
+                                    <p role="status" className="text-xs text-gray-600">{isSaving ? '장소 정보를 저장하고 있습니다.' : isDirty ? '저장되지 않은 변경사항이 있습니다.' : '변경한 정보를 저장해 주세요.'}</p>
+                                </form>
                             ) : (
                                 <div>
                                     <h1 className="text-3xl md:text-5xl font-black text-gray-900 leading-tight break-keep tracking-tight">{getSpotDisplayName(spot)}</h1>
@@ -184,7 +254,7 @@ export default function SpotDetailPage() {
                                             {currentTypeInfo.icon} {currentTypeInfo.label}
                                         </span>
                                         <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="bg-white text-blue-600 border border-blue-50 px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors flex items-center gap-2 shadow-sm">🗺️ 구글 지도</a>
-                                        <button onClick={() => setIsEditing(true)} className="text-gray-400 font-bold text-xs hover:text-blue-500 px-2 transition-colors flex items-center gap-1">✏️ 정보 수정</button>
+                                        <button onClick={() => { setEditForm(toEditForm(spot)); setSaveError(null); setNameError(null); setIsEditing(true); }} className="min-h-11 text-gray-500 font-bold text-xs hover:text-blue-500 px-3 transition-colors flex items-center gap-1">✏️ 정보 수정</button>
                                     </div>
                                     <p className="text-gray-500 text-base md:text-lg font-medium border-t border-gray-100 mt-6 pt-6 leading-relaxed italic">
                                         {spot.description || "등록된 설명이 없습니다."}
@@ -207,7 +277,7 @@ export default function SpotDetailPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     <div className="lg:col-span-8 space-y-6">
                         {/* 🕒 방문 히스토리 */}
-                        <div className="bg-white rounded-[2rem] p-6 md:p-8 border border-gray-100 shadow-sm">
+                        <div data-guide-target="spot-detail-history" className="bg-white rounded-[2rem] p-6 md:p-8 border border-gray-100 shadow-sm">
                             <h3 className="text-xl md:text-2xl font-black text-gray-900 mb-8 flex items-center gap-3">
                                 <span className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-lg">🗓</span> 방문 히스토리
                             </h3>
@@ -217,7 +287,7 @@ export default function SpotDetailPage() {
                                         <div key={h.id} className="relative group cursor-pointer" onClick={() => navigate(!h.planId ? `/days/${h.dayId}` : `/plans/${h.planId}`)}>
                                             <div className="absolute -left-[33px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white shadow-sm" />
                                             <div className="bg-gray-50 p-4 md:p-5 rounded-2xl border border-gray-100 group-hover:bg-white group-hover:shadow-lg transition-all">
-                                                <span className="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full mb-2 inline-block uppercase tracking-widest">{h.visitedAt}</span>
+                                                <span className="text-xs font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full mb-2 inline-block uppercase tracking-widest">{h.visitedAt}</span>
                                                 <h4 className="font-black text-gray-800 text-lg">{!h.planId ? `[개별 일정] ${h.dayName}` : h.planName}</h4>
                                                 {h.planId && <p className="text-xs text-gray-400 font-bold mt-1 uppercase tracking-tighter">{h.dayName} 스케줄</p>}
                                             </div>
@@ -229,14 +299,14 @@ export default function SpotDetailPage() {
                             )}
                         </div>
 
-                        {/* 🛍️ 쇼핑 리스트 섹션 */}
+                        {/* 🛍️ 기념품 기록 섹션 */}
                         <div className="bg-white rounded-[2rem] p-6 md:p-8 border border-gray-100 shadow-sm min-h-[400px]">
                             <div className="flex justify-between items-center mb-8 px-2">
                                 <h3 className="text-xl md:text-2xl font-black text-gray-900 flex items-center gap-3">
-                                    <span className="w-10 h-10 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center text-lg">🛍</span> 쇼핑 리스트
+                                    <span className="w-10 h-10 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center text-lg">🛍</span> 기념품 기록
                                 </h3>
                                 <button onClick={() => setIsAddingPurchase(!isAddingPurchase)} className={`px-5 py-2 rounded-xl font-bold text-xs transition-all shadow-md active:scale-95 ${isAddingPurchase ? 'bg-gray-100 text-gray-500' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-                                    {isAddingPurchase ? '닫기' : '+ 새 아이템'}
+                                    {isAddingPurchase ? '닫기' : '+ 새 기념품 추가'}
                                 </button>
                             </div>
 
@@ -244,6 +314,7 @@ export default function SpotDetailPage() {
                                 {/* ✅ getStatusInfo 프롭 제거 (PurchaseCard 내부에서 유틸 사용) */}
                                 {isAddingPurchase && (
                                     <PurchaseEditCard
+                                        spotName={getSpotDisplayName(spot)}
                                         mode="add"
                                         form={newPurchase}
                                         onChange={(updates) => setNewPurchase(prev => ({ ...prev, ...updates }))}
@@ -254,12 +325,13 @@ export default function SpotDetailPage() {
 
                                 {spot.purchases.map((p: SpotPurchaseResponse) => (
                                     <PurchaseEditCard
-                                        key={p.id}
+                                        key={`${p.id}:${editingPurchaseId === p.id ? 'edit' : 'view'}`}
+                                        spotName={getSpotDisplayName(spot)}
                                         mode={editingPurchaseId === p.id ? 'edit' : 'view'}
                                         data={p}
                                         form={editPurchaseForm}
                                         onChange={(updates) => setEditPurchaseForm(prev => ({ ...prev, ...updates }))}
-                                        onSave={() => handleUpdatePurchase(p.id)}
+                                        onSave={value => handleUpdatePurchase(p.id, value)}
                                         onCancel={() => setEditingPurchaseId(null)}
                                         onDelete={handleDeletePurchase}
                                         onEditMode={(item) => {
@@ -276,7 +348,7 @@ export default function SpotDetailPage() {
                         {/* 📋 사이드바: 그룹 태그 */}
                         <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm">
                             <div className="flex justify-between items-center mb-6 px-1">
-                                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">그룹 태그</h3>
+                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">그룹 태그</h3>
                                 <button onClick={() => setIsGroupModalOpen(true)} className="text-blue-500 font-black text-xs hover:underline transition-all">편집</button>
                             </div>
                             <div className="flex flex-wrap gap-2.5">
@@ -288,16 +360,16 @@ export default function SpotDetailPage() {
 
                         {/* 📋 사이드바: 장소 상세 정보 */}
                         <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm space-y-10">
-                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">장소 상세 정보</h3>
+                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">장소 상세 정보</h3>
                             <div className="space-y-8 px-1">
                                 <div className="space-y-2">
-                                    <p className="text-[10px] font-black text-blue-500 uppercase mb-1 tracking-widest">기본 주소</p>
+                                    <p className="text-xs font-black text-blue-500 uppercase mb-1 tracking-widest">기본 주소</p>
                                     <p className="text-gray-900 font-bold text-sm leading-relaxed break-keep">{spot.shortAddress || spot.address}</p>
-                                    {spot.shortAddress && <p className="text-[11px] text-gray-400 font-medium leading-relaxed">{spot.address}</p>}
+                                    {spot.shortAddress && <p className="text-xs text-gray-400 font-medium leading-relaxed">{spot.address}</p>}
                                 </div>
                                 {spot.website && (
                                     <div className="space-y-2">
-                                        <p className="text-[10px] font-black text-blue-500 uppercase mb-1 tracking-widest">홈페이지</p>
+                                        <p className="text-xs font-black text-blue-500 uppercase mb-1 tracking-widest">홈페이지</p>
                                         <a href={spot.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold underline transition break-all text-xs">{spot.website}</a>
                                     </div>
                                 )}

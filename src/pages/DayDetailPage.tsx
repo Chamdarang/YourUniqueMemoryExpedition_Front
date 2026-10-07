@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useBlocker } from "react-router-dom";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary, InfoWindow, Pin, type MapMouseEvent } from "@vis.gl/react-google-maps";
@@ -14,6 +14,8 @@ import { useSchedule } from "../hooks/useSchedule"; // ✅ useSchedule 훅 임�
 // Components
 import DayScheduleList from "../components/day/DayScheduleList";
 import DayRouteAuditModal from "../components/day/DayRouteAuditModal";
+import SaveStatusIndicator from "../components/common/SaveStatusIndicator";
+import LoadErrorState from "../components/common/LoadErrorState";
 
 // Types & Utils
 import type { PlanDayDetailResponse } from "../types/planDay.ts";
@@ -146,6 +148,8 @@ function DayDetailContent() {
 
     const [dayDetail, setDayDetail] = useState<PlanDayDetailResponse | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [loadAttempt, setLoadAttempt] = useState(0);
 
     // UI State
     const [mapViewMode] = useState<'ALL' | 'PINS' | 'NONE'>('ALL');
@@ -179,6 +183,42 @@ function DayDetailContent() {
     // Header Editing State
     const [titleForm, setTitleForm] = useState("");
     const [memoForm, setMemoForm] = useState("");
+    const [headerSaveState, setHeaderSaveState] = useState<'IDLE' | 'SAVING' | 'ERROR'>('IDLE');
+    const [dirtySchedules, setDirtySchedules] = useState<Record<number, boolean>>({});
+    const headerSaveQueue = useRef<Promise<void>>(Promise.resolve());
+    const pendingHeaderSaves = useRef(0);
+    const headerDirty = dayDetail != null && (titleForm !== dayDetail.dayName || memoForm !== (dayDetail.memo || ''));
+    const isAnyDirty = headerDirty || headerSaveState === 'SAVING' || Object.values(dirtySchedules).some(Boolean);
+    const handleScheduleDirty = useCallback((scheduleId: number, dirty: boolean) => {
+        setDirtySchedules(previous => previous[scheduleId] === dirty ? previous : { ...previous, [scheduleId]: dirty });
+    }, []);
+    const blocker = useBlocker(({ currentLocation, nextLocation }) => isAnyDirty && currentLocation.pathname !== nextLocation.pathname);
+    const blockerPromptActive = useRef(false);
+
+    useEffect(() => {
+        if (!isAnyDirty) return;
+        const preventUnsavedReload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+        window.addEventListener('beforeunload', preventUnsavedReload);
+        return () => window.removeEventListener('beforeunload', preventUnsavedReload);
+    }, [isAnyDirty]);
+
+    useEffect(() => {
+        if (blocker.state !== 'blocked' || blockerPromptActive.current) return;
+        blockerPromptActive.current = true;
+        void confirm({
+            title: '저장되지 않은 변경사항',
+            message: '저장되지 않았거나 저장 중인 변경사항이 있습니다. 이 화면을 떠날까요?',
+            confirmLabel: '화면 떠나기',
+            danger: true,
+        }).then(leave => {
+            if (leave) blocker.proceed();
+            else blocker.reset();
+            blockerPromptActive.current = false;
+        });
+    }, [blocker, confirm]);
 
     // Map Interaction
     const [pickingTarget, setPickingTarget] = useState<{ dayId: number, scheduleId: number } | null>(null);
@@ -199,32 +239,54 @@ function DayDetailContent() {
 
     // ✅ 데이터 로드 (일차 정보 + 스케줄 목록)
     useEffect(() => {
-        if (!dayId) return;
+        let active = true;
+        if (!dayId) {
+            setLoadError('올바른 하루 일정 주소가 아닙니다.');
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
         setRouteAuditResult(null);
         setRouteAuditOpen(false);
         setRouteAuditCheckedAt(null);
         auditedRouteFingerprintRef.current = null;
 
-        // 일차 기본 정보 조회
-        getPlanDayDetail(dayId).then(data => {
+        // 기본 정보와 일정 모두 확인한 뒤 화면을 표시합니다.
+        void Promise.all([getPlanDayDetail(dayId), fetchSchedules(dayId)]).then(([data, schedulesLoaded]) => {
+            if (!active) return;
+            if (!schedulesLoaded) throw new Error('일정 조회 실패');
             setDayDetail(data);
             setTitleForm(data.dayName);
             setMemoForm(data.memo || "");
-        }).catch(() => showToast({ message: "일차 정보를 불러오지 못했습니다.", type: 'error' }));
-
-        // 스케줄 목록 조회 (훅 사용)
-        fetchSchedules(dayId).finally(() => setLoading(false));
-    }, [dayId, fetchSchedules, showToast]);
+            setLoadError(null);
+        }).catch(() => {
+            if (active) setLoadError('하루 일정 정보를 불러오지 못했습니다.');
+        }).finally(() => { if (active) setLoading(false); });
+        return () => { active = false; };
+    }, [dayId, fetchSchedules, loadAttempt]);
 
     // ✅ 개별 헤더 정보 저장 (이름/메모)
     const handleUpdateDayInfo = async () => {
-        if (!dayId || !titleForm.trim()) return;
-        try {
-            await updatePlanDay(dayId, { dayName: titleForm, memo: memoForm });
-            showToast({ message: '일차 정보를 수정했습니다.', type: 'success' });
-        } catch {
-            showToast({ message: "일차 정보를 수정하지 못했습니다.", type: 'error' });
+        if (!dayId || !headerDirty) return;
+        if (!titleForm.trim()) {
+            setHeaderSaveState('ERROR');
+            return;
         }
+        const snapshot = { dayName: titleForm, memo: memoForm };
+        pendingHeaderSaves.current += 1;
+        setHeaderSaveState('SAVING');
+        headerSaveQueue.current = headerSaveQueue.current.then(async () => {
+            try {
+                await updatePlanDay(dayId, snapshot);
+                setDayDetail(previous => previous?.id === dayId ? { ...previous, ...snapshot } : previous);
+                setHeaderSaveState(pendingHeaderSaves.current > 1 ? 'SAVING' : 'IDLE');
+            } catch {
+                setHeaderSaveState(pendingHeaderSaves.current > 1 ? 'SAVING' : 'ERROR');
+            } finally {
+                pendingHeaderSaves.current -= 1;
+            }
+        });
+        await headerSaveQueue.current;
     };
 
     // ✅ Export 핸들러
@@ -399,7 +461,7 @@ function DayDetailContent() {
         if (!dayId || applicable.length === 0 || routeApplyLoading) return;
         if (applicable.length > 1 && !await confirm({
             title: '예상 이동시간 전체 적용',
-            message: `계산된 ${applicable.length}개 구간의 이동시간을 반영할까요?\n각 구간의 이동 인저리타임은 그대로 유지됩니다.`,
+            message: `계산된 ${applicable.length}개 구간의 이동시간을 반영할까요?\n각 구간의 이동 여유시간은 그대로 유지됩니다.`,
             confirmLabel: '전체 적용',
         })) return;
 
@@ -448,7 +510,9 @@ function DayDetailContent() {
         }
     };
 
-    if (loading || !dayDetail) return <div className="text-center py-20">로딩 중...</div>;
+    if (!dayDetail || dayDetail.id !== dayId) return <div className="p-4">{loadError
+        ? <LoadErrorState message={loadError} onRetry={() => setLoadAttempt(value => value + 1)} retrying={loading} backTo="/days" />
+        : <div role="status" className="text-center py-20">로딩 중...</div>}</div>;
 
     return (
         <>
@@ -534,9 +598,9 @@ function DayDetailContent() {
                     {/* [2] 일정 리스트 영역 */}
                     <div className={`flex flex-col w-full h-full bg-white md:w-1/2 relative z-10 transition-transform duration-300 ${mobileViewMode === 'MAP' ? 'translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
                         {/* 헤더 */}
-                        <div className="px-4 py-3 md:px-5 md:py-4 border-b border-gray-100 bg-white/95 backdrop-blur z-30 flex-shrink-0 flex flex-col gap-3">
+                        <div data-guide-target="day-detail-toolbar" className="px-4 py-3 md:px-5 md:py-4 border-b border-gray-100 bg-white/95 backdrop-blur z-30 flex-shrink-0 flex flex-col gap-3">
                             <div className="flex items-center gap-2 w-full">
-                                <button onClick={() => navigate(-1)} className="text-gray-400 p-1 hover:bg-gray-100 rounded-full shrink-0">🔙</button>
+                                <button onClick={() => navigate(-1)} aria-label="이전 화면" className="flex h-11 w-11 items-center justify-center text-gray-500 hover:bg-gray-100 rounded-full shrink-0">🔙</button>
                                 <input
                                     type="text"
                                     className="flex-1 min-w-0 text-xl md:text-2xl font-black text-gray-900 outline-none bg-transparent placeholder-gray-300 truncate"
@@ -547,21 +611,29 @@ function DayDetailContent() {
                                 />
                             </div>
 
-                            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <SaveStatusIndicator isDirty={isAnyDirty} statusOverride={headerSaveState === 'ERROR' ? 'ERROR' : headerSaveState === 'SAVING' ? 'SAVING' : undefined} className="shrink-0" />
+                                <span className="text-xs text-slate-500">입력 후 다른 곳을 누르면 자동 저장됩니다.</span>
+                            </div>
+                            {headerSaveState === 'ERROR' && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-red-700">
+                                <span>{titleForm.trim() ? '변경사항을 저장하지 못했습니다. 입력한 내용은 유지됩니다.' : '일정 제목을 입력해 주세요.'}</span>
+                                <button type="button" onClick={() => void handleUpdateDayInfo()} disabled={!titleForm.trim()} className="min-h-11 rounded-lg bg-red-50 px-3 font-semibold disabled:opacity-50">저장 다시 시도</button>
+                            </div>}
+                            <div className="flex flex-wrap items-center gap-2">
                                 <button
                                     onClick={() => setShowInjury(!showInjury)}
-                                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition border shadow-sm shrink-0 whitespace-nowrap ${showInjury ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                                    className={`min-h-11 px-3 rounded-lg text-xs font-bold transition border shadow-sm shrink-0 whitespace-nowrap ${showInjury ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
                                 >
-                                    ⚽ {showInjury ? '인저리 ON' : 'OFF'}
+                                    ⚽ {showInjury ? '여유시간 표시' : '여유시간 숨김'}
                                 </button>
-                                <button onClick={handleExportClick} className="p-1.5 px-3 text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition text-xs font-bold flex items-center gap-1 shrink-0 whitespace-nowrap">
-                                    📸 저장
+                                <button onClick={handleExportClick} className="min-h-11 px-3 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition text-xs font-bold flex items-center gap-1 shrink-0 whitespace-nowrap">
+                                    📸 이미지로 내보내기
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => void handleRouteAudit()}
                                     disabled={routeAuditLoading}
-                                    className="p-1.5 px-3 text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition text-xs font-bold flex items-center gap-1 shrink-0 whitespace-nowrap disabled:cursor-wait disabled:opacity-60"
+                                    className="min-h-11 px-3 text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition text-xs font-bold flex items-center gap-1 shrink-0 whitespace-nowrap disabled:cursor-wait disabled:opacity-60"
                                 >
                                     {routeAuditLoading
                                         ? '경로 점검 중…'
@@ -583,13 +655,15 @@ function DayDetailContent() {
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-4 pb-32 bg-white scrollbar-hide relative z-0">
+                        <div data-guide-target="day-detail-schedules" className="flex-1 overflow-y-auto p-4 pb-32 bg-white scrollbar-hide relative z-0">
+                            {loadError && <LoadErrorState message={loadError} onRetry={() => setLoadAttempt(value => value + 1)} retrying={loading} />}
                             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                                 <DayScheduleList
-                                    variant="page"
+                                    variant="card"
                                     schedules={schedules} // ✅ 훅의 실시간 상태 연결
                                     showInjury={showInjury}
                                     onUpdate={updateSchedule} // ✅ 훅 함수 직접 전달
+                                    onItemDirtyChange={handleScheduleDirty}
                                     onToggleVisit={toggleVisit} // ✅ 훅 함수 직접 전달
                                     onDelete={handleScheduleDelete}
                                     onInsert={handleScheduleInsert}

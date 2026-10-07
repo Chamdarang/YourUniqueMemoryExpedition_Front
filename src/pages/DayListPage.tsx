@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createIndependentDay, deleteDay, getIndependentDays } from "../api/dayApi";
 import type { PlanDayResponse, ScheduleMode } from "../types/planDay.ts";
 
@@ -6,11 +6,14 @@ import type { PlanDayResponse, ScheduleMode } from "../types/planDay.ts";
 import DayList from "../components/day/DayList";
 import Pagination from "../components/common/Pagination";
 import { useFeedback } from '../components/common/useFeedback';
+import LoadErrorState from '../components/common/LoadErrorState';
 
 export default function DayListPage() {
     const { confirm, runUndoable, showToast } = useFeedback();
+    const fetchGeneration = useRef(0);
     const [days, setDays] = useState<PlanDayResponse[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     // ✅ 페이징 상태
     const [page, setPage] = useState(0);
@@ -26,6 +29,7 @@ export default function DayListPage() {
 
     // 1. 목록 불러오기
     const fetchDays = useCallback(async (pageNum = 0, currentSearchKeyword = '') => {
+        const generation = ++fetchGeneration.current;
         try {
             setLoading(true);
 
@@ -35,15 +39,19 @@ export default function DayListPage() {
                 keyword: currentSearchKeyword
             });
 
+            if (generation !== fetchGeneration.current) return;
             setDays(data.content);
             setTotalPages(data.totalPages);
             setTotalElements(data.totalElements);
             setPage(data.number);
+            setLoadError(null);
 
         } catch (err) {
+            if (generation !== fetchGeneration.current) return;
             console.error("계획 목록 로드 실패:", err);
+            setLoadError('하루 일정 목록을 불러오지 못했습니다.');
         } finally {
-            setLoading(false);
+            if (generation === fetchGeneration.current) setLoading(false);
         }
     }, []);
 
@@ -51,10 +59,12 @@ export default function DayListPage() {
 
     // 2. 검색 핸들러
     const handleSearch = () => {
-        setSearchKeyword(keyword);
+        setSearchKeyword(keyword.trim());
         setPage(0);
-        fetchDays(0, keyword);
+        fetchDays(0, keyword.trim());
     };
+
+    const resetSearch = () => { setKeyword(''); setSearchKeyword(''); void fetchDays(0); };
 
     // 3. 삭제 핸들러
     const handleDelete = async (id: number) => {
@@ -93,14 +103,16 @@ export default function DayListPage() {
             <div className="flex flex-row justify-between items-end mb-4 gap-4">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2 leading-tight">
-                        나의 계획 📅
+                        하루 코스 📅
                     </h1>
                     <p className="text-gray-500 mt-1 md:mt-2 text-sm">
-                        총 <span className="text-orange-500 font-bold">{totalElements}</span>개의 하루 일정이 있습니다.
+                        {loadError ? '목록을 다시 불러와 주세요.' : <>총 <span className="text-orange-500 font-bold">{totalElements}</span>개의 하루 일정이 있습니다.</>}
                     </p>
                 </div>
 
                 <button
+                    data-guide-target="days-create"
+                    data-guide-state={isCreating ? 'open' : 'closed'}
                     onClick={() => setIsCreating(!isCreating)}
                     className="bg-gray-900 hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg transition whitespace-nowrap text-sm shrink-0 h-10 md:h-auto flex items-center"
                 >
@@ -113,13 +125,14 @@ export default function DayListPage() {
                 <div className="relative w-full">
                     <input
                         type="text"
-                        placeholder="일정 제목 검색..."
+                        aria-label="하루 코스 제목 검색" placeholder="하루 코스 제목 검색..."
                         className="w-full pl-4 pr-12 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-white transition shadow-sm"
                         value={keyword}
                         onChange={(e) => setKeyword(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                     />
                     <button
+                        aria-label="하루 코스 검색 실행"
                         onClick={handleSearch}
                         className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-orange-500 transition rounded-lg hover:bg-orange-50"
                     >
@@ -132,31 +145,33 @@ export default function DayListPage() {
 
             {/* ✨ 새 일정 만들기 폼 */}
             {isCreating && (
-                <div className="mb-6 bg-orange-50 p-6 rounded-2xl border border-orange-100 animate-fade-in-down shadow-inner">
-                    <h3 className="font-bold text-orange-800 mb-3 flex items-center gap-2">
-                        <span>✨</span> 새로운 하루 계획 만들기
+                <div data-guide-target="days-create-form" className="mb-6 bg-white p-6 rounded-xl border border-gray-100 animate-fade-in-down shadow-lg">
+                    <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                        <span>✨</span> 새로운 하루 코스 만들기
                     </h3>
                     <form onSubmit={handleCreate} className="space-y-3">
-                        <div className="grid grid-cols-2 gap-2 rounded-xl bg-white p-1.5 shadow-sm">
-                            <button type="button" onClick={() => setNewDayMode('SIMPLE')} className={`rounded-lg px-3 py-2.5 text-sm font-bold transition ${newDayMode === 'SIMPLE' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
+                        <p className="text-xs text-gray-600">여행 날짜를 정하기 전 후보 코스를 만들어 두세요. 저장한 코스는 여행 일정에 가져올 수 있어요.</p>
+                        <div data-guide-target="days-create-mode" className="grid grid-cols-2 gap-2 rounded-xl bg-gray-50 p-1.5">
+                            <button type="button" onClick={() => setNewDayMode('SIMPLE')} className={`rounded-lg px-3 py-2.5 text-sm font-bold transition ${newDayMode === 'SIMPLE' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>
                                 간편 일정
                                 <span className="mt-0.5 block text-[10px] font-medium opacity-75">장소 · 시간 · 메모만</span>
                             </button>
-                            <button type="button" onClick={() => setNewDayMode('DETAILED')} className={`rounded-lg px-3 py-2.5 text-sm font-bold transition ${newDayMode === 'DETAILED' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
+                            <button type="button" onClick={() => setNewDayMode('DETAILED')} className={`rounded-lg px-3 py-2.5 text-sm font-bold transition ${newDayMode === 'DETAILED' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>
                                 상세 일정
                                 <span className="mt-0.5 block text-[10px] font-medium opacity-75">체류 · 이동 · 교통수단 포함</span>
                             </button>
                         </div>
                         <div className="flex gap-3">
                         <input
+                            data-guide-target="days-create-name"
                             type="text"
                             placeholder="예) 오사카 맛집 탐방 (1일차 후보)"
                             value={newDayName}
                             onChange={(e) => setNewDayName(e.target.value)}
-                            className="flex-1 px-4 py-3 border border-orange-200 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-white transition"
+                            className="flex-1 px-4 py-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white transition"
                             autoFocus
                         />
-                        <button type="submit" className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-6 py-3 rounded-xl transition shadow-md shadow-orange-200 whitespace-nowrap">
+                        <button data-guide-target="days-create-submit" type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl transition shadow-md whitespace-nowrap">
                             생성
                         </button>
                         </div>
@@ -165,11 +180,14 @@ export default function DayListPage() {
             )}
 
             {/* 📋 리스트 렌더링 */}
-            {loading ? (
+            {loadError && <LoadErrorState message={loadError} retrying={loading} onRetry={() => void fetchDays(page, searchKeyword)} />}
+            {loading && !days.length && !loadError ? (
                 <div className="text-center p-20 text-gray-400 animate-pulse">로딩 중... ⏳</div>
             ) : (
                 <>
-                    <DayList days={days} onDelete={handleDelete} />
+                    <div data-guide-target="days-list">
+                        {(!loadError || days.length > 0) && <DayList days={days} onDelete={handleDelete} searchKeyword={searchKeyword} onResetSearch={resetSearch} />}
+                    </div>
 
                     <Pagination
                         currentPage={page}

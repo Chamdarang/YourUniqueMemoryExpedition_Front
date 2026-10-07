@@ -6,3 +6,9 @@ html, body, #root {
     padding: 0;
     overflow: hidden; /* 불필요한 전체 스크롤 방지 */
 }
+.safe-area-bottom { padding-bottom: calc(0.5rem + env(safe-area-inset-bottom)); }
+.yume-toast-region { bottom: 1.25rem; }
+@media (max-width: 767px) {
+  .yume-toast-region { bottom: calc(var(--yume-mobile-nav-height, 0px) + 5rem); }
+}
+:where(button, a, input, select, textarea):focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }

@@ -5,6 +5,8 @@ import type { ScheduleCreateRequest } from "../../types/schedule";
 import type { SpotCreateRequest, SpotResponse } from "../../types/spot";
 import { getSpotDisplayName, mapGoogleTypeToSpotType } from "../../utils/spotUtils";
 
+import { useSuggestionNavigation } from '../../hooks/useSuggestionNavigation';
+
 interface Props {
     scheduleOrder: number;
     onSubmit: (request: ScheduleCreateRequest) => Promise<boolean>;
@@ -254,12 +256,19 @@ export default function QuickScheduleAdd({ scheduleOrder, onSubmit, onMapPickSta
         setShowSuggestions(Boolean(spotName.trim()));
     };
 
+    const suggestionOpen = Boolean(showSuggestions && !selectedSpot && !mapSelection && spotName.trim());
+    const navigation = useSuggestionNavigation({
+        count: isSearching || isRegistering ? 0 : suggestions.length, query: `${searchMode}:${spotName}`,
+        open: suggestionOpen, onOpen: () => setShowSuggestions(true), onClose: () => setShowSuggestions(false),
+        onSelect: index => searchMode === 'GOOGLE' ? void selectGoogleSpot(suggestions[index]) : selectMineSpot(suggestions[index]),
+    });
+
     return (
         <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
             <button
                 type="button"
                 onClick={() => setIsOpen((open) => !open)}
-                className="flex w-full items-center justify-between text-left text-sm font-bold text-blue-700"
+                className="flex min-h-11 w-full items-center justify-between gap-2 text-left text-sm font-bold text-blue-700"
                 aria-expanded={isOpen}
             >
                 <span>+ 간편 일정 추가</span>
@@ -294,6 +303,8 @@ export default function QuickScheduleAdd({ scheduleOrder, onSubmit, onMapPickSta
                                     <option value="GOOGLE">Google</option>
                                 </select>
                             <input
+                                {...navigation.inputProps}
+                                aria-label="일정 장소 검색"
                                 ref={spotInputRef}
                                 value={spotName}
                                 maxLength={200}
@@ -301,9 +312,12 @@ export default function QuickScheduleAdd({ scheduleOrder, onSubmit, onMapPickSta
                                 autoComplete="off"
                                 placeholder={searchMode === "MINE" ? "내 장소 검색" : "Google에서 장소·주소 검색"}
                                 onFocus={() => setShowSuggestions(true)}
-                                onBlur={() => window.setTimeout(() => setShowSuggestions(false), 150)}
+                                onBlur={() => setShowSuggestions(false)}
                                 onChange={(event) => {
                                     setSpotName(event.target.value);
+                                    setMapSelection(null);
+                                    setSuggestions([]);
+                                    setIsSearching(Boolean(event.target.value.trim()));
                                     setSelectedSpot(null);
                                     setFeedback("");
                                     setShowSuggestions(true);
@@ -335,25 +349,26 @@ export default function QuickScheduleAdd({ scheduleOrder, onSubmit, onMapPickSta
                                     📍 지도
                                 </button>
                             </div>
-                            {(selectedSpot || mapSelection) && <span className="mt-1 block text-[11px] font-bold text-blue-600">✓ 지도 핀과 경로에 연결됨</span>}
-                            {feedback && <span className={`mt-1 block text-[11px] font-medium ${selectedSpot || mapSelection || isMapPicking ? "text-blue-600" : "text-gray-500"}`}>{feedback}</span>}
+                            {(selectedSpot || mapSelection) && <span className="mt-1 block text-xs font-bold text-blue-600">✓ 지도 핀과 경로에 연결됨</span>}
+                            {feedback && <span className={`mt-1 block text-xs font-medium ${selectedSpot || mapSelection || isMapPicking ? "text-blue-600" : "text-gray-500"}`}>{feedback}</span>}
 
-                            {showSuggestions && !selectedSpot && !mapSelection && spotName.trim() && (
-                                <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
-                                    {(isSearching || isRegistering) && <p className="px-3 py-2 text-xs text-gray-400">{isRegistering ? "장소 등록 중..." : "장소 검색 중..."}</p>}
+                            {suggestionOpen && (
+                                <div id={navigation.listId} role="listbox" aria-label="일정 장소 검색 결과" className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                                    {(isSearching || isRegistering) && <p className="px-3 py-2 text-xs text-gray-500">{isRegistering ? "장소 등록 중..." : "장소 검색 중..."}</p>}
                                     {!isSearching && !isRegistering && suggestions.map((spot, index) => (
                                         <button
                                             type="button"
                                             key={`${spot.placeId || spot.id}-${index}`}
+                                            id={navigation.optionId(index)} role="option" tabIndex={-1} aria-selected={navigation.activeIndex === index}
                                             onMouseDown={(event) => event.preventDefault()}
                                             onClick={() => searchMode === "GOOGLE" ? void selectGoogleSpot(spot) : selectMineSpot(spot)}
-                                            className="block w-full border-b border-gray-50 px-3 py-2 text-left last:border-0 hover:bg-blue-50"
+                                            className={`block min-h-11 w-full border-b border-gray-50 px-3 py-2 text-left last:border-0 hover:bg-blue-50 ${navigation.activeIndex === index ? "bg-blue-100" : ""}`}
                                         >
                                             <span className="flex items-center gap-2 text-sm font-bold text-gray-800">
                                                 {getSpotDisplayName(spot)}
-                                                {searchMode === "GOOGLE" && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[9px] text-blue-600">GOOGLE</span>}
+                                                {searchMode === "GOOGLE" && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600">GOOGLE</span>}
                                             </span>
-                                            <span className="block truncate text-xs text-gray-400">{spot.address}</span>
+                                            <span className="block truncate text-xs text-gray-500">{spot.address}</span>
                                         </button>
                                     ))}
                                     {!isSearching && !isRegistering && suggestions.length === 0 && (
@@ -377,7 +392,7 @@ export default function QuickScheduleAdd({ scheduleOrder, onSubmit, onMapPickSta
                     </label>
 
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-[11px] text-gray-500">검색 결과나 지도 위치를 선택하면 핀·경로에 연결되고, 장소명만 입력해도 추가할 수 있습니다.</p>
+                        <p className="text-xs text-gray-500">검색 결과나 지도 위치를 선택하면 핀·경로에 연결되고, 장소명만 입력해도 추가할 수 있습니다.</p>
                         <button
                             type="submit"
                             disabled={isSubmitting || isRegistering || !spotName.trim()}

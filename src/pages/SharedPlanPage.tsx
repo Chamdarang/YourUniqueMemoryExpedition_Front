@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { APIProvider } from '@vis.gl/react-google-maps';
-import { getPublicPlanShare } from '../api/planShareApi';
+import { acceptPlanShareLink, getPublicPlanShare } from '../api/planShareApi';
 import SharedPlanDayMap from '../components/plan/SharedPlanDayMap';
 import type { PublicPlanShare } from '../types/planShare';
 
@@ -20,10 +20,29 @@ function dateForDay(startDate: string | null, dayOrder: number) {
 }
 
 export default function SharedPlanPage() {
+  const navigate = useNavigate();
   const [token, setToken] = useState(() => window.location.hash.slice(1));
   const [plan, setPlan] = useState<PublicPlanShare | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [accepting, setAccepting] = useState(false);
+  const [acceptError, setAcceptError] = useState('');
+  const loggedIn = Boolean(localStorage.getItem('accessToken'));
+
+  const continueToLogin = () => {
+    try { sessionStorage.setItem('yume:pending-edit-share-token', token); } catch { /* Link remains in this page if storage is unavailable. */ }
+    navigate('/login');
+  };
+
+  const acceptEditAccess = async () => {
+    if (!token || accepting) return;
+    setAccepting(true); setAcceptError('');
+    try {
+      const planId = await acceptPlanShareLink(token);
+      navigate(`/plans/${planId}`, { replace: true });
+    } catch (reason) { setAcceptError(reason instanceof Error ? reason.message : '편집 권한을 받지 못했습니다.'); }
+    finally { setAccepting(false); }
+  };
 
   useEffect(() => {
     const readTokenFromHash = () => setToken(window.location.hash.slice(1));
@@ -73,7 +92,12 @@ export default function SharedPlanPage() {
           <h1 className="mt-3 text-3xl font-black md:text-4xl">{plan.planName}</h1>
           {(plan.planStartDate || plan.planEndDate) && <p className="mt-3 text-sm font-semibold text-blue-100">{plan.planStartDate || '날짜 미정'} ~ {plan.planEndDate || '날짜 미정'}</p>}
           {plan.planMemo && <p className="mt-5 whitespace-pre-wrap rounded-2xl bg-white/10 p-4 text-sm leading-relaxed">{plan.planMemo}</p>}
-          <p className="mt-5 text-xs text-blue-100">읽기 전용 공유 링크</p>
+          <p className="mt-5 text-xs text-blue-100">{plan.accessMode === 'EDIT' ? '편집 권한 링크 · 현재는 미리보기' : '보기 전용 링크'}</p>
+          {plan.accessMode === 'EDIT' && <div className="mt-4 rounded-xl bg-white p-4 text-slate-800">
+            <p className="text-sm font-semibold">함께 편집하려면 YUME 계정으로 참여해 주세요.</p>
+            {acceptError && <p role="alert" className="mt-2 text-xs text-red-600">{acceptError}</p>}
+            {loggedIn ? <button type="button" disabled={accepting} onClick={() => void acceptEditAccess()} className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{accepting ? '참여 중…' : '편집자로 참여'}</button> : <button type="button" onClick={continueToLogin} className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">로그인하고 참여</button>}
+          </div>}
         </header>
 
         <div className="space-y-5">
@@ -121,7 +145,7 @@ export default function SharedPlanPage() {
             </section>
           ))}
         </div>
-        <footer className="py-8 text-center text-xs font-semibold text-slate-400">이 페이지는 일정 확인용 읽기 전용 공유입니다.</footer>
+        <footer className="py-8 text-center text-xs font-semibold text-slate-400">{plan.accessMode === 'EDIT' ? '편집 권한은 YUME 로그인 후 참여를 수락하면 적용됩니다.' : '이 페이지는 일정 확인용 읽기 전용 공유입니다.'}</footer>
       </div>
     </main>
   );

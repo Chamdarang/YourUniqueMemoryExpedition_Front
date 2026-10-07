@@ -14,11 +14,12 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pr
     const endPage = Math.min(startPage + pageGroupSize, totalPages);
 
     return (
-        <div className="flex justify-center items-center gap-2 mt-8">
+        <nav aria-label="페이지 이동" className="flex flex-wrap justify-center items-center gap-1 sm:gap-2 mt-8">
             <button
+                type="button" aria-label="이전 페이지"
                 onClick={() => onPageChange(currentPage - 1)}
                 disabled={currentPage === 0}
-                className="px-3 py-1 rounded border hover:bg-gray-50 disabled:opacity-30 disabled:hover:bg-white"
+                className="min-w-11 min-h-11 px-3 rounded border hover:bg-gray-50 disabled:opacity-30 disabled:hover:bg-white"
             >
                 &lt;
             </button>
@@ -26,8 +27,9 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pr
             {Array.from({ length: endPage - startPage }, (_, i) => startPage + i).map((pageNum) => (
                 <button
                     key={pageNum}
+                    type="button" aria-label={`${pageNum + 1}페이지`} aria-current={currentPage === pageNum ? 'page' : undefined}
                     onClick={() => onPageChange(pageNum)}
-                    className={`w-8 h-8 rounded-lg text-sm font-bold transition ${
+                    className={`w-11 h-11 rounded-lg text-sm font-bold transition ${
                         currentPage === pageNum
                             ? "bg-gray-900 text-white"
                             : "text-gray-500 hover:bg-gray-100"
@@ -38,12 +40,13 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pr
             ))}
 
             <button
+                type="button" aria-label="다음 페이지"
                 onClick={() => onPageChange(currentPage + 1)}
                 disabled={currentPage === totalPages - 1}
-                className="px-3 py-1 rounded border hover:bg-gray-50 disabled:opacity-30 disabled:hover:bg-white"
+                className="min-w-11 min-h-11 px-3 rounded border hover:bg-gray-50 disabled:opacity-30 disabled:hover:bg-white"
             >
                 &gt;
             </button>
-        </div>
+        </nav>
     );
 }

@@ -1,6 +1,19 @@
 import { expect, test } from '@playwright/test';
 
 // 핵심 흐름만 유지하는 최소 E2E 스모크 테스트입니다.
+test.beforeEach(async ({ page }) => {
+  // Keep onboarding and unrelated collaboration requests out of these flow tests.
+  await page.addInitScript(() => {
+    localStorage.setItem('yume:first-visit-guide:testuser', 'done');
+    for (const id of ['plans', 'plan-detail', 'days', 'day-detail', 'spots']) {
+      localStorage.setItem(`yume:page-guide:testuser:${id}`, 'done');
+    }
+  });
+  await page.route(/\/api\/plans\/(?:shared|invitations|\d+\/collaborators)(?:\?|$)/, route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ success: true, message: 'Success', data: [] }),
+  }));
+});
 
 test('비로그인 사용자는 로그인 화면으로 이동하고 가입 입력을 검증한다', async ({ page }) => {
   await page.goto('/plans');
@@ -159,7 +172,7 @@ test('기념품 장부에서 장소를 선택해 기념품을 등록한다', asy
   await page.goto('/spots?mode=PURCHASE');
   await expect(page.getByRole('heading', { name: '기념품 장부' })).toBeVisible();
   await page.getByRole('button', { name: '+ 새 기념품 추가' }).click();
-  await page.getByPlaceholder('아이템 이름 (필수)').fill('교토 여행 자석');
+  await page.getByLabel('기념품 이름 (필수)').fill('교토 여행 자석');
   await page.getByRole('combobox').first().selectOption('7');
   await page.getByRole('button', { name: '저장하기' }).click();
 
@@ -173,7 +186,7 @@ test('CSV 일정 파일을 분석하고 미리보기 후 계획으로 등록한�
     localStorage.setItem('username', 'testuser');
   });
 
-  let importedPlan = {
+  const importedPlan = {
     id: 51,
     planName: '교토 CSV 여행',
     planStartDate: '2026-10-04',
@@ -318,7 +331,8 @@ test('여행 전체 점검에서 일정 문제와 요약을 표시한다', async
   });
 
   await page.goto('/plans/1');
-  await page.getByRole('button', { name: '🩺 전체 점검' }).click();
+  await page.locator('summary[aria-label="더 많은 일정 도구"]').click();
+  await page.getByRole('button', { name: '전체 점검', exact: true }).click();
 
   await expect(page.getByRole('heading', { name: '여행 전체 일정 점검' })).toBeVisible();
   const issueSummary = page.getByText('발견 항목').locator('..');
