@@ -548,10 +548,6 @@ export default function HomePage() {
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-4 pb-4 shrink-0 border-t border-gray-100 pt-4 bg-white">
-          <Link to="/map" className="flex items-center justify-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition"><span className="text-xl">🗺️</span><span className="text-sm font-bold text-gray-700">장소 탐색</span></Link>
-          <Link to="/spots" className="flex items-center justify-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition"><span className="text-xl">📍</span><span className="text-sm font-bold text-gray-700">장소 보관함</span></Link>
-        </div>
         {showFirstVisitGuide && <FirstVisitGuide onClose={closeFirstVisitGuide} />}
       </div>
   );

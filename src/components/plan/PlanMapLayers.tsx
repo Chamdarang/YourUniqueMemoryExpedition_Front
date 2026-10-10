@@ -62,33 +62,61 @@ export function PlanMapDirections({ daySchedulesMap, dayOrderMap, mapViewMode, v
 
             const color = getDayColor(dayOrderMap[dayId] || 1);
             if (auditedDayRoute?.dayId === dayId) {
-                const scheduleById = new globalThis.Map(schedules.map(schedule => [schedule.id, schedule]));
-                auditedDayRoute.result.legs.forEach(leg => {
-                    const from = scheduleById.get(leg.fromScheduleId);
-                    const to = scheduleById.get(leg.toScheduleId);
-                    if (!from || !to) return;
-                    const drawing = drawAuditedRouteLeg({ mapsLibrary, map, leg, from, to });
-                    if (!drawing) return;
-                    if (!drawing.actualRoute) {
-                        const connector = new mapsLibrary.Polyline({
-                            path: [
-                                { lat: Number(from.lat), lng: Number(from.lng) },
-                                { lat: Number(to.lat), lng: Number(to.lng) },
-                            ],
-                            geodesic: true,
-                            strokeColor: color,
-                            strokeOpacity: 0.8,
-                            strokeWeight: 5,
-                            zIndex: 10,
-                            icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW }, offset: '50%', repeat: '100px' }],
-                        });
-                        connector.setMap(map);
-                        newPolylines.push(connector);
-                    }
-                    newPolylines.push(...drawing.polylines);
-                    drawing.path.forEach(point => bounds.extend(point));
-                    hasPoints = true;
+                const locatedSchedules = schedules.filter(schedule => {
+                    if (schedule.lat == null || schedule.lng == null) return false;
+                    const lat = Number(schedule.lat);
+                    const lng = Number(schedule.lng);
+                    return Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0);
                 });
+                for (let index = 1; index < locatedSchedules.length; index++) {
+                    const from = locatedSchedules[index - 1];
+                    const to = locatedSchedules[index];
+                    const leg = auditedDayRoute.result.legs.find(candidate =>
+                        candidate.fromScheduleId === from.id && candidate.toScheduleId === to.id
+                    );
+                    const path = [
+                        { lat: Number(from.lat), lng: Number(from.lng) },
+                        { lat: Number(to.lat), lng: Number(to.lng) },
+                    ];
+                    if (leg) {
+                        const drawing = drawAuditedRouteLeg({ mapsLibrary, map, leg, from, to });
+                        if (drawing) {
+                            if (!drawing.actualRoute) {
+                                const connector = new mapsLibrary.Polyline({
+                                    path,
+                                    geodesic: true,
+                                    strokeColor: color,
+                                    strokeOpacity: 0.8,
+                                    strokeWeight: 5,
+                                    zIndex: 10,
+                                    icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW }, offset: '50%', repeat: '100px' }],
+                                });
+                                connector.setMap(map);
+                                newPolylines.push(connector);
+                            }
+                            newPolylines.push(...drawing.polylines);
+                            drawing.path.forEach(point => bounds.extend(point));
+                            hasPoints = true;
+                            continue;
+                        }
+                    }
+
+                    // A locationless schedule sits between these stops, so no audited leg exists.
+                    // Keep the map path continuous between the nearest stops that have coordinates.
+                    const connector = new mapsLibrary.Polyline({
+                        path,
+                        geodesic: true,
+                        strokeColor: color,
+                        strokeOpacity: 0.8,
+                        strokeWeight: 5,
+                        zIndex: 10,
+                        icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW }, offset: '50%', repeat: '100px' }],
+                    });
+                    connector.setMap(map);
+                    newPolylines.push(connector);
+                    path.forEach(point => bounds.extend(point));
+                    hasPoints = true;
+                }
                 return;
             }
 

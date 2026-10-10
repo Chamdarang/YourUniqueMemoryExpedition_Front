@@ -53,14 +53,12 @@ type PlanWorkspacePreferences = {
     mapViewMode: 'ALL' | 'PINS' | 'NONE';
     showInjury: boolean;
     visibleDayIds: number[];
-    expandedDayIds: number[];
 };
 
 const defaultPlanWorkspacePreferences: PlanWorkspacePreferences = {
     mapViewMode: 'ALL',
     showInjury: false,
     visibleDayIds: [],
-    expandedDayIds: [],
 };
 
 const planWorkspaceStorageKey = (planId: number) => `yume:plan-workspace:${planId}`;
@@ -74,7 +72,6 @@ const readPlanWorkspacePreferences = (planId: number): PlanWorkspacePreferences 
             mapViewMode: saved.mapViewMode === 'PINS' || saved.mapViewMode === 'NONE' ? saved.mapViewMode : 'ALL',
             showInjury: saved.showInjury === true,
             visibleDayIds: Array.isArray(saved.visibleDayIds) ? saved.visibleDayIds.filter(Number.isInteger) : [],
-            expandedDayIds: Array.isArray(saved.expandedDayIds) ? saved.expandedDayIds.filter(Number.isInteger) : [],
         };
     } catch {
         return defaultPlanWorkspacePreferences;
@@ -257,7 +254,7 @@ function PlanDetailContent() {
         setMapViewMode(preferences.mapViewMode);
         setShowInjury(preferences.showInjury);
         setVisibleDays(new Set(preferences.visibleDayIds));
-        setExpandedDayIds(new Set(preferences.expandedDayIds));
+        setExpandedDayIds(new Set());
         setGeneratedMapUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
         setIsExportMenuOpen(false);
         planToolsMenuRef.current?.removeAttribute('open');
@@ -281,14 +278,13 @@ function PlanDetailContent() {
             mapViewMode,
             showInjury,
             visibleDayIds: [...visibleDays],
-            expandedDayIds: [...expandedDayIds],
         };
         try {
             localStorage.setItem(planWorkspaceStorageKey(planId), JSON.stringify(preferences));
         } catch {
             // 저장 공간을 사용할 수 없는 브라우저에서도 화면 동작은 유지한다.
         }
-    }, [expandedDayIds, mapViewMode, planId, showInjury, visibleDays, workspaceReadyPlanId]);
+    }, [mapViewMode, planId, showInjury, visibleDays, workspaceReadyPlanId]);
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 

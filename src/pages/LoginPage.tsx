@@ -72,7 +72,6 @@ export default function LoginPage() {
                 <div className="bg-gradient-to-br from-blue-700 to-sky-500 px-8 py-9 text-white">
                     <p className="text-xs font-black tracking-[0.25em] text-blue-100">YUME</p>
                     <h1 className="mt-2 text-3xl font-black">여행의 모든 순간을 한곳에</h1>
-                    <p className="mt-2 text-sm text-blue-50">이메일 없이 아이디와 비밀번호만 사용합니다.</p>
                 </div>
 
                 <div className="p-8">

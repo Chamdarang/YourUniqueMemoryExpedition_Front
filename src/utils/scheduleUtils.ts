@@ -34,14 +34,14 @@ export const getScheduleTimingWarning = (
         return {
             type: 'CONFLICT',
             minutes: Math.abs(difference),
-            message: `앞 일정과 이동시간을 고려하면 ${Math.abs(difference)}분 늦습니다.`,
+            message: `앞 일정 종료 후 이동시간이 ${Math.abs(difference)}분 부족해요. 이 일정 시작 시각이나 이동시간을 조정해 주세요.`,
         };
     }
     if (difference >= 30) {
         return {
             type: 'GAP',
             minutes: difference,
-            message: `앞 일정 이후 ${difference}분의 빈 시간이 있습니다.`,
+            message: `앞 일정에서 이동하고도 ${difference}분 여유가 있어요.`,
         };
     }
     return null;
