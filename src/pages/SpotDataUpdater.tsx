@@ -69,7 +69,7 @@ function SpotDataUpdaterContent() {
                     await place.fetchFields({
                         fields: [
                             'displayName', 'formattedAddress', 'location',
-                            'types', 'googleMapsURI', 'websiteURI',
+                            'types', 'primaryType', 'googleMapsURI', 'websiteURI',
                             'regularOpeningHours', 'photos'
                         ]
                     });
@@ -82,12 +82,13 @@ function SpotDataUpdaterContent() {
 
                     const updateReq: SpotUpdateRequest = {
                         spotName: place.displayName || spot.spotName,
-                        spotType: mapGoogleTypeToSpotType(place.types),
+                        spotType: mapGoogleTypeToSpotType(place.types, place.primaryType),
                         description: spot.description || '',
                         isVisit: spot.isVisit,
                         metadata: {
                             ...spot.metadata,
                             originalTypes: place.types || [],
+                            originalPrimaryType: place.primaryType || null,
                             openingHours: openingHours,
                             photoUrl: photoUrl
                         }

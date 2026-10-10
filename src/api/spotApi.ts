@@ -1,5 +1,5 @@
 import type { ApiResponse, PageResponse } from "../types/common";
-import type { SpotCreateRequest, SpotDetailResponse, SpotDuplicateCandidate, SpotResponse, SpotUpdateRequest } from "../types/spot";
+import type { SpotCreateRequest, SpotDetailResponse, SpotResponse, SpotUpdateRequest } from "../types/spot";
 import { fetchWithAuth } from "./utils";
 import type { SpotInUseError, UsedScheduleResponse } from "../types/error";
 
@@ -49,7 +49,6 @@ export const getMySpots = async (params?: GetSpotsParams): Promise<PageResponse<
   if (!json.success) throw new Error(json.message);
   return json.data;
 };
-
 // 2. 장소 생성
 export const createSpot = async (req: SpotCreateRequest): Promise<SpotResponse> => {
   const res = await fetchWithAuth('/api/spots', {
@@ -115,20 +114,4 @@ export const spotDataUpdate = async (placeId: string, req: SpotUpdateRequest): P
     // JSON 파싱 실패
     throw new Error("서버 응답을 처리할 수 없습니다.");
   }
-};
-
-export const getSpotDuplicateCandidates = async (): Promise<SpotDuplicateCandidate[]> => {
-  const res = await fetchWithAuth('/api/spots/duplicates', { method: 'GET' });
-  const json: ApiResponse<SpotDuplicateCandidate[]> = await res.json();
-  if (!json.success) throw new Error(json.message);
-  return json.data;
-};
-
-export const mergeSpots = async (targetId: number, sourceId: number): Promise<SpotResponse> => {
-  const res = await fetchWithAuth(`/api/spots/${targetId}/merge/${sourceId}`, {
-    method: 'POST',
-  });
-  const json: ApiResponse<SpotResponse> = await res.json();
-  if (!json.success) throw new Error(json.message);
-  return json.data;
 };

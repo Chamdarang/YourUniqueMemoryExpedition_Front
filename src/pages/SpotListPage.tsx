@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 // API
-import { deleteSpot, getMySpots, getSpotDuplicateCandidates, mergeSpots, updateSpot } from "../api/spotApi";
+import { deleteSpot, getMySpots, updateSpot } from "../api/spotApi";
 import { deletePurchase, updatePurchase, getAllPurchases, createPurchase } from "../api/purchaseApi";
 
 // Types
-import type { SpotDuplicateCandidate, SpotResponse } from "../types/spot";
+import type { SpotResponse } from "../types/spot";
 import type { SpotPurchaseResponse, SpotPurchaseSaveRequest, PurchaseSearchParams } from "../types/purchase";
 import type { SpotInUseError, UsedScheduleResponse } from "../types/error";
 
@@ -20,7 +20,6 @@ import Pagination from "../components/common/Pagination";
 import SpotInUseModal from "../components/spot/SpotInUseModal.tsx";
 import { useFeedback } from "../components/common/useFeedback";
 import LoadErrorState from '../components/common/LoadErrorState';
-import { useDialogFocus } from '../hooks/useDialogFocus';
 
 // ❌ PURCHASE_KIND_KEYS 등 기념품 유틸 임포트는 PurchaseFilter 내부로 이동했으므로 여기서 삭제했습니다.
 
@@ -53,9 +52,6 @@ export default function SpotListPage() {
     const [isInUseModalOpen, setIsInUseModalOpen] = useState(false);
     const [conflictUsage, setConflictUsage] = useState<UsedScheduleResponse[]>([]);
     const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
-    const [duplicateCandidates, setDuplicateCandidates] = useState<SpotDuplicateCandidate[] | null>(null);
-    const [mergingSpots, setMergingSpots] = useState(false);
-    const duplicateDialogRef = useDialogFocus(duplicateCandidates !== null, () => { if (!mergingSpots) setDuplicateCandidates(null); });
 
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -200,17 +196,6 @@ export default function SpotListPage() {
         });
     };
 
-    const openDuplicateCandidates = async () => {
-        try {
-            setLoading(true);
-            setDuplicateCandidates(await getSpotDuplicateCandidates());
-        } catch (error) {
-            showToast({ message: error instanceof Error ? error.message : "중복 장소를 확인하지 못했습니다.", type: 'error' });
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleTogglePurchaseStatus = async (purchase: SpotPurchaseResponse) => {
         try {
             const nextStatus = purchase.status === 'ACQUIRED' ? 'WANT' : 'ACQUIRED';
@@ -234,33 +219,6 @@ export default function SpotListPage() {
         }
     };
 
-    const handleMergeSpots = async (
-        target: SpotResponse,
-        source: SpotResponse,
-    ) => {
-        const targetName = target.displayName || target.spotName;
-        const sourceName = source.displayName || source.spotName;
-        if (!await confirm({
-            title: '중복 장소 병합',
-            message: `'${targetName}'을(를) 남기고 '${sourceName}'을(를) 병합할까요?\n일정·기념품·방문 기록은 남길 장소로 이동됩니다.`,
-            confirmLabel: '병합',
-            danger: true,
-        })) return;
-
-        try {
-            setMergingSpots(true);
-            await mergeSpots(target.id, source.id);
-            const refreshed = await getSpotDuplicateCandidates();
-            setDuplicateCandidates(refreshed);
-            await fetchSpotsData(page, spotFilter);
-            showToast({ message: '장소를 병합했습니다.', type: 'success' });
-        } catch (error) {
-            showToast({ message: error instanceof Error ? error.message : "장소를 병합하지 못했습니다.", type: 'error' });
-        } finally {
-            setMergingSpots(false);
-        }
-    };
-
     return (
         <div className="max-w-7xl mx-auto p-4 md:p-6 pb-20 font-sans relative">
 
@@ -276,25 +234,16 @@ export default function SpotListPage() {
                     <h1 className="text-2xl md:text-3xl font-black text-gray-900">{viewMode === 'PURCHASE' ? '기념품 장부' : '내 장소'}</h1>
                     <p className="text-gray-500 text-xs mt-1 font-bold">{viewMode === 'GROUP' ? '그룹으로 장소를 모아 관리하세요.' : loadError ? '목록을 다시 불러와 주세요.' : `총 ${totalElements}개의 항목 관리 중`}</p>
                 </div>
-                <div data-guide-target="spots-tabs" className="flex bg-gray-100 p-1 rounded-2xl shadow-inner border border-gray-100">
-                    <button aria-pressed={viewMode === 'SPOT'} data-guide-target="spots-tab-spot" data-guide-state={viewMode === 'SPOT' ? 'selected' : 'unselected'} onClick={() => handleModeChange('SPOT')} className={`px-5 py-2 rounded-xl text-sm font-black transition-all ${viewMode === 'SPOT' ? 'bg-white text-blue-600 shadow-sm scale-105' : 'text-gray-500'}`}>📍 장소</button>
-                    <button aria-pressed={viewMode === 'GROUP'} data-guide-target="spots-tab-group" data-guide-state={viewMode === 'GROUP' ? 'selected' : 'unselected'} onClick={() => handleModeChange('GROUP')} className={`px-5 py-2 rounded-xl text-sm font-black transition-all ${viewMode === 'GROUP' ? 'bg-white text-orange-600 shadow-sm scale-105' : 'text-gray-500'}`}>📂 그룹</button>
-                    <button aria-pressed={viewMode === 'PURCHASE'} data-guide-target="spots-tab-purchase" data-guide-state={viewMode === 'PURCHASE' ? 'selected' : 'unselected'} onClick={() => handleModeChange('PURCHASE')} className={`px-5 py-2 rounded-xl text-sm font-black transition-all ${viewMode === 'PURCHASE' ? 'bg-white text-pink-600 shadow-sm scale-105' : 'text-gray-500'}`}>🎁 기념품</button>
+                <div data-guide-target="spots-tabs" className="yume-segmented w-full md:w-auto">
+                    <button aria-pressed={viewMode === 'SPOT'} data-guide-target="spots-tab-spot" data-guide-state={viewMode === 'SPOT' ? 'selected' : 'unselected'} onClick={() => handleModeChange('SPOT')} className="yume-segment">📍 장소</button>
+                    <button aria-pressed={viewMode === 'GROUP'} data-guide-target="spots-tab-group" data-guide-state={viewMode === 'GROUP' ? 'selected' : 'unselected'} onClick={() => handleModeChange('GROUP')} className="yume-segment">📂 그룹</button>
+                    <button aria-pressed={viewMode === 'PURCHASE'} data-guide-target="spots-tab-purchase" data-guide-state={viewMode === 'PURCHASE' ? 'selected' : 'unselected'} onClick={() => handleModeChange('PURCHASE')} className="yume-segment">🎁 기념품</button>
                 </div>
             </div>
 
             <div data-guide-target="spots-content">
             {viewMode === 'SPOT' && (
                 <div className="animate-in fade-in duration-300">
-                    <div className="mb-4 flex justify-end">
-                        <button
-                            type="button"
-                            onClick={openDuplicateCandidates}
-                            className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-black text-orange-700 transition hover:bg-orange-100"
-                        >
-                            🧹 중복 장소 확인
-                        </button>
-                    </div>
                     <SpotFilter key={spotFilterVersion} onSearch={handleSpotSearch} />
                     {loadError && <LoadErrorState message={loadError} retrying={loading} onRetry={() => void fetchSpotsData(page, spotFilter)} />}
                     {(!loadError || spots.length > 0) && <SpotList spots={spots} onDelete={handleDeleteSpot} onToggleVisit={handleToggleVisit}
@@ -344,74 +293,6 @@ export default function SpotListPage() {
                 onSpotDeleteRetry={() => pendingDeleteId && handleDeleteSpot(pendingDeleteId, true)}
             />
 
-            {duplicateCandidates !== null && (
-                <div ref={duplicateDialogRef} role="dialog" aria-modal="true" aria-label="중복 장소 정리" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-                    <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl md:p-8">
-                        <div className="mb-6 flex items-start justify-between gap-4">
-                            <div>
-                                <h3 className="text-xl font-black text-gray-900">🧹 중복 장소 정리</h3>
-                                <p className="mt-1 text-xs text-gray-500">이름과 좌표가 모두 가까운 장소만 후보로 표시합니다.</p>
-                            </div>
-                            <button
-                                type="button"
-                                disabled={mergingSpots}
-                                onClick={() => setDuplicateCandidates(null)}
-                                aria-label="중복 장소 정리 닫기"
-                                className="min-h-11 min-w-11 text-xl text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        {duplicateCandidates.length === 0 ? (
-                            <div className="rounded-2xl border-2 border-dashed border-gray-200 py-12 text-center text-sm font-bold text-gray-400">
-                                중복 가능성이 있는 장소가 없습니다.
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {duplicateCandidates.map(candidate => {
-                                    const firstName = candidate.first.displayName || candidate.first.spotName;
-                                    const secondName = candidate.second.displayName || candidate.second.spotName;
-                                    return (
-                                        <div key={`${candidate.first.id}-${candidate.second.id}`} className="rounded-2xl border border-orange-200 bg-orange-50/40 p-4">
-                                            <div className="mb-3 flex items-center justify-between gap-3 text-xs">
-                                                <span className="font-bold text-orange-700">{candidate.reason}</span>
-                                                <span className="shrink-0 text-gray-400">{candidate.distanceMeters}m</span>
-                                            </div>
-                                            <div className="grid gap-3 md:grid-cols-2">
-                                                <div className="rounded-xl border border-gray-200 bg-white p-3">
-                                                    <div className="font-black text-gray-800">{firstName}</div>
-                                                    <div className="mt-1 text-xs text-gray-400">{candidate.first.address}</div>
-                                                    <button
-                                                        type="button"
-                                                        disabled={mergingSpots}
-                                                        onClick={() => handleMergeSpots(candidate.first, candidate.second)}
-                                                        className="mt-3 w-full rounded-lg bg-blue-600 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                                                    >
-                                                        이 장소를 남기기
-                                                    </button>
-                                                </div>
-                                                <div className="rounded-xl border border-gray-200 bg-white p-3">
-                                                    <div className="font-black text-gray-800">{secondName}</div>
-                                                    <div className="mt-1 text-xs text-gray-400">{candidate.second.address}</div>
-                                                    <button
-                                                        type="button"
-                                                        disabled={mergingSpots}
-                                                        onClick={() => handleMergeSpots(candidate.second, candidate.first)}
-                                                        className="mt-3 w-full rounded-lg bg-blue-600 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                                                    >
-                                                        이 장소를 남기기
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

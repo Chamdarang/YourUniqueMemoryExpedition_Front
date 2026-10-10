@@ -1,14 +1,13 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { useParams, useBlocker } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { APIProvider, useMapsLibrary, type MapMouseEvent } from "@vis.gl/react-google-maps";
+import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps";
 
 // API
 import { exportPlanData, getPlanDetail } from "../api/planApi";
 import { copyPlanDay, createDayInPlan, swapPlanDay } from "../api/dayApi";
-import { getSchedulesByDay, getUnlinkedSpotGroups, ScheduleEditConflictError, transferSchedule, updateSchedule as updateScheduleApi, type UnlinkedSpotGroup } from "../api/scheduleApi";
-import { createSpot } from "../api/spotApi";
+import { getSchedulesByDay, getUnlinkedSpotGroups, transferSchedule, type UnlinkedSpotGroup } from "../api/scheduleApi";
 import { applyDayRouteEstimates, auditDayRoute } from "../api/routeApi";
 // ✅ 지도 생성 API
 import { makeStaticGoogleMap } from "../api/mapApi";
@@ -28,10 +27,8 @@ import DayRouteAuditModal from "../components/day/DayRouteAuditModal";
 import { usePlanRouteAudit } from "../hooks/usePlanRouteAudit";
 
 // Types & Utils
-import type { PlanDetailResponse } from "../types/plan";
 import type { PlanDayResponse, ScheduleMode } from "../types/planDay.ts";
-import type { DayScheduleResponse, ScheduleUpdateRequest } from "../types/schedule";
-import type { SpotCreateRequest } from "../types/spot";
+import type { DayScheduleResponse } from "../types/schedule";
 import type { DayRouteAuditLeg, DayRouteAuditResponse } from "../types/route";
 
 // ✅ Export 관련 컴포넌트
@@ -42,13 +39,15 @@ import {
 import { useScheduleExport } from "../components/common/useScheduleExport";
 import { getStaticMapQuery, type ExportSection } from "../components/common/scheduleExportUtils";
 import { useDialogFocus } from '../hooks/useDialogFocus';
-import { usePlanLiveUpdates } from '../hooks/usePlanLiveUpdates';
+import { usePlanDetailData } from '../hooks/usePlanDetailData';
+import { usePlanMapSpotPicker } from '../hooks/usePlanMapSpotPicker';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { useFeedback } from "../components/common/useFeedback";
 import { saveOfflineTripSnapshot } from "../utils/offlineHomeStorage";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const scrollbarHideStyle = `.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`;
-const planToolbarButtonClass = "inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-wait disabled:opacity-50 sm:w-auto";
+const planToolbarButtonClass = "yume-button yume-button-secondary min-h-10 w-full shrink-0 text-xs font-semibold shadow-sm sm:w-auto";
 
 type PlanWorkspacePreferences = {
     mapViewMode: 'ALL' | 'PINS' | 'NONE';
@@ -136,22 +135,8 @@ function PlanDetailContent() {
         markStale: markPlanAuditStale,
         getAuditedScheduleCount,
     } = usePlanRouteAudit(planId, { confirm, showToast });
-    const [plan, setPlan] = useState<PlanDetailResponse | null>(null);
     const [offlineSaveLoading, setOfflineSaveLoading] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-    const [collaboratorsRefreshVersion, setCollaboratorsRefreshVersion] = useState(0);
-    const simpleDayIds = useMemo(() => new Set(
-        plan?.days.filter(day => day.scheduleMode === 'SIMPLE').map(day => day.id) ?? []
-    ), [plan?.days]);
-    const [loading, setLoading] = useState(true);
-    const [loadError, setLoadError] = useState<string | null>(null);
-    const [mapSchedulesMap, setMapSchedulesMap] = useState<Record<number, DayScheduleResponse[]>>({});
-    const mapSchedulesMapRef = useRef<Record<number, DayScheduleResponse[]>>({});
-    const [scheduleRefreshVersions, setScheduleRefreshVersions] = useState<Record<number, number>>({});
-    const [dayOrderMap, setDayOrderMap] = useState<Record<number, number>>({});
-    const [remoteUpdatePending, setRemoteUpdatePending] = useState(false);
-    const liveRefreshRequestId = useRef(0);
-
     const [mapViewMode, setMapViewMode] = useState<'ALL' | 'PINS' | 'NONE'>('ALL');
     const [showInjury, setShowInjury] = useState(false);
     const [visibleDays, setVisibleDays] = useState<Set<number>>(new Set());
@@ -159,9 +144,6 @@ function PlanDetailContent() {
     const [workspaceReadyPlanId, setWorkspaceReadyPlanId] = useState<number | null>(null);
     const [mobileViewMode, setMobileViewMode] = useState<'LIST' | 'MAP'>('LIST');
     const [selectedScheduleId, setSelectedScheduleId] = useState<number | null>(null);
-
-    const [pickingTarget, setPickingTarget] = useState<{ dayId: number, scheduleId: number } | null>(null);
-    const [tempSelectedSpot, setTempSelectedSpot] = useState<SpotCreateRequest | null>(null);
 
     // Export 관련 State
     const { isExportModalOpen, openExportModal, closeExportModal, exportOptions, setExportOptions, handleSaveImage } = useScheduleExport();
@@ -207,13 +189,47 @@ function PlanDetailContent() {
         [geocodingLibrary]
     );
 
-    const [dirtyMap, setDirtyMap] = useState<Record<string | number, boolean>>({});
-    const isAnyDirty = useMemo(() => Object.values(dirtyMap).some(Boolean), [dirtyMap]);
-    const isAnyDirtyRef = useRef(isAnyDirty);
-    isAnyDirtyRef.current = isAnyDirty;
-    const blockerPromptActiveRef = useRef(false);
-
-    const blocker = useBlocker(({ currentLocation, nextLocation }) => isAnyDirty && currentLocation.pathname !== nextLocation.pathname);
+    const { isDirty: isAnyDirty, setDirty: handleSetDirty, setHeaderDirty: handleHeaderDirty, clearDirty } = useUnsavedChangesGuard(confirm);
+    const {
+        plan,
+        setPlan,
+        loading,
+        loadError,
+        mapSchedulesMap,
+        setMapSchedulesMap,
+        mapSchedulesMapRef,
+        scheduleRefreshVersions,
+        setScheduleRefreshVersions,
+        dayOrderMap,
+        setDayOrderMap,
+        remoteUpdatePending,
+        collaboratorsRefreshVersion,
+        setCollaboratorsRefreshVersion,
+        fetchPlanDetail,
+        refreshForLiveUpdate,
+    } = usePlanDetailData(planId, isAnyDirty, markPlanAuditStale);
+    const {
+        pickingTarget,
+        setPickingTarget,
+        tempSelectedSpot,
+        setTempSelectedSpot,
+        handleMapClick,
+        handleConfirmRegister,
+        handleConfirmScheduleOnly,
+    } = usePlanMapSpotPicker({
+        geocoder,
+        mapSchedulesMapRef,
+        setMapSchedulesMap,
+        setScheduleRefreshVersions,
+        setMobileViewMode,
+        markPlanAuditStale,
+        refreshForLiveUpdate,
+        confirm,
+        showToast,
+    });
+    const simpleDayIds = useMemo(() => new Set(
+        plan?.days.filter(day => day.scheduleMode === 'SIMPLE').map(day => day.id) ?? []
+    ), [plan?.days]);
     useEffect(() => {
         const closeToolsMenu = (event: PointerEvent) => {
             const menu = planToolsMenuRef.current;
@@ -236,41 +252,8 @@ function PlanDetailContent() {
     }, []);
 
     useEffect(() => {
-        if (!isAnyDirty) return;
-
-        const preventUnsavedReload = (event: BeforeUnloadEvent) => {
-            event.preventDefault();
-            event.returnValue = '';
-        };
-        window.addEventListener('beforeunload', preventUnsavedReload);
-        return () => window.removeEventListener('beforeunload', preventUnsavedReload);
-    }, [isAnyDirty]);
-
-    useEffect(() => {
-        if (blocker.state === "blocked" && !blockerPromptActiveRef.current) {
-            blockerPromptActiveRef.current = true;
-            void confirm({
-                title: '저장되지 않은 변경사항',
-                message: '저장되지 않은 변경사항이 있습니다. 저장하지 않고 이동할까요?',
-                confirmLabel: '저장하지 않고 이동',
-                danger: true,
-            }).then(shouldProceed => {
-                if (shouldProceed) {
-                    setDirtyMap({});
-                    setTimeout(() => blocker.proceed(), 0);
-                } else blocker.reset();
-                blockerPromptActiveRef.current = false;
-            });
-        }
-    }, [blocker, confirm]);
-
-    useEffect(() => {
-        liveRefreshRequestId.current += 1;
         const preferences = readPlanWorkspacePreferences(planId);
         setWorkspaceReadyPlanId(null);
-        setMapSchedulesMap({});
-        mapSchedulesMapRef.current = {};
-        setDayOrderMap({});
         setMapViewMode(preferences.mapViewMode);
         setShowInjury(preferences.showInjury);
         setVisibleDays(new Set(preferences.visibleDayIds));
@@ -278,7 +261,7 @@ function PlanDetailContent() {
         setGeneratedMapUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
         setIsExportMenuOpen(false);
         planToolsMenuRef.current?.removeAttribute('open');
-        setDirtyMap({});
+        clearDirty();
         setMobileViewMode('LIST');
         setIsHeaderExpanded(false);
         setDayRouteAudit(null);
@@ -290,7 +273,7 @@ function PlanDetailContent() {
         setScheduleTransferTargetDayId(null);
         setScheduleTransferLoading(false);
         setWorkspaceReadyPlanId(planId);
-    }, [planId]);
+    }, [clearDirty, planId]);
 
     useEffect(() => {
         if (workspaceReadyPlanId !== planId) return;
@@ -307,75 +290,7 @@ function PlanDetailContent() {
         }
     }, [expandedDayIds, mapViewMode, planId, showInjury, visibleDays, workspaceReadyPlanId]);
 
-    const handleSetDirty = useCallback((itemId: string | number, isDirty: boolean) => {
-        setDirtyMap(prev => (prev[itemId] === isDirty ? prev : { ...prev, [itemId]: isDirty }));
-    }, []);
-    const handleHeaderDirty = useCallback((isDirty: boolean) => { handleSetDirty('header', isDirty); }, [handleSetDirty]);
-
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
-
-    const fetchPlanDetail = useCallback(() => {
-        setLoading(true);
-        getPlanDetail(planId).then(data => {
-            setPlan(data);
-            setLoadError(null);
-            const map: Record<number, number> = {};
-            data.days.forEach(d => { map[d.id] = d.dayOrder; });
-            setDayOrderMap(map);
-        }).catch(() => {
-            setLoadError('여행 정보를 불러오지 못했습니다.');
-        }).finally(() => setLoading(false));
-    }, [planId]);
-
-    const refreshForLiveUpdate = useCallback(async () => {
-        if (isAnyDirty) {
-            setRemoteUpdatePending(true);
-            return;
-        }
-        const requestId = ++liveRefreshRequestId.current;
-        try {
-            const latestPlan = await getPlanDetail(planId);
-            const loadedDayIds = Object.keys(mapSchedulesMapRef.current).map(Number);
-            const validLoadedDayIds = loadedDayIds.filter(dayId => latestPlan.days.some(day => day.id === dayId));
-            const loadedSchedules = await Promise.all(validLoadedDayIds.map(async dayId => ({
-                dayId,
-                schedules: await getSchedulesByDay(dayId),
-            })));
-            if (requestId !== liveRefreshRequestId.current) return;
-            if (isAnyDirtyRef.current) {
-                setRemoteUpdatePending(true);
-                return;
-            }
-            const nextSchedulesMap: Record<number, DayScheduleResponse[]> = {};
-            loadedSchedules.forEach(({ dayId, schedules }) => { nextSchedulesMap[dayId] = schedules; });
-            mapSchedulesMapRef.current = nextSchedulesMap;
-            setMapSchedulesMap(nextSchedulesMap);
-            setPlan(latestPlan);
-            setDayOrderMap(Object.fromEntries(latestPlan.days.map(day => [day.id, day.dayOrder])));
-            setScheduleRefreshVersions(previous => {
-                const next = { ...previous };
-                validLoadedDayIds.forEach(dayId => { next[dayId] = (next[dayId] ?? 0) + 1; });
-                return next;
-            });
-            setCollaboratorsRefreshVersion(version => version + 1);
-            markPlanAuditStale();
-            setLoadError(null);
-            setRemoteUpdatePending(false);
-        } catch {
-            if (requestId !== liveRefreshRequestId.current) return;
-            setRemoteUpdatePending(true);
-        }
-    }, [getSchedulesByDay, isAnyDirty, markPlanAuditStale, planId]);
-
-    const liveConnectionState = usePlanLiveUpdates(planId, refreshForLiveUpdate);
-
-    useEffect(() => {
-        if (isAnyDirty) liveRefreshRequestId.current += 1;
-    }, [isAnyDirty]);
-
-    useEffect(() => {
-        if (!isAnyDirty && remoteUpdatePending) void refreshForLiveUpdate();
-    }, [isAnyDirty, refreshForLiveUpdate, remoteUpdatePending]);
 
     const savePlanForOffline = async () => {
         if (!plan) return;
@@ -399,9 +314,6 @@ function PlanDetailContent() {
             setOfflineSaveLoading(false);
         }
     };
-
-    useEffect(() => { mapSchedulesMapRef.current = mapSchedulesMap; }, [mapSchedulesMap]);
-    useEffect(() => { if (planId) fetchPlanDetail(); }, [planId, fetchPlanDetail]);
 
     useEffect(() => {
         if (!plan || workspaceReadyPlanId !== planId) return;
@@ -619,188 +531,6 @@ function PlanDetailContent() {
             markPlanAuditStale();
         } catch {
             showToast({ message: "일차 순서를 변경하지 못했습니다.", type: 'error' });
-        }
-    };
-
-    const handleMapClick = useCallback(async (e: MapMouseEvent) => {
-        if (!pickingTarget || !geocoder) return;
-        if (e.domEvent) e.domEvent.stopPropagation();
-        const processSpotData = (spotReq: SpotCreateRequest) => { setTempSelectedSpot(spotReq); };
-
-        try {
-        if (e.detail?.placeId) {
-            const place = new google.maps.places.Place({ id: e.detail.placeId });
-            await place.fetchFields({
-                // ✅ 동일하게 필드 추가
-                fields: ['displayName', 'formattedAddress', 'location', 'types', 'googleMapsURI', 'websiteURI', 'regularOpeningHours', 'photos']
-            });
-
-            const addrParts = place.formattedAddress?.split(' ') || [];
-            const shortAddr = addrParts.length > 2 ? addrParts.slice(1).join(' ') : (place.formattedAddress || "");
-            const openingHours = place.regularOpeningHours?.weekdayDescriptions || [];
-            const photoUrl = place.photos && place.photos.length > 0
-                ? place.photos[0].getURI({ maxWidth: 800 })
-                : null;
-
-            processSpotData({
-                spotName: place.displayName || "선택된 장소",
-                spotType: 'OTHER',
-                address: place.formattedAddress || "",
-                lat: place.location?.lat() || 0,
-                lng: place.location?.lng() || 0,
-                placeId: e.detail.placeId,
-                isVisit: false,
-                shortAddress: shortAddr,
-                website: place.websiteURI || "",
-                googleMapUrl: place.googleMapsURI || "",
-                description: "",
-                metadata: {
-                    originalTypes: place.types || [],
-                    openingHours: openingHours, // ✅ 추가
-                    photoUrl: photoUrl          // ✅ 추가
-                }
-            });
-            return;
-        }
-
-        const clickedLocation = e.detail?.latLng;
-        if (!clickedLocation) return;
-        const { results } = await geocoder.geocode({ location: clickedLocation });
-        const result = results[0];
-        const lat = clickedLocation.lat;
-        const lng = clickedLocation.lng;
-        processSpotData({
-            spotName: result?.address_components?.[0]?.long_name || result?.formatted_address || '지도에서 선택한 위치',
-            spotType: 'OTHER',
-            address: result?.formatted_address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-            lat,
-            lng,
-            placeId: result?.place_id || `map:${lat.toFixed(6)},${lng.toFixed(6)}`,
-            isVisit: false,
-            metadata: { source: 'map_click' }
-        });
-        } catch {
-            showToast({ message: "선택한 위치의 장소 정보를 불러오지 못했습니다.", type: 'error' });
-        }
-    }, [pickingTarget, geocoder, showToast]);
-
-    const handleConfirmRegister = async () => {
-        if (!tempSelectedSpot || !pickingTarget) return;
-        const { dayId, scheduleId } = pickingTarget;
-        const expectedVersion = mapSchedulesMapRef.current[dayId]?.find(schedule => schedule.id === scheduleId)?.version;
-        if (expectedVersion == null) return showToast({ message: '최신 일정 정보를 확인하지 못했습니다. 다시 불러와 주세요.', type: 'error' });
-        let updateRequest: ScheduleUpdateRequest | null = null;
-        try {
-            const savedSpot = await createSpot(tempSelectedSpot);
-            updateRequest = {
-                expectedVersion,
-                spotUserId: savedSpot.id,
-                spotName: savedSpot.displayName?.trim() || savedSpot.spotName,
-                spotType: savedSpot.spotType,
-                lat: savedSpot.lat,
-                lng: savedSpot.lng,
-            };
-            const updatedSchedules = await updateScheduleApi(scheduleId, updateRequest);
-            setMapSchedulesMap(prev => ({ ...prev, [dayId]: updatedSchedules }));
-            setScheduleRefreshVersions(prev => ({ ...prev, [dayId]: (prev[dayId] || 0) + 1 }));
-            markPlanAuditStale();
-            setTempSelectedSpot(null);
-            setPickingTarget(null);
-            if (window.innerWidth < 768) setMobileViewMode('LIST');
-            showToast({ message: "내 장소에 등록하고 일정에 선택했습니다.", type: 'success' });
-        } catch (error) {
-            if (error instanceof ScheduleEditConflictError && updateRequest) {
-                let latest = error.latestSchedule;
-                if (!latest) {
-                    try { latest = (await getSchedulesByDay(dayId)).find(schedule => schedule.id === scheduleId) ?? null; }
-                    catch { latest = null; }
-                }
-                if (latest) {
-                    const original = mapSchedulesMapRef.current[dayId]?.find(schedule => schedule.id === scheduleId);
-                    const applyMine = await confirm({
-                        title: '일정 위치 수정 충돌',
-                        message: `처음 장소: ${original?.spotName || '없음'} (${original?.lat ?? '위치 없음'}, ${original?.lng ?? '위치 없음'})\n내 선택: ${updateRequest.spotName} (${updateRequest.lat}, ${updateRequest.lng})\n최신 저장값: ${latest.spotName || '없음'} (${latest.lat ?? '위치 없음'}, ${latest.lng ?? '위치 없음'})\n\n확인을 누르면 내 장소 선택을 최신 일정에 적용하고, 취소하면 최신 저장값을 사용합니다.`,
-                        confirmLabel: '내 장소 선택 적용',
-                    });
-                    if (applyMine) {
-                        try {
-                            const updatedSchedules = await updateScheduleApi(scheduleId, { ...updateRequest, expectedVersion: latest.version });
-                            mapSchedulesMapRef.current = { ...mapSchedulesMapRef.current, [dayId]: updatedSchedules };
-                            setMapSchedulesMap(previous => ({ ...previous, [dayId]: updatedSchedules }));
-                            setScheduleRefreshVersions(previous => ({ ...previous, [dayId]: (previous[dayId] || 0) + 1 }));
-                            markPlanAuditStale();
-                            setTempSelectedSpot(null);
-                            setPickingTarget(null);
-                            if (window.innerWidth < 768) setMobileViewMode('LIST');
-                            return;
-                        } catch (retryError) {
-                            showToast({ message: retryError instanceof Error ? retryError.message : '최신 일정에 내 장소 선택을 적용하지 못했습니다.', type: 'error' });
-                            return;
-                        }
-                    }
-                    await refreshForLiveUpdate();
-                    setTempSelectedSpot(null);
-                    setPickingTarget(null);
-                    return;
-                }
-            }
-            showToast({ message: error instanceof Error ? error.message : "장소를 등록하지 못했습니다.", type: 'error' });
-        }
-    };
-
-    const handleConfirmScheduleOnly = async () => {
-        if (!tempSelectedSpot || !pickingTarget) return;
-        const { dayId, scheduleId } = pickingTarget;
-        const expectedVersion = mapSchedulesMapRef.current[dayId]?.find(schedule => schedule.id === scheduleId)?.version;
-        if (expectedVersion == null) return showToast({ message: '최신 일정 정보를 확인하지 못했습니다. 다시 불러와 주세요.', type: 'error' });
-        const updateRequest: ScheduleUpdateRequest = {
-            expectedVersion,
-            spotUserId: 0,
-            spotName: tempSelectedSpot.spotName,
-            spotType: tempSelectedSpot.spotType,
-            lat: tempSelectedSpot.lat,
-            lng: tempSelectedSpot.lng,
-        };
-        try {
-            const updatedSchedules = await updateScheduleApi(scheduleId, updateRequest);
-            setMapSchedulesMap(prev => ({ ...prev, [dayId]: updatedSchedules }));
-            setScheduleRefreshVersions(prev => ({ ...prev, [dayId]: (prev[dayId] || 0) + 1 }));
-            markPlanAuditStale();
-            setTempSelectedSpot(null);
-            setPickingTarget(null);
-            if (window.innerWidth < 768) setMobileViewMode('LIST');
-        } catch (error) {
-            if (error instanceof ScheduleEditConflictError) {
-                let latest = error.latestSchedule;
-                if (!latest) {
-                    try { latest = (await getSchedulesByDay(dayId)).find(schedule => schedule.id === scheduleId) ?? null; }
-                    catch { latest = null; }
-                }
-                if (latest) {
-                    const original = mapSchedulesMapRef.current[dayId]?.find(schedule => schedule.id === scheduleId);
-                    const applyMine = await confirm({
-                        title: '일정 위치 수정 충돌',
-                        message: `처음 장소: ${original?.spotName || '없음'} (${original?.lat ?? '위치 없음'}, ${original?.lng ?? '위치 없음'})\n내 선택: ${updateRequest.spotName} (${updateRequest.lat}, ${updateRequest.lng})\n최신 저장값: ${latest.spotName || '없음'} (${latest.lat ?? '위치 없음'}, ${latest.lng ?? '위치 없음'})\n\n확인을 누르면 내 위치를 최신 일정에 적용하고, 취소하면 최신 저장값을 사용합니다.`,
-                        confirmLabel: '내 위치 적용',
-                    });
-                    if (applyMine) {
-                        try {
-                            const updatedSchedules = await updateScheduleApi(scheduleId, { ...updateRequest, expectedVersion: latest.version });
-                            mapSchedulesMapRef.current = { ...mapSchedulesMapRef.current, [dayId]: updatedSchedules };
-                            setMapSchedulesMap(previous => ({ ...previous, [dayId]: updatedSchedules }));
-                            setScheduleRefreshVersions(previous => ({ ...previous, [dayId]: (previous[dayId] || 0) + 1 }));
-                            markPlanAuditStale();
-                        } catch (retryError) {
-                            showToast({ message: retryError instanceof Error ? retryError.message : '최신 일정에 내 위치를 적용하지 못했습니다.', type: 'error' });
-                            return;
-                        }
-                    } else await refreshForLiveUpdate();
-                    setTempSelectedSpot(null);
-                    setPickingTarget(null);
-                    return;
-                }
-            }
-            showToast({ message: "일정에 장소를 추가하지 못했습니다.", type: 'error' });
         }
     };
 
@@ -1099,13 +829,10 @@ function PlanDetailContent() {
                                 />
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <PlanCollaboratorsBar planId={plan.id} refreshVersion={collaboratorsRefreshVersion} />
-                                    <span role="status" className={`text-xs ${liveConnectionState === 'connected' ? 'text-emerald-700' : 'text-slate-500'}`}>
-                                        {liveConnectionState === 'connected' ? '● 실시간 동기화 중' : liveConnectionState === 'unavailable' ? '실시간 연결을 사용할 수 없습니다' : liveConnectionState === 'paused' ? '탭이 숨겨져 있어 연결을 쉬는 중' : '실시간 연결 중…'}
-                                    </span>
                                 </div>
                             </div>
-                            <div className="md:hidden absolute bottom-0 left-0 w-full h-10 flex justify-center items-end pb-2 bg-gradient-to-t from-white via-white/90 to-transparent">
-                                <button onClick={() => setIsHeaderExpanded(!isHeaderExpanded)} className="text-[10px] font-bold text-gray-400 bg-white hover:bg-gray-50 px-3 py-1 rounded-full border border-gray-200 shadow-sm flex items-center gap-1 active:scale-95 transition-transform">{isHeaderExpanded ? '접기 ▲' : '상세 정보 ▼'}</button>
+                            <div className="md:hidden absolute bottom-0 left-0 w-full h-12 flex justify-center items-end pb-1 bg-gradient-to-t from-white via-white/90 to-transparent">
+                                <button type="button" aria-expanded={isHeaderExpanded} onClick={() => setIsHeaderExpanded(!isHeaderExpanded)} className="yume-button yume-button-secondary rounded-full">{isHeaderExpanded ? '접기 ▲' : '상세 정보 ▼'}</button>
                             </div>
                         </div>
 
@@ -1299,7 +1026,7 @@ function PlanDetailContent() {
                             </DndContext>
                         </div>
                         <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-40 w-full px-6 pointer-events-none">
-                            <button onClick={() => setMobileViewMode('MAP')} className="pointer-events-auto mx-auto bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform">
+                            <button onClick={() => setMobileViewMode('MAP')} className="yume-button yume-button-floating pointer-events-auto mx-auto">
                                 🗺️ 지도 보기
                             </button>
                         </div>
@@ -1350,18 +1077,18 @@ function PlanDetailContent() {
                         </div>
                         <label className="block text-xs font-bold text-gray-600">
                             복사본 이름
-                            <input value={copyName} onChange={event => setCopyName(event.target.value)} maxLength={100} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-violet-400" />
+                            <input value={copyName} onChange={event => setCopyName(event.target.value)} maxLength={100} className="yume-input mt-1" />
                         </label>
                         <label className="mt-4 block text-xs font-bold text-gray-600">
                             복제 위치
-                            <select value={copyTarget} onChange={event => setCopyTarget(event.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-bold outline-none focus:border-violet-400">
+                            <select value={copyTarget} onChange={event => setCopyTarget(event.target.value)} className="yume-input mt-1 font-bold">
                                 {fullDays.filter(item => !item.data).map(item => <option key={item.dayOrder} value={item.dayOrder}>{item.dayOrder}일차 빈 자리</option>)}
                                 <option value="INDEPENDENT">내 하루 일정에 보관</option>
                             </select>
                         </label>
                         <div className="mt-6 flex gap-2">
-                            <button type="button" disabled={copyingDay} onClick={() => setCopySourceDay(null)} className="flex-1 rounded-xl bg-gray-100 py-3 text-sm font-bold text-gray-600 hover:bg-gray-200">취소</button>
-                            <button type="button" disabled={copyingDay} onClick={() => void submitCopyDay()} className="flex-[2] rounded-xl bg-violet-600 py-3 text-sm font-bold text-white shadow hover:bg-violet-700 disabled:opacity-50">{copyingDay ? '복제 중...' : '복제하기'}</button>
+                            <button type="button" disabled={copyingDay} onClick={() => setCopySourceDay(null)} className="yume-button yume-button-secondary flex-1">취소</button>
+                            <button type="button" disabled={copyingDay} onClick={() => void submitCopyDay()} className="yume-button yume-button-primary flex-[2]">{copyingDay ? '복제 중...' : '복제하기'}</button>
                         </div>
                     </div>
                 </div>
@@ -1379,13 +1106,13 @@ function PlanDetailContent() {
                             <button type="button" disabled={scheduleTransferLoading} onClick={() => setScheduleTransferSource(null)} className="min-h-11 min-w-11 rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="이동·복사 창 닫기">✕</button>
                         </div>
 
-                        <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1">
-                            <button type="button" onClick={() => setScheduleTransferCopy(false)} className={`rounded-lg py-2 text-xs font-black transition ${!scheduleTransferCopy ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>이동</button>
-                            <button type="button" onClick={() => setScheduleTransferCopy(true)} className={`rounded-lg py-2 text-xs font-black transition ${scheduleTransferCopy ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-400'}`}>복사</button>
+                        <div className="yume-segmented mb-4 grid grid-cols-2">
+                            <button type="button" aria-pressed={!scheduleTransferCopy} onClick={() => setScheduleTransferCopy(false)} className="yume-segment">이동</button>
+                            <button type="button" aria-pressed={scheduleTransferCopy} onClick={() => setScheduleTransferCopy(true)} className="yume-segment">복사</button>
                         </div>
 
                         <label className="mb-1 block text-xs font-bold text-gray-500">대상 일차</label>
-                        <select value={scheduleTransferTargetDayId ?? ''} onChange={event => setScheduleTransferTargetDayId(Number(event.target.value))} className="mb-4 w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm font-bold text-gray-800 outline-none focus:border-blue-400">
+                        <select value={scheduleTransferTargetDayId ?? ''} onChange={event => setScheduleTransferTargetDayId(Number(event.target.value))} className="yume-input mb-4 font-bold">
                             {plan?.days
                                 .filter(day => day.id !== scheduleTransferSource.sourceDay.id)
                                 .sort((left, right) => left.dayOrder - right.dayOrder)
@@ -1393,14 +1120,14 @@ function PlanDetailContent() {
                         </select>
 
                         <label className="mb-1 block text-xs font-bold text-gray-500">추가 위치</label>
-                        <div className="mb-5 grid grid-cols-2 gap-2">
-                            <button type="button" onClick={() => setScheduleTransferAtStart(true)} className={`rounded-xl border py-2.5 text-xs font-bold ${scheduleTransferAtStart ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}>맨 위</button>
-                            <button type="button" onClick={() => setScheduleTransferAtStart(false)} className={`rounded-xl border py-2.5 text-xs font-bold ${!scheduleTransferAtStart ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}>맨 아래</button>
+                        <div className="yume-segmented mb-5 grid grid-cols-2">
+                            <button type="button" aria-pressed={scheduleTransferAtStart} onClick={() => setScheduleTransferAtStart(true)} className="yume-segment">맨 위</button>
+                            <button type="button" aria-pressed={!scheduleTransferAtStart} onClick={() => setScheduleTransferAtStart(false)} className="yume-segment">맨 아래</button>
                         </div>
 
                         <div className="flex gap-2">
-                            <button type="button" disabled={scheduleTransferLoading} onClick={() => setScheduleTransferSource(null)} className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50">취소</button>
-                            <button type="button" disabled={scheduleTransferLoading} onClick={() => void executeScheduleTransfer()} className="flex-[2] rounded-xl bg-blue-600 py-3 text-sm font-black text-white shadow-md hover:bg-blue-700 disabled:opacity-50">{scheduleTransferLoading ? '처리 중…' : scheduleTransferCopy ? '이 일정을 복사' : '이 일정을 이동'}</button>
+                            <button type="button" disabled={scheduleTransferLoading} onClick={() => setScheduleTransferSource(null)} className="yume-button yume-button-secondary flex-1">취소</button>
+                            <button type="button" disabled={scheduleTransferLoading} onClick={() => void executeScheduleTransfer()} className="yume-button yume-button-primary flex-[2]">{scheduleTransferLoading ? '처리 중…' : scheduleTransferCopy ? '이 일정을 복사' : '이 일정을 이동'}</button>
                         </div>
                     </div>
                 </div>
@@ -1423,7 +1150,7 @@ function PlanDetailContent() {
                         <div className="text-4xl">✅</div>
                         <h2 className="mt-3 text-xl font-black text-gray-900">연결할 장소가 없습니다</h2>
                         <p className="mt-2 text-sm text-gray-500">이 계획의 장소는 모두 내 장소에 연결되어 있거나 장소명이 비어 있습니다.</p>
-                        <button type="button" onClick={() => setSpotLinkGroups(null)} className="mt-6 w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white hover:bg-blue-700">확인</button>
+                        <button type="button" onClick={() => setSpotLinkGroups(null)} className="yume-button yume-button-primary mt-6 w-full">확인</button>
                     </div>
                 </div>
             )}

@@ -1,33 +1,6 @@
 // src/types/schedule.ts
 import type { SpotType, Transportation } from './enums'; 
 
-export interface ScheduleItemRequest {
-  id: number | null;
-  scheduleOrder: number;
-  spotUserId: number | null;
-  spotName: string | null;
-  lat: number | null;
-  lng: number | null;
-  spotType: SpotType | null;
-  isChecked: boolean;
-  isSkipped: boolean;
-  startTime: string | null;
-  fixedStartTime: boolean;
-  duration: number;
-  endTime: string | null;
-  movingDuration: number;
-  extraDuration: number;
-  extraMovingDuration: number;
-  transportation: Transportation;
-  memo: string | null;
-  movingMemo: string | null;
-}
-
-// Sync 요청 DTO
-export interface ScheduleSyncRequest {
-  schedules: ScheduleItemRequest[];
-}
-
 export interface ScheduleCreateRequest extends ScheduleQuickCreateFields {
   scheduleOrder: number; // 추가될 순서
 }
