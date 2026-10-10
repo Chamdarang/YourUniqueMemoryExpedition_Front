@@ -2,11 +2,11 @@ import { randomBytes } from 'node:crypto';
 import { expect, test, request as requestFactory } from '@playwright/test';
 
 // Explicit opt-in: uses a temporary account on the local backend and deletes it afterward.
-test.use({ trace: 'off', baseURL: 'http://127.0.0.1:5173', isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+test.use({ trace: 'off', baseURL: 'http://localhost:5173', isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 test('로컬 백엔드와 모바일 일정·장소·그룹·기념품 저장을 연동한다', async ({ page, request }, testInfo) => {
   test.skip(process.env.YUME_LIVE_API !== '1', '로컬 백엔드 실행 후 YUME_LIVE_API=1로 실행합니다.');
   test.setTimeout(120_000);
-  const api = 'http://127.0.0.1:8080';
+  const api = 'http://localhost:8080';
   const username = `ux_${randomBytes(8).toString('hex')}`;
   const password = randomBytes(24).toString('hex');
   const signup = await request.post(`${api}/api/auth/signup`, { data: { username, password } });

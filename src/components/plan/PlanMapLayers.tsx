@@ -3,10 +3,9 @@ import { useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import type { DayScheduleResponse } from '../../types/schedule';
 import type { DayRouteAuditResponse } from '../../types/route';
 import { drawAuditedRouteLeg } from '../../utils/mapRoutePolylines';
+import { getPlanDayColor } from '../../utils/mapStyles';
 
-const DAY_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
-
-export const getDayColor = (dayOrder: number) => DAY_COLORS[(dayOrder - 1) % DAY_COLORS.length];
+export const getDayColor = getPlanDayColor;
 
 export function NumberedMarker({ number, color }: { number?: number; color: string }) {
     return (

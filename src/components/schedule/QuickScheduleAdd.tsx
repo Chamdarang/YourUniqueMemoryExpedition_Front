@@ -59,12 +59,12 @@ export default function QuickScheduleAdd({ scheduleOrder, onSubmit, onMapPickSta
                 const placeId = "placeId" in event ? event.placeId : undefined;
                 if (placeId) {
                     const place = new google.maps.places.Place({ id: placeId });
-                    await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "types"] });
+                    await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "types", "primaryType"] });
                     setSpotName(place.displayName || place.formattedAddress || "지도에서 선택한 장소");
                     setMapSelection({
                         lat: place.location?.lat() ?? lat,
                         lng: place.location?.lng() ?? lng,
-                        spotType: mapGoogleTypeToSpotType(place.types),
+                        spotType: mapGoogleTypeToSpotType(place.types, place.primaryType),
                     });
                 } else {
                     const result = geocoder ? (await geocoder.geocode({ location: { lat, lng } })).results[0] : null;
@@ -170,13 +170,13 @@ export default function QuickScheduleAdd({ scheduleOrder, onSubmit, onMapPickSta
         setFeedback("");
         try {
             const place = new google.maps.places.Place({ id: suggestion.placeId });
-            await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "types"] });
+            await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "types", "primaryType"] });
             if (!place.location) throw new Error("장소의 지도 좌표를 가져올 수 없습니다.");
 
             const createRequest: SpotCreateRequest = {
                 placeId: suggestion.placeId,
                 spotName: place.displayName || suggestion.spotName,
-                spotType: mapGoogleTypeToSpotType(place.types),
+                spotType: mapGoogleTypeToSpotType(place.types, place.primaryType),
                 address: place.formattedAddress || suggestion.address || "",
                 lat: place.location.lat(),
                 lng: place.location.lng(),
@@ -396,7 +396,7 @@ export default function QuickScheduleAdd({ scheduleOrder, onSubmit, onMapPickSta
                         <button
                             type="submit"
                             disabled={isSubmitting || isRegistering || !spotName.trim()}
-                            className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                            className="yume-button yume-button-primary shrink-0 disabled:cursor-not-allowed"
                         >
                             {isSubmitting ? "추가 중..." : "일정 추가"}
                         </button>

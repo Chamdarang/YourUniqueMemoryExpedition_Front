@@ -22,7 +22,7 @@ export default function SpotCard({ spot, onDelete, onToggleVisit }: SpotCardProp
       : `https://www.google.com/maps/search/?api=1&query=${spot.lat},${spot.lng}`;
 
   return (
-      <div className="group bg-white rounded-xl border-2 border-gray-100 overflow-hidden shadow-md hover:shadow-lg hover:border-gray-200 transition-all duration-300 flex flex-col h-full relative">
+      <div className="yume-card yume-card-interactive group overflow-hidden flex flex-col h-full relative">
 
         {/* 상단 상태 바 (두께를 얇게 조절) */}
         <div className={`h-1 w-full ${spot.isVisit ? 'bg-green-500' : 'bg-gray-200'}`} />
@@ -78,14 +78,14 @@ export default function SpotCard({ spot, onDelete, onToggleVisit }: SpotCardProp
                 href={safeGoogleMapUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="min-h-11 flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-gray-900 text-white rounded-lg text-xs font-black hover:bg-black active:scale-95 transition-all shadow-sm"
+                className="yume-button yume-button-primary flex-1"
             >
               🗺️ 지도 보기
             </a>
 
             <button
                 onClick={() => navigate(`/spots/${spot.id}`)}
-                className="min-h-11 min-w-11 flex-1 py-2.5 bg-gray-50 text-gray-500 rounded-lg text-xs font-black hover:bg-gray-100 hover:text-gray-900 transition-all border border-gray-100"
+                className="yume-button yume-button-secondary flex-1"
             >
               상세 정보
             </button>
@@ -93,7 +93,7 @@ export default function SpotCard({ spot, onDelete, onToggleVisit }: SpotCardProp
             {onDelete && (
                 <button
                     onClick={() => onDelete(spot.id)}
-                    className="min-h-11 min-w-11 p-2.5 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                    className="yume-icon-button yume-icon-button-danger min-h-11 min-w-11"
                     aria-label={`${getSpotDisplayName(spot)} 삭제`} title="삭제"
                 >
                   🗑️

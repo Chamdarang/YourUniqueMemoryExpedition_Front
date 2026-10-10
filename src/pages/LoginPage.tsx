@@ -167,7 +167,7 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="mt-2 w-full rounded-xl bg-blue-600 py-3.5 font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
+                            className="yume-button yume-button-primary mt-2 w-full disabled:cursor-wait"
                         >
                             {loading
                                 ? "처리 중…"

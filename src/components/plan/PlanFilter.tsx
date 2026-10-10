@@ -45,25 +45,23 @@ export default function PlanFilter({ status, onStatusChange, onSearch }: Props) 
   };
 
   return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="yume-card overflow-hidden">
 
         {/* 상단: 탭 & 검색 버튼 */}
         <div className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
 
           {/* 1. 탭 (전체/다가오는/지난) */}
-          <div className="flex bg-gray-100 p-1 rounded-xl w-full md:w-auto">
+          <div className="yume-segmented w-full md:w-auto">
             {(['ALL', 'UPCOMING', 'PAST'] as const).map((tabKey) => {
               const label = { ALL: '전체', UPCOMING: '다가오는', PAST: '지난' };
               const isActive = status === tabKey;
               return (
                   <button
                       key={tabKey}
+                      type="button"
+                      aria-pressed={isActive}
                       onClick={() => onStatusChange(tabKey)}
-                      className={`flex-1 md:flex-none px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
-                          isActive
-                              ? 'bg-white text-blue-600 shadow-sm'
-                              : 'text-gray-500 hover:text-gray-700'
-                      }`}
+                      className="yume-segment"
                   >
                     {label[tabKey]}
                   </button>
@@ -82,7 +80,7 @@ export default function PlanFilter({ status, onStatusChange, onSearch }: Props) 
 
             <button
                 onClick={() => onSearch(localParams)}
-                className="bg-gray-900 hover:bg-gray-800 text-white text-sm font-bold px-5 py-2.5 rounded-lg shadow-sm transition active:scale-95 whitespace-nowrap"
+                className="yume-button yume-button-primary whitespace-nowrap"
             >
               검색 적용
             </button>
@@ -105,7 +103,7 @@ export default function PlanFilter({ status, onStatusChange, onSearch }: Props) 
                     onInput={enforceFourDigitDateYear}
                     value={localParams.startDate}
                     onChange={(e) => setLocalParams({...localParams, startDate: limitDateYear(e.target.value)})}
-                    className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="yume-input"
                 />
                 <span className="text-gray-400">~</span>
                 <input
@@ -114,7 +112,7 @@ export default function PlanFilter({ status, onStatusChange, onSearch }: Props) 
                     onInput={enforceFourDigitDateYear}
                     value={localParams.endDate}
                     onChange={(e) => setLocalParams({...localParams, endDate: limitDateYear(e.target.value)})}
-                    className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="yume-input"
                 />
               </div>
             </div>

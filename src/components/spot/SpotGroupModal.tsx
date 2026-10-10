@@ -74,7 +74,7 @@ export default function SpotGroupModal({ isOpen, onClose, currentGroups, onSave 
               <input
                   autoFocus
                   type="text"
-                  className="flex-1 p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                  className="yume-input min-w-0 flex-1"
                   placeholder="태그 입력 후 엔터"
                   value={inputValue}
                   onChange={e => setInputValue(e.target.value)}
@@ -82,7 +82,7 @@ export default function SpotGroupModal({ isOpen, onClose, currentGroups, onSave 
               />
               <button
                   onClick={addGroup}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 rounded-lg font-bold transition"
+                  className="yume-button yume-button-primary px-3"
               >
                 +
               </button>
@@ -109,13 +109,13 @@ export default function SpotGroupModal({ isOpen, onClose, currentGroups, onSave 
           <div className="flex gap-3">
             <button
                 onClick={onClose}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-3 rounded-xl transition"
+                className="yume-button yume-button-secondary flex-1"
             >
               취소
             </button>
             <button
                 onClick={handleSave}
-                className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-blue-200"
+                className="yume-button yume-button-primary flex-[2]"
             >
               저장하기
             </button>

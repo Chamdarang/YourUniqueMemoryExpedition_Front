@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SAVE_STATUS_EVENT, type SaveStatus } from '../../utils/saveStatus';
 
 interface Props {
@@ -9,15 +9,29 @@ interface Props {
 
 export default function SaveStatusIndicator({ isDirty = false, className = '', statusOverride }: Props) {
   const [trackedStatus, setStatus] = useState<SaveStatus>('IDLE');
+  const savedTimer = useRef<number | null>(null);
   const status = statusOverride ?? trackedStatus;
 
   useEffect(() => {
     const updateStatus = (event: Event) => {
-      setStatus((event as CustomEvent<SaveStatus>).detail);
+      const nextStatus = (event as CustomEvent<SaveStatus>).detail;
+      if (savedTimer.current !== null) window.clearTimeout(savedTimer.current);
+      setStatus(nextStatus);
+      if (nextStatus === 'SAVED') {
+        savedTimer.current = window.setTimeout(() => {
+          setStatus('IDLE');
+          savedTimer.current = null;
+        }, 1600);
+      }
     };
     window.addEventListener(SAVE_STATUS_EVENT, updateStatus);
-    return () => window.removeEventListener(SAVE_STATUS_EVENT, updateStatus);
+    return () => {
+      window.removeEventListener(SAVE_STATUS_EVENT, updateStatus);
+      if (savedTimer.current !== null) window.clearTimeout(savedTimer.current);
+    };
   }, []);
+
+  if (status === 'IDLE' && !isDirty) return null;
 
   const label = status === 'SAVING'
     ? '저장 중…'

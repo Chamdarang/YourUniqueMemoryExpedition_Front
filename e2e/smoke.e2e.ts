@@ -37,7 +37,7 @@ test('로그인 후 홈과 하루 경로 점검을 표시한다', async ({ page 
     body: JSON.stringify({
       success: true,
       message: 'Success',
-      data: { token: 'e2e-token', username: 'testuser', expiryDate: '2099-01-01T00:00:00' },
+      data: { token: 'e2e-token', username: 'testuser', nickname: 'testuser', expiryDate: '2099-01-01T00:00:00' },
     }),
   }));
   await page.route('**/api/plans/upcoming', route => route.fulfill({
@@ -121,8 +121,8 @@ test('로그인 후 홈과 하루 경로 점검을 표시한다', async ({ page 
 
 test('기념품 장부에서 장소를 선택해 기념품을 등록한다', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('accessToken', 'e2e-token');
     localStorage.setItem('username', 'testuser');
+    localStorage.setItem('accessToken', 'e2e-token');
   });
 
   const spot = {
@@ -182,8 +182,8 @@ test('기념품 장부에서 장소를 선택해 기념품을 등록한다', asy
 
 test('CSV 일정 파일을 분석하고 미리보기 후 계획으로 등록한다', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('accessToken', 'e2e-token');
     localStorage.setItem('username', 'testuser');
+    localStorage.setItem('accessToken', 'e2e-token');
   });
 
   const importedPlan = {
@@ -281,8 +281,8 @@ test('CSV 일정 파일을 분석하고 미리보기 후 계획으로 등록한�
 
 test('여행 전체 점검에서 일정 문제와 요약을 표시한다', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('accessToken', 'e2e-token');
     localStorage.setItem('username', 'testuser');
+    localStorage.setItem('accessToken', 'e2e-token');
   });
 
   await page.route('**/api/plans/1', route => route.fulfill({

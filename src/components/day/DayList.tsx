@@ -16,7 +16,7 @@ export default function DayList({ days, onDelete, searchKeyword, onResetSearch }
         return (
             <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-gray-200">
                 <p className="text-gray-600">{searchKeyword ? `“${searchKeyword}”에 맞는 하루 코스가 없습니다.` : '등록된 하루 코스가 없습니다.'}</p>
-                {searchKeyword && onResetSearch && <button type="button" onClick={onResetSearch} className="mt-4 min-h-11 rounded-xl bg-blue-50 px-4 text-sm font-semibold text-blue-700">검색 초기화</button>}
+                {searchKeyword && onResetSearch && <button type="button" onClick={onResetSearch} className="yume-button yume-button-soft mt-4">검색 초기화</button>}
             </div>
         );
     }

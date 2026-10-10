@@ -410,7 +410,7 @@ export default function PlanListPage() {
             >
               {importing ? '불러오는 중...' : '📂 불러오기'}
             </button>
-            <button data-guide-target="plans-create" data-guide-state={isCreatingPlan ? 'open' : 'closed'} type="button" onClick={() => setIsCreatingPlan(open => !open)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 md:px-5 rounded-xl shadow transition text-sm flex items-center gap-2 shrink-0 h-10 md:h-auto">
+            <button data-guide-target="plans-create" data-guide-state={isCreatingPlan ? 'open' : 'closed'} type="button" onClick={() => setIsCreatingPlan(open => !open)} className={`yume-button shrink-0 ${isCreatingPlan ? 'yume-button-secondary' : 'yume-button-primary'}`}>
               <span>{isCreatingPlan ? '닫기' : '+ 새 여행'}</span>
             </button>
           </div>
@@ -446,7 +446,7 @@ export default function PlanListPage() {
                 <label className="block text-sm font-bold text-gray-700 mb-1">간단 메모</label>
                 <textarea rows={3} value={createForm.planMemo} onChange={event => setCreateForm(current => ({ ...current, planMemo: event.target.value }))} placeholder="여행 테마나 계획을 적어보세요." className="w-full px-4 py-2 border rounded-lg outline-none resize-none" />
               </div>
-              <button data-guide-target="plans-create-submit" type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition transform active:scale-95">여행 생성하기</button>
+              <button data-guide-target="plans-create-submit" type="submit" className="yume-button yume-button-primary w-full">여행 생성하기</button>
             </form>
           </section>
         )}
@@ -471,8 +471,8 @@ export default function PlanListPage() {
                     <p className="mt-1 text-xs text-slate-500">{invitation.inviterUsername}님이 함께 계획하도록 초대했습니다.</p>
                   </div>
                   <div className="flex shrink-0 gap-2">
-                    <button type="button" onClick={() => void handleInvitation(invitation, false)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">거절</button>
-                    <button type="button" onClick={() => void handleInvitation(invitation, true)} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">수락</button>
+                    <button type="button" onClick={() => void handleInvitation(invitation, false)} className="yume-button yume-button-secondary">거절</button>
+                    <button type="button" onClick={() => void handleInvitation(invitation, true)} className="yume-button yume-button-primary">수락</button>
                   </div>
                 </li>
               ))}
@@ -597,8 +597,8 @@ export default function PlanListPage() {
                   </div>
 
                   <div className="flex gap-4 pt-4">
-                    <button type="button" onClick={() => setEditingPlan(null)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-xl font-bold text-lg hover:bg-gray-200 transition">취소</button>
-                    <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 shadow-lg hover:shadow-xl transition transform hover:-translate-y-0.5">저장하기</button>
+                    <button type="button" onClick={() => setEditingPlan(null)} className="yume-button yume-button-secondary yume-button-large flex-1">취소</button>
+                    <button type="submit" className="yume-button yume-button-primary yume-button-large flex-1">저장하기</button>
                   </div>
                 </form>
               </div>
@@ -687,7 +687,7 @@ export default function PlanListPage() {
                 <button
                   type="button"
                   onClick={() => navigate(`/plans/${importCompletion.plan.id}`)}
-                  className="flex-[2] rounded-xl bg-blue-600 py-3 font-bold text-white shadow hover:bg-blue-700"
+                  className="yume-button yume-button-primary flex-[2]"
                 >
                   계획 확인하기
                 </button>

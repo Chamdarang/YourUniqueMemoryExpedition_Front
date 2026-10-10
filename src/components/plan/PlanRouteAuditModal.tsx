@@ -125,11 +125,11 @@ export default function PlanRouteAuditModal({ result, loading, checkedAt, stale,
                       </div>
                       {day.dayId != null && (
                         <div className="flex shrink-0 flex-col items-end gap-2">
-                          <button type="button" onClick={() => onOpenDay(day.dayId as number)} className="text-xs font-black text-blue-600 hover:text-blue-800">
+                          <button type="button" onClick={() => onOpenDay(day.dayId as number)} className="yume-button yume-button-soft">
                             일정 열기 →
                           </button>
                           {day.scheduleCount > 1 && (
-                            <button type="button" onClick={() => onAuditDay(day.dayId as number)} className="rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[10px] font-black text-violet-700 hover:bg-violet-100">
+                            <button type="button" onClick={() => onAuditDay(day.dayId as number)} className="yume-button yume-button-secondary">
                               🧭 경로 점검
                             </button>
                           )}
@@ -189,7 +189,7 @@ export default function PlanRouteAuditModal({ result, loading, checkedAt, stale,
             type="button"
             disabled={loading}
             onClick={onRefresh}
-            className="mt-4 w-full rounded-2xl border border-gray-200 bg-white py-3 text-sm font-black text-gray-600 hover:bg-gray-50 disabled:cursor-wait disabled:opacity-50"
+            className="yume-button yume-button-secondary mt-4 w-full disabled:cursor-wait"
           >
             {loading ? '점검 중…' : '기본 점검 다시 실행'}
           </button>

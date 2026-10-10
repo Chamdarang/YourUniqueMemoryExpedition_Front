@@ -60,22 +60,28 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
             {/* 1. 처리 방식 선택 (SwapMode) */}
             <div>
               <label className="block text-xs font-bold text-gray-500 mb-1">방식 선택</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="yume-segmented grid grid-cols-3">
                 <button
+                    type="button"
+                    aria-pressed={swapMode === 'REPLACE'}
                     onClick={() => setSwapMode('REPLACE')}
-                    className={`min-h-11 min-w-11 py-2 text-xs rounded-lg border font-bold transition ${swapMode === 'REPLACE' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                    className="yume-segment text-xs"
                 >
                   덮어쓰기
                 </button>
                 <button
+                    type="button"
+                    aria-pressed={swapMode === 'SHIFT'}
                     onClick={() => setSwapMode('SHIFT')}
-                    className={`min-h-11 min-w-11 py-2 text-xs rounded-lg border font-bold transition ${swapMode === 'SHIFT' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                    className="yume-segment text-xs"
                 >
                   밀어내기
                 </button>
                 <button
+                    type="button"
+                    aria-pressed={swapMode === 'INDEPENDENT'}
                     onClick={() => setSwapMode('INDEPENDENT')}
-                    className={`min-h-11 min-w-11 py-2 text-xs rounded-lg border font-bold transition ${swapMode === 'INDEPENDENT' ? 'bg-orange-50 border-orange-500 text-orange-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                    className="yume-segment text-xs"
                 >
                   독립시키기
                 </button>
@@ -94,7 +100,7 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">대상 여행</label>
                 <select aria-label="대상 여행"
-                    className="min-h-11 w-full p-2 border rounded-lg text-sm bg-white outline-none focus:border-blue-500 transition"
+                    className="yume-input"
                     value={selectedPlanId}
                     onChange={(e) => { setSelectedPlanId(Number(e.target.value)); setTargetDayOrder(1); }}
                 >
@@ -107,7 +113,7 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
                   <div className="animate-fade-in">
                     <label className="block text-xs font-bold text-gray-500 mb-1">날짜 (위치)</label>
                     <select aria-label="날짜 위치"
-                        className="min-h-11 w-full p-2 border rounded-lg text-sm bg-white outline-none focus:border-blue-500 transition"
+                        className="yume-input"
                         value={targetDayOrder}
                         onChange={(e) => setTargetDayOrder(Number(e.target.value))}
                     >
@@ -124,13 +130,13 @@ export default function PlanDaySwapModal({ isOpen, onClose, onSubmit, currentDay
           <div className="flex gap-2 mt-6">
             <button
                 onClick={onClose}
-                className="min-h-11 min-w-11 flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition"
+                className="yume-button yume-button-secondary min-w-11 flex-1"
             >
               취소
             </button>
             <button
                 onClick={handleSubmit}
-                className="min-h-11 min-w-11 flex-[2] py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 shadow-md transition"
+                className="yume-button yume-button-primary min-w-11 flex-[2]"
             >
               확인
             </button>

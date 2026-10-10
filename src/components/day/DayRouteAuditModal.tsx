@@ -98,7 +98,7 @@ export default function DayRouteAuditModal({ result, onClose, onApplyLeg, onAppl
               type="button"
               disabled={applying}
               onClick={onApplyAll}
-              className="min-h-11 min-w-11 mt-5 w-full rounded-2xl bg-blue-600 py-3 text-sm font-black text-white shadow-lg hover:bg-blue-700 disabled:cursor-wait disabled:opacity-50"
+              className="yume-button yume-button-primary mt-5 w-full disabled:cursor-wait"
             >
               {applying ? '적용 중…' : `계산된 ${result.calculatedLegs}개 구간 전체 적용`}
             </button>
@@ -107,7 +107,7 @@ export default function DayRouteAuditModal({ result, onClose, onApplyLeg, onAppl
             type="button"
             disabled={recalculating}
             onClick={onRecalculate}
-            className="min-h-11 min-w-11 mt-3 w-full rounded-2xl border border-gray-200 bg-white py-3 text-sm font-black text-gray-600 hover:bg-gray-50 disabled:cursor-wait disabled:opacity-50"
+            className="yume-button yume-button-secondary mt-3 w-full disabled:cursor-wait"
           >
             {recalculating ? '다시 점검 중…' : '경로 다시 점검'}
           </button>

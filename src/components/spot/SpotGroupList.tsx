@@ -189,13 +189,13 @@ export default function SpotGroupList({ initialGroupName }: Props) {
                         <div className="flex flex-wrap gap-2 w-full md:w-auto min-w-0">
                           <input
                               type="text" aria-label="그룹 이름"
-                              className="min-h-11 min-w-0 w-full px-3 py-2 border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-800"
+                              className="yume-input min-w-0 w-full font-bold"
                               value={editName}
                               onChange={e => setEditName(e.target.value)}
                               autoFocus
                           />
-                          <button onClick={handleRenameGroup} className="min-h-11 bg-blue-600 text-white px-3 py-2 rounded-lg font-bold text-sm whitespace-nowrap hover:bg-blue-700">저장</button>
-                          <button onClick={() => setIsEditing(false)} className="min-h-11 bg-white text-gray-600 border border-gray-300 px-3 py-2 rounded-lg font-bold text-sm whitespace-nowrap hover:bg-gray-50">취소</button>
+                          <button onClick={handleRenameGroup} className="yume-button yume-button-primary whitespace-nowrap">저장</button>
+                          <button onClick={() => setIsEditing(false)} className="yume-button yume-button-secondary whitespace-nowrap">취소</button>
                         </div>
                     ) : (
                         <div>
@@ -210,13 +210,13 @@ export default function SpotGroupList({ initialGroupName }: Props) {
                       <div className="flex gap-2">
                         <button
                             onClick={startEditing}
-                            className="min-h-11 px-3 py-2 bg-white border border-blue-200 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-50 transition"
+                            className="yume-button yume-button-soft"
                         >
                           ✏️ 이름 변경
                         </button>
                         <button
                             onClick={handleDeleteGroup}
-                            className="min-h-11 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-lg text-sm font-bold hover:bg-red-50 transition"
+                            className="yume-button yume-button-danger-outline"
                         >
                           🗑️ 그룹 삭제
                         </button>
@@ -226,7 +226,7 @@ export default function SpotGroupList({ initialGroupName }: Props) {
               </div>
 
               {/* 장소 리스트 */}
-              <div className="bg-white rounded-xl border border-gray-100 p-1">
+              <div className="yume-card p-1">
                 {groupSpots.length === 0 ? (!loading && !detailError && (
                     <div className="text-center py-12">
                       <p className="text-gray-400">이 그룹에 저장된 장소가 없습니다.</p>
@@ -243,7 +243,7 @@ export default function SpotGroupList({ initialGroupName }: Props) {
             // 🅱️ [목록 뷰] 그룹 리스트 (폴더 아이콘)
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {groups.length === 0 ? (!listError && (
-                  <div className="col-span-full text-center py-20 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                  <div className="yume-empty-state col-span-full py-20 text-center">
                     <p className="text-gray-400">만든 그룹이 아직 없습니다.</p>
                     <p className="text-xs text-gray-400 mt-2">장소 상세의 그룹 관리에서 그룹을 추가할 수 있습니다.</p>
                   </div>
@@ -252,7 +252,7 @@ export default function SpotGroupList({ initialGroupName }: Props) {
                       <button type="button" aria-label={`${group.groupName} 그룹 열기`}
                           key={group.id}
                           onClick={() => handleGroupClick(group.id, group.groupName)}
-                          className="text-left min-h-11 focus-visible:ring-2 focus-visible:ring-blue-500 bg-white p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 cursor-pointer transition group relative overflow-hidden"
+                          className="yume-card yume-card-interactive text-left min-h-11 p-5 cursor-pointer group relative overflow-hidden"
                       >
                         <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition">
                           <span className="text-6xl">📂</span>

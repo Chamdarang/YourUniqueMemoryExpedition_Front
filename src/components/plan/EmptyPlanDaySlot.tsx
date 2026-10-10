@@ -31,7 +31,7 @@ export default function EmptyPlanDaySlot({ dayOrder, onCreateNew, onImportSelect
 
     if (!isExpanded) {
         return (
-            <button type="button" data-plan-day-order={dayOrder} onClick={() => setIsExpanded(true)} className="mb-3 flex w-full scroll-mt-24 items-center gap-3 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 text-left font-bold text-gray-400 transition hover:border-blue-400 hover:bg-white hover:text-blue-600">
+            <button type="button" data-plan-day-order={dayOrder} onClick={() => setIsExpanded(true)} className="yume-empty-state mb-3 flex w-full scroll-mt-24 items-center gap-3 p-4 text-left font-bold text-gray-500 transition">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-200 text-lg">+</span>
                 Day {dayOrder} 일정 추가하기
             </button>
@@ -46,9 +46,9 @@ export default function EmptyPlanDaySlot({ dayOrder, onCreateNew, onImportSelect
             </div>
             {!showImport ? (
                 <div className="grid gap-2 sm:grid-cols-3">
-                    <button type="button" onClick={() => onCreateNew('SIMPLE')} className="rounded-xl border border-blue-200 bg-white px-3 py-3 font-bold text-blue-700 shadow-sm hover:bg-blue-50">간편 일정<span className="mt-1 block text-[10px] font-medium text-gray-400">장소 · 시간 · 메모</span></button>
-                    <button type="button" onClick={() => onCreateNew('DETAILED')} className="rounded-xl border border-orange-200 bg-white px-3 py-3 font-bold text-orange-600 shadow-sm hover:bg-orange-50">상세 일정<span className="mt-1 block text-[10px] font-medium text-gray-400">체류 · 이동 · 교통수단</span></button>
-                    <button type="button" onClick={loadCandidates} className="rounded-xl border border-gray-200 bg-white px-3 py-3 font-bold text-gray-600 shadow-sm hover:bg-gray-50">기존 일정 가져오기</button>
+                    <button type="button" onClick={() => onCreateNew('SIMPLE')} className="yume-button yume-button-secondary min-h-16 flex-col px-3 py-2.5">간편 일정<span className="block text-xs font-medium text-gray-500">장소 · 시간 · 메모</span></button>
+                    <button type="button" onClick={() => onCreateNew('DETAILED')} className="yume-button yume-button-secondary min-h-16 flex-col px-3 py-2.5">상세 일정<span className="block text-xs font-medium text-gray-500">체류 · 이동 · 교통수단</span></button>
+                    <button type="button" onClick={loadCandidates} className="yume-button yume-button-secondary min-h-16">기존 일정 가져오기</button>
                 </div>
             ) : (
                 <div className="overflow-hidden rounded-xl border border-blue-100 bg-white">

@@ -203,7 +203,7 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                       <span className={`px-3 py-1 rounded-full text-xs font-extrabold tracking-wide ${status.color}`}>{status.text}</span>
                       {viewDuration.valid && (<span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600">{viewDuration.nights}박 {viewDuration.days}일</span>)}
                     </div>
-                    <button onClick={startEditing} className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 text-xs font-bold hover:bg-gray-50 hover:text-blue-600 transition">⚙️ 정보 수정</button>
+                    <button type="button" onClick={startEditing} className="yume-button yume-button-secondary">⚙️ 정보 수정</button>
                   </div>
                   <div>
                     <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-2 tracking-tight">{plan.planName}</h1>
@@ -218,8 +218,8 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                   <div className="flex justify-between items-center pb-2 border-b border-gray-100">
                     <span className="text-sm font-bold text-blue-600">수정 모드 ✨</span>
                     <div className="flex gap-2">
-                      <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-sm font-bold text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition">취소</button>
-                      <button onClick={handleSave} className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md transition">저장</button>
+                      <button onClick={() => setIsEditing(false)} className="yume-button yume-button-secondary">취소</button>
+                      <button onClick={handleSave} className="yume-button yume-button-primary">저장</button>
                     </div>
                   </div>
                   <div>
@@ -229,22 +229,22 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                       <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">시작일</label>
-                      <input type="date" min="1900-01-01" max="2100-12-31" onInput={enforceFourDigitDateYear} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-gray-700 focus:ring-2 focus:ring-blue-100 outline-none transition" value={editForm.planStartDate} onChange={(e) => setEditForm({ ...editForm, planStartDate: limitDateYear(e.target.value) })} />
+                      <input type="date" min="1900-01-01" max="2100-12-31" onInput={enforceFourDigitDateYear} className="yume-input yume-input-soft font-mono" value={editForm.planStartDate} onChange={(e) => setEditForm({ ...editForm, planStartDate: limitDateYear(e.target.value) })} />
                       <button
                         type="button"
                         onClick={fitEndDateToSchedules}
-                        className="mt-2 w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                        className="yume-button yume-button-soft mt-2 w-full"
                       >
                         시작일 기준으로 종료일 맞추기
                       </button>
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">종료일</label>
-                      <input type="date" min="1900-01-01" max="2100-12-31" onInput={enforceFourDigitDateYear} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-gray-700 focus:ring-2 focus:ring-blue-100 outline-none transition" value={editForm.planEndDate} onChange={(e) => setEditForm({ ...editForm, planEndDate: limitDateYear(e.target.value) })} />
+                      <input type="date" min="1900-01-01" max="2100-12-31" onInput={enforceFourDigitDateYear} className="yume-input yume-input-soft font-mono" value={editForm.planEndDate} onChange={(e) => setEditForm({ ...editForm, planEndDate: limitDateYear(e.target.value) })} />
                       <button
                         type="button"
                         onClick={fitStartDateToSchedules}
-                        className="mt-2 w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                        className="yume-button yume-button-soft mt-2 w-full"
                       >
                         종료일 기준으로 시작일 맞추기
                       </button>
@@ -257,7 +257,7 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                     <textarea className="w-full bg-white border border-gray-300 rounded-xl p-4 text-sm text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none resize-none transition shadow-sm" rows={5} value={editForm.planMemo} onChange={(e) => setEditForm({ ...editForm, planMemo: e.target.value })} placeholder="여행에 대한 메모를 자유롭게 남겨보세요." />
                   </div>
                   {isOwner && <div className="pt-4 border-t border-gray-100 flex justify-center">
-                    <button disabled={isPlanDeletePending} onClick={handleDelete} className="rounded px-3 py-1.5 text-xs font-bold text-red-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:bg-amber-50 disabled:text-amber-600">{isPlanDeletePending ? '⏳ 삭제 대기 중…' : '🗑️ 이 여행 계획 삭제하기'}</button>
+                    <button type="button" disabled={isPlanDeletePending} onClick={handleDelete} className="yume-button yume-button-danger-outline">{isPlanDeletePending ? '⏳ 삭제 대기 중…' : '🗑️ 이 여행 계획 삭제하기'}</button>
                   </div>}
                 </div>
             )}

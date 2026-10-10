@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AdvancedMarker, Map, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import type { PublicPlanShareSchedule } from '../../types/planShare';
+import { MAP_COLORS } from '../../utils/mapStyles';
 
 type RoutePoint = {
   schedule: PublicPlanShareSchedule;
@@ -28,7 +29,7 @@ function SharedPlanRoute({ points }: { points: RoutePoint[] }) {
     const route = new mapsLibrary.Polyline({
       path: points.map(point => point.position),
       geodesic: true,
-      strokeColor: '#2563EB',
+      strokeColor: MAP_COLORS.route,
       strokeOpacity: 0.85,
       strokeWeight: 4,
       icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW }, offset: '50%', repeat: '100px' }],

@@ -4,6 +4,7 @@ import { addTime } from "../../utils/scheduleUtils";
 import { getSpotTypeInfo } from "../../utils/spotUtils";
 import type { DayScheduleResponse } from "../../types/schedule";
 import type { ExportOptions, ExportSection } from "./scheduleExportUtils";
+import { MAP_COLORS } from "../../utils/mapStyles";
 
 // 🛠️ [유틸] 메모 파싱용 (인저리 타임 태그만 처리)
 const getInjuryTime = (memo: string | null | undefined, tag: string) => {
@@ -222,7 +223,7 @@ export const ImageExportModal = ({ isOpen, onClose, onConfirm, options, setOptio
                             <ModalMapController points={points} onStateChange={setMapState} />
                             {points.map((p, i) => (
                                 <AdvancedMarker key={i} position={p}>
-                                    <Pin background={'#3B82F6'} glyphColor={'white'} borderColor={'#2563EB'} scale={0.8} />
+                                    <Pin background={MAP_COLORS.route} glyphColor={'white'} borderColor={MAP_COLORS.route} scale={0.8} />
                                 </AdvancedMarker>
                             ))}
                         </Map>
@@ -239,8 +240,8 @@ export const ImageExportModal = ({ isOpen, onClose, onConfirm, options, setOptio
                 {!isValid && <p className="text-xs text-red-500 font-bold mb-4 text-center animate-pulse">⚠️ 지도 또는 일정 중 하나는 반드시 선택해야 합니다.</p>}
 
                 <div className="flex gap-2 shrink-0">
-                    <button onClick={onClose} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500 hover:bg-gray-200 transition">취소</button>
-                    <button onClick={() => onConfirm(mapState)} disabled={!isValid} className={`flex-[2] py-3 text-white rounded-xl font-bold shadow-md transition ${isValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'}`}>이대로 저장하기</button>
+                    <button type="button" onClick={onClose} className="yume-button yume-button-secondary flex-1">취소</button>
+                    <button type="button" onClick={() => onConfirm(mapState)} disabled={!isValid} className="yume-button yume-button-primary flex-[2]">이대로 저장하기</button>
                 </div>
             </div>
         </div>

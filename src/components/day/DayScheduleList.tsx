@@ -103,13 +103,14 @@ export default function DayScheduleList({
             <SortableContext items={validScheduleIds} strategy={verticalListSortingStrategy}>
                 <div className="space-y-4">
                     {(!schedules || schedules.length === 0) && (
-                        <div
-                            className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 hover:text-blue-500 hover:border-blue-300 transition"
+                        <button
+                            type="button"
+                            className="yume-empty-state w-full px-4 py-10 text-center text-gray-500 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                             onClick={() => onInsert(0)}
                         >
                             <div className="text-3xl mb-2 grayscale opacity-50">🗺️</div>
                             <p className="font-bold text-sm">+ 첫 일정 추가하기</p>
-                        </div>
+                        </button>
                     )}
 
                     {(schedules || []).map((schedule, index) => {
@@ -171,7 +172,7 @@ export default function DayScheduleList({
                     {schedules && schedules.length > 0 && (
                         <button
                             onClick={() => onInsert(schedules.length)}
-                            className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 font-bold hover:border-orange-400 hover:text-orange-500 hover:bg-orange-50 transition text-sm"
+                            className="yume-button yume-button-primary w-full"
                         >
                             + 맨 아래에 장소 추가
                         </button>

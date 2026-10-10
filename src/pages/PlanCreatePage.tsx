@@ -181,7 +181,7 @@ export default function PlanCreatePage() {
                 rows={3}
                 value={form.planMemo}
                 placeholder="여행 테마나 계획을 적어보세요."
-                className="w-full px-4 py-2 border rounded-lg outline-none resize-none"
+                className="yume-input yume-input-soft resize-none"
                 onChange={handleTextChange}
             />
           </div>
@@ -189,7 +189,7 @@ export default function PlanCreatePage() {
           <button
               data-guide-target="plan-create-submit"
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition transform active:scale-95"
+              className="yume-button yume-button-primary w-full"
           >
             여행 생성하기
           </button>

@@ -202,7 +202,7 @@ export default function SpotDetailPage() {
     if (!spot || spot.id !== Number(id)) return <div className="max-w-3xl mx-auto p-6 space-y-4">
         {loadError ? <LoadErrorState message={loadError} retrying={loading} onRetry={() => void fetchDetail()} />
             : <p role="status" className="text-center p-12 text-gray-600">장소 정보를 불러오는 중...</p>}
-        <button type="button" onClick={() => navigate('/spots')} className="min-h-11 rounded-xl border px-4 text-sm font-bold text-gray-700">장소 목록으로</button>
+        <button type="button" onClick={() => navigate('/spots')} className="yume-button yume-button-secondary">장소 목록으로</button>
     </div>;
 
     const currentTypeInfo = getSpotTypeInfo(spot.spotType);
@@ -218,8 +218,8 @@ export default function SpotDetailPage() {
                     <div className="lg:w-2/3 p-6 md:p-10 space-y-6">
                         <div className="space-y-4">
                             <div className="flex items-center gap-4">
-                                <button onClick={() => navigate('/spots')} className="text-blue-500 font-bold text-sm hover:underline transition-all">← 목록</button>
-                                <button disabled={isSaving} onClick={handleToggleVisit} className={`min-h-11 px-4 py-1.5 rounded-full text-xs font-black border transition-all ${spot.isVisit ? 'bg-green-500 text-white border-green-500 shadow-md' : 'bg-white text-orange-500 border-orange-200'}`}>
+                                <button type="button" onClick={() => navigate('/spots')} className="yume-button yume-button-secondary rounded-full">← 목록</button>
+                                <button type="button" aria-pressed={spot.isVisit} disabled={isSaving} onClick={handleToggleVisit} className={`yume-button rounded-full ${spot.isVisit ? 'yume-button-success' : 'yume-button-warm'}`}>
                                     {spot.isVisit ? '✓ 방문 완료' : '+ 방문 체크'}
                                 </button>
                             </div>
@@ -231,16 +231,16 @@ export default function SpotDetailPage() {
                                     <input id="spot-edit-name" ref={nameInputRef} maxLength={200} aria-invalid={Boolean(nameError)} aria-describedby={nameError ? 'spot-name-error' : undefined} aria-label="장소 이름" className="w-full text-3xl md:text-5xl font-black p-2 border-b-4 border-blue-100 focus:border-blue-500 outline-none bg-transparent" value={editForm.spotName} onChange={e => setEditForm({...editForm, spotName: e.target.value})} autoFocus />
                                     {nameError && <p id="spot-name-error" role="alert" className="text-sm text-red-700">{nameError}</p>}
                                     <label htmlFor="spot-edit-type" className="block text-sm font-bold text-gray-700">장소 유형</label>
-                                    <select id="spot-edit-type" className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none" value={editForm.spotType} onChange={e => setEditForm({...editForm, spotType: e.target.value as SpotType})}>
+                                    <select id="spot-edit-type" className="yume-input yume-input-soft font-bold" value={editForm.spotType} onChange={e => setEditForm({...editForm, spotType: e.target.value as SpotType})}>
                                         {Object.entries(SPOT_TYPE_INFO).map(([key, info]) => (
                                             <option key={key} value={key}>{info.icon} {info.label}</option>
                                         ))}
                                     </select>
                                     <label htmlFor="spot-edit-description" className="block text-sm font-bold text-gray-700">설명 (선택)</label>
-                                    <textarea id="spot-edit-description" className="w-full p-4 bg-gray-50 rounded-xl text-sm outline-none min-h-[100px] resize-none" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} placeholder="설명을 입력하세요." />
+                                    <textarea id="spot-edit-description" className="yume-input yume-input-soft min-h-[100px] resize-none" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} placeholder="설명을 입력하세요." />
                                     <div className="flex gap-2">
-                                        <button type="submit" className="min-h-11 bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-blue-200">{isSaving ? '저장 중…' : saveError ? '저장 다시 시도' : '저장'}</button>
-                                        <button type="button" onClick={() => { setIsEditing(false); setEditForm(toEditForm(spot)); setSaveError(null); setNameError(null); }} className="bg-gray-100 text-gray-500 px-6 py-2.5 rounded-xl font-bold text-sm">취소</button>
+                                        <button type="submit" className="yume-button yume-button-primary px-6">{isSaving ? '저장 중…' : saveError ? '저장 다시 시도' : '저장'}</button>
+                                        <button type="button" onClick={() => { setIsEditing(false); setEditForm(toEditForm(spot)); setSaveError(null); setNameError(null); }} className="yume-button yume-button-secondary px-6">취소</button>
                                     </div>
                                     </fieldset>
                                     {saveError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{saveError}</p>}
@@ -253,8 +253,8 @@ export default function SpotDetailPage() {
                                         <span className={`px-4 py-2 rounded-xl text-sm font-black shadow-sm flex items-center gap-2 ${currentTypeInfo.color}`}>
                                             {currentTypeInfo.icon} {currentTypeInfo.label}
                                         </span>
-                                        <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="bg-white text-blue-600 border border-blue-50 px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors flex items-center gap-2 shadow-sm">🗺️ 구글 지도</a>
-                                        <button onClick={() => { setEditForm(toEditForm(spot)); setSaveError(null); setNameError(null); setIsEditing(true); }} className="min-h-11 text-gray-500 font-bold text-xs hover:text-blue-500 px-3 transition-colors flex items-center gap-1">✏️ 정보 수정</button>
+                                        <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="yume-button yume-button-soft">🗺️ 구글 지도</a>
+                                        <button onClick={() => { setEditForm(toEditForm(spot)); setSaveError(null); setNameError(null); setIsEditing(true); }} className="yume-button yume-button-ghost text-xs">✏️ 정보 수정</button>
                                     </div>
                                     <p className="text-gray-500 text-base md:text-lg font-medium border-t border-gray-100 mt-6 pt-6 leading-relaxed italic">
                                         {spot.description || "등록된 설명이 없습니다."}
@@ -305,7 +305,7 @@ export default function SpotDetailPage() {
                                 <h3 className="text-xl md:text-2xl font-black text-gray-900 flex items-center gap-3">
                                     <span className="w-10 h-10 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center text-lg">🛍</span> 기념품 기록
                                 </h3>
-                                <button onClick={() => setIsAddingPurchase(!isAddingPurchase)} className={`px-5 py-2 rounded-xl font-bold text-xs transition-all shadow-md active:scale-95 ${isAddingPurchase ? 'bg-gray-100 text-gray-500' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                                <button onClick={() => setIsAddingPurchase(!isAddingPurchase)} className={`yume-button ${isAddingPurchase ? 'yume-button-secondary' : 'yume-button-primary'}`}>
                                     {isAddingPurchase ? '닫기' : '+ 새 기념품 추가'}
                                 </button>
                             </div>

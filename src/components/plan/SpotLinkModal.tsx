@@ -69,7 +69,7 @@ export default function SpotLinkModal({ planId, groups, onClose, onChanged }: Pr
   const resolveSpot = async (spot: SpotResponse) => {
     if (spot.id) return spot;
     const place = new google.maps.places.Place({ id: spot.placeId });
-    await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location', 'types'] });
+    await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location', 'types', 'primaryType'] });
     if (!place.location) throw new Error('Google 장소의 위치를 확인하지 못했습니다.');
     const existing = (await getMySpots({ keyword: place.displayName || spot.spotName, page: 0, size: 50 })).content
       .find(item => item.placeId === spot.placeId);
@@ -78,7 +78,7 @@ export default function SpotLinkModal({ planId, groups, onClose, onChanged }: Pr
       placeId: spot.placeId,
       spotName: place.displayName || spot.spotName,
       address: place.formattedAddress || spot.address || '',
-      spotType: mapGoogleTypeToSpotType(place.types || []),
+      spotType: mapGoogleTypeToSpotType(place.types || [], place.primaryType),
       lat: place.location.lat(),
       lng: place.location.lng(),
       isVisit: false,

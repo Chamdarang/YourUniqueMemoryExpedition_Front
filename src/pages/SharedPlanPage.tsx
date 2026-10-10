@@ -35,7 +35,7 @@ export default function SharedPlanPage() {
   const refreshRequestId = useRef(0);
   const dayRequestIds = useRef<Record<number, number>>({});
   const tokenRef = useRef(token);
-  const loggedIn = Boolean(localStorage.getItem('accessToken'));
+  const loggedIn = Boolean(localStorage.getItem('username'));
 
   const continueToLogin = () => {
     try { sessionStorage.setItem('yume:pending-edit-share-token', token); } catch { /* Link remains in this page if storage is unavailable. */ }
@@ -152,7 +152,7 @@ export default function SharedPlanPage() {
           <div className="text-4xl">🔒</div>
           <h1 className="mt-4 text-xl font-black text-slate-900">공유 일정을 열 수 없습니다</h1>
           <p className="mt-2 text-sm leading-relaxed text-slate-500">{error || '공유 링크가 만료되었거나 더 이상 사용할 수 없습니다.'}</p>
-          <Link to="/" className="mt-6 inline-flex rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-700">YUME 홈</Link>
+          <Link to="/" className="yume-button yume-button-primary mt-6">YUME 홈</Link>
         </section>
       </main>
     );
@@ -175,7 +175,7 @@ export default function SharedPlanPage() {
           {plan.accessMode === 'EDIT' && <div className="mt-4 rounded-xl bg-white p-4 text-slate-800">
             <p className="text-sm font-semibold">함께 편집하려면 YUME 계정으로 참여해 주세요.</p>
             {acceptError && <p role="alert" className="mt-2 text-xs text-red-600">{acceptError}</p>}
-            {loggedIn ? <button type="button" disabled={accepting} onClick={() => void acceptEditAccess()} className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{accepting ? '참여 중…' : '편집자로 참여'}</button> : <button type="button" onClick={continueToLogin} className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">로그인하고 참여</button>}
+            {loggedIn ? <button type="button" disabled={accepting} onClick={() => void acceptEditAccess()} className="yume-button yume-button-primary mt-3">{accepting ? '참여 중…' : '편집자로 참여'}</button> : <button type="button" onClick={continueToLogin} className="yume-button yume-button-primary mt-3">로그인하고 참여</button>}
           </div>}
         </header>
 
@@ -200,7 +200,7 @@ export default function SharedPlanPage() {
               ) : dayErrors[day.dayOrder] ? (
                 <div className="px-5 py-6 text-center">
                   <p role="alert" className="text-sm text-red-700">{dayErrors[day.dayOrder]}</p>
-                  <button type="button" onClick={() => void loadDaySchedules(day.dayOrder)} className="mt-3 min-h-10 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white">다시 시도</button>
+                  <button type="button" onClick={() => void loadDaySchedules(day.dayOrder)} className="yume-button yume-button-primary mt-3">다시 시도</button>
                 </div>
               ) : Object.prototype.hasOwnProperty.call(daySchedules, day.dayOrder) ? <>
                 <SharedPlanDayMap schedules={daySchedules[day.dayOrder]} mapsEnabled={Boolean(GOOGLE_MAPS_API_KEY)} />

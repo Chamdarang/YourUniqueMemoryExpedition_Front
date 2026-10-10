@@ -41,12 +41,11 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
     const clientRequestId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
         : `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const headers = {
+    const headers: Record<string, string> = {
         ...authHeaders,
         'X-Request-ID': clientRequestId,
         ...(options.headers as Record<string, string>),
     };
-
     let response: Response;
     try {
         response = await fetch(getApiUrl(url), {

@@ -9,10 +9,10 @@ interface PlanCardProps {
 
 export default function PlanCard({ plan }: PlanCardProps) {
   return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition group">
+      <div className="yume-card yume-card-interactive overflow-hidden group">
 
         {/* 🎨 상단 컬러 포인트 */}
-        <div className="h-3 bg-blue-500 w-full" />
+        <div className="h-1.5 bg-blue-500 w-full" />
 
         <div className="p-6">
 
@@ -38,7 +38,7 @@ export default function PlanCard({ plan }: PlanCardProps) {
           {/* 하단 버튼 */}
           <Link
               to={`/plans/${plan.id}`}
-              className="block w-full text-center py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-blue-600 font-medium transition"
+              className="yume-button yume-button-primary w-full"
           >
             상세 일정 보기
           </Link>

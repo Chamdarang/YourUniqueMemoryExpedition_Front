@@ -116,32 +116,32 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="yume-toast-region fixed left-1/2 z-[20000] flex w-[min(92vw,430px)] -translate-x-1/2 flex-col gap-2" aria-live="polite">
         {toasts.map(toast => (
-          <div key={toast.id} className={`flex flex-wrap items-center gap-2 rounded-2xl border px-4 py-3 shadow-xl ${toast.type === 'error' ? 'border-red-200 bg-red-50 text-red-800' : toast.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' : 'border-blue-200 bg-white text-gray-700'}`}>
+          <div key={toast.id} className={`yume-card flex flex-wrap items-center gap-2 px-4 py-3 shadow-lg ${toast.type === 'error' ? 'yume-card-error' : toast.type === 'success' ? 'yume-card-success' : 'yume-card-toast-info'}`}>
             <span className="min-w-0 flex-1 basis-24 text-sm font-bold">{toast.message}</span>
             {toast.actions?.map(action => (
               <button
                 key={action.label}
                 type="button"
                 onClick={action.onClick}
-                className={`shrink-0 rounded-lg min-h-11 px-3 py-1.5 text-xs font-black text-white ${action.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                className={`yume-button shrink-0 px-3 ${action.danger ? 'yume-button-danger-solid' : 'yume-button-primary'}`}
               >
                 {action.label}
               </button>
             ))}
             {!toast.actions?.length && (
-              <button type="button" onClick={() => dismiss(toast.id)} aria-label="알림 닫기" className="min-h-11 min-w-11 shrink-0 text-gray-400 hover:text-gray-700">×</button>
+              <button type="button" onClick={() => dismiss(toast.id)} aria-label="알림 닫기" className="yume-icon-button min-h-11 min-w-11 shrink-0">×</button>
             )}
           </div>
         ))}
       </div>
       {confirmState && (
         <div ref={dialogRef} tabIndex={-1} className="fixed inset-0 z-[21000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="feedback-confirm-title">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+          <div className="yume-card w-full max-w-sm p-6 shadow-2xl">
             <h2 id="feedback-confirm-title" className="text-xl font-black text-gray-900">{confirmState.title}</h2>
             <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-gray-500">{confirmState.message}</p>
             <div className="mt-6 flex gap-2">
-              <button type="button" onClick={() => closeConfirm(false)} className="flex-1 rounded-xl bg-gray-100 py-3 text-sm font-bold text-gray-600 hover:bg-gray-200">취소</button>
-              <button type="button" onClick={() => closeConfirm(true)} className={`flex-1 rounded-xl py-3 text-sm font-bold text-white shadow ${confirmState.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}>{confirmState.confirmLabel || '확인'}</button>
+              <button type="button" onClick={() => closeConfirm(false)} className="yume-button yume-button-secondary flex-1">취소</button>
+              <button type="button" onClick={() => closeConfirm(true)} className={`yume-button flex-1 ${confirmState.danger ? 'yume-button-danger-solid' : 'yume-button-primary'}`}>{confirmState.confirmLabel || '확인'}</button>
             </div>
           </div>
         </div>

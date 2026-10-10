@@ -14,6 +14,7 @@ import DayScheduleList from "../day/DayScheduleList";
 import { useFeedback } from "../common/useFeedback";
 import LoadErrorState from '../common/LoadErrorState';
 import EditConflictPanel, { type EditConflictField } from '../common/EditConflictPanel';
+import { getPlanDayColor } from '../../utils/mapStyles';
 
 interface Props {
     id: number | string;
@@ -42,9 +43,6 @@ interface Props {
     focusRequest?: { scheduleId: number; key: number; openEditor: boolean };
     onTransferSchedule: (sourceDay: PlanDayResponse, schedule: DayScheduleResponse) => void;
 }
-
-const DAY_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
-const getDayColor = (dayOrder: number) => DAY_COLORS[(dayOrder - 1) % DAY_COLORS.length];
 
 export default function PlanDayItem({
                                         id, dayOrder, routeDate, data, showInjury, isOwner, onUpdateDayInfo,
@@ -316,7 +314,7 @@ export default function PlanDayItem({
     };
 
     if (!data) return null;
-    const dayColor = getDayColor(dayOrder);
+    const dayColor = getPlanDayColor(dayOrder);
 
     return (
         <div ref={setNodeRef} style={style} data-plan-day-id={data.id} data-plan-day-order={dayOrder} aria-busy={isDayDeletePending} className={`relative mb-4 scroll-mt-24 transition ${isDayDeletePending ? 'opacity-70' : ''}`}>
@@ -335,11 +333,11 @@ export default function PlanDayItem({
                         <div className="flex-1 min-w-0 mr-2">
                             {isEditingInfo ? (
                                 <div className="flex flex-col gap-2" onClick={e => e.stopPropagation()}>
-                                    <input type="text" className="w-full border border-orange-300 rounded px-2 py-1 text-sm font-bold focus:outline-none" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} autoFocus />
-                                    <textarea className="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none" value={editMemo} onChange={(e) => setEditMemo(e.target.value)} rows={2} />
+                                    <input type="text" className="yume-input yume-input-soft font-bold" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} autoFocus />
+                                    <textarea className="yume-input yume-input-soft resize-none" value={editMemo} onChange={(e) => setEditMemo(e.target.value)} rows={2} />
                                     <div className="flex gap-2 mt-1">
-                                        <button onClick={handleSaveInfo} className="bg-orange-500 text-white text-xs px-3 py-1.5 rounded font-bold hover:bg-orange-600">저장</button>
-                                        <button onClick={handleCancelEdit} className="bg-gray-100 text-gray-600 text-xs px-3 py-1.5 rounded font-bold hover:bg-gray-200">취소</button>
+                                        <button type="button" onClick={handleSaveInfo} className="yume-button yume-button-primary">저장</button>
+                                        <button type="button" onClick={handleCancelEdit} className="yume-button yume-button-secondary">취소</button>
                                     </div>
                                 </div>
                             ) : (
@@ -364,7 +362,7 @@ export default function PlanDayItem({
                                 <button
                                     type="button"
                                     onClick={(e) => { e.stopPropagation(); onToggleMapVisibility(data.id); }}
-                                    className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-2.5 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 xl:px-3 ${isVisibleOnMap ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+                                    className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-xl border px-2.5 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 xl:px-3 ${isVisibleOnMap ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
                                     title={isVisibleOnMap ? '지도에서 이 일차 숨기기' : '지도에 이 일차 표시'}
                                     aria-label={isVisibleOnMap ? `${data.dayName} 지도에서 숨기기` : `${data.dayName} 지도에 표시`}
                                     aria-pressed={isVisibleOnMap}
@@ -380,7 +378,7 @@ export default function PlanDayItem({
                                         type="button"
                                         disabled={isDayActionPending}
                                         onClick={() => setIsActionMenuOpen((open) => !open)}
-                                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-wait disabled:opacity-50"
+                                        className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-wait disabled:opacity-50"
                                         aria-label="하루 일정 관리"
                                         title="하루 일정 관리"
                                     >

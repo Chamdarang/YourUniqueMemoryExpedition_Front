@@ -510,17 +510,17 @@ export default function GeneralImportModal({ file, onClose, onImported }: Props)
             <div className="sticky bottom-0 mt-10 flex gap-3 rounded-2xl border border-gray-200 bg-white/95 p-4 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur">
               {step === 1 ? (
                 <>
-                  <button type="button" disabled={busy} onClick={onClose} className="rounded-xl bg-gray-100 px-5 py-3 font-bold text-gray-600">취소</button>
-                  <button type="button" disabled={busy} onClick={goNext} className="rounded-xl border border-blue-200 bg-white px-5 py-3 font-bold text-blue-700">세부 설정</button>
-                  <button type="button" disabled={busy} onClick={makePreview} className="flex-1 rounded-xl bg-blue-600 px-5 py-3 font-bold text-white disabled:opacity-50">{busy ? '분석 중...' : '자동 설정으로 미리보기'}</button>
+                  <button type="button" disabled={busy} onClick={onClose} className="yume-button yume-button-secondary">취소</button>
+                  <button type="button" disabled={busy} onClick={goNext} className="yume-button yume-button-soft">세부 설정</button>
+                  <button type="button" disabled={busy} onClick={makePreview} className="yume-button yume-button-primary flex-1">{busy ? '분석 중...' : '자동 설정으로 미리보기'}</button>
                 </>
               ) : (
                 <>
-                  <button type="button" disabled={busy} onClick={() => { setError(''); setStep(current => current - 1); }} className="flex-1 rounded-xl bg-gray-100 py-3 font-bold text-gray-600">이전</button>
+                  <button type="button" disabled={busy} onClick={() => { setError(''); setStep(current => current - 1); }} className="yume-button yume-button-secondary flex-1">이전</button>
                   {step < 3 ? (
-                    <button type="button" disabled={busy} onClick={goNext} className="flex-[2] rounded-xl bg-blue-600 py-3 font-bold text-white disabled:opacity-50">다음</button>
+                    <button type="button" disabled={busy} onClick={goNext} className="yume-button yume-button-primary flex-[2]">다음</button>
                   ) : (
-                    <button type="button" disabled={busy} onClick={makePreview} className="flex-[2] rounded-xl bg-blue-600 py-3 font-bold text-white disabled:opacity-50">{busy ? '분석 중...' : '미리보기 만들기'}</button>
+                    <button type="button" disabled={busy} onClick={makePreview} className="yume-button yume-button-primary flex-[2]">{busy ? '분석 중...' : '미리보기 만들기'}</button>
                   )}
                 </>
               )}
@@ -583,8 +583,8 @@ export default function GeneralImportModal({ file, onClose, onImported }: Props)
               </div>)}
             </div>
             <div className="mt-6 flex gap-3">
-              <button type="button" disabled={busy} onClick={() => { setPreview(null); setStep(1); }} className="flex-1 rounded-xl bg-gray-100 py-3 font-bold text-gray-600">다시 설정</button>
-              <button type="button" disabled={busy || preview.summary.importedSchedules === 0} onClick={importPreview} className="flex-[2] rounded-xl bg-blue-600 py-3 font-bold text-white disabled:opacity-50">{busy ? '등록 중...' : '이 계획으로 등록'}</button>
+              <button type="button" disabled={busy} onClick={() => { setPreview(null); setStep(1); }} className="yume-button yume-button-secondary flex-1">다시 설정</button>
+              <button type="button" disabled={busy || preview.summary.importedSchedules === 0} onClick={importPreview} className="yume-button yume-button-primary flex-[2]">{busy ? '등록 중...' : '이 계획으로 등록'}</button>
             </div>
           </div>
         ) : null}

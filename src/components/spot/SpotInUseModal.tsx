@@ -109,7 +109,7 @@ export default function SpotInUseModal({ isOpen, onClose, usageList, onSpotDelet
                 <div className="flex gap-2">
                     <button
                         onClick={onClose}
-                        className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition"
+                        className="yume-button yume-button-secondary flex-1"
                     >
                         닫기
                     </button>
@@ -119,7 +119,7 @@ export default function SpotInUseModal({ isOpen, onClose, usageList, onSpotDelet
                             onClose();
                         }}
                         disabled={conflicts.length > 0}
-                        className="flex-1 py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="yume-button yume-button-danger-solid flex-1 disabled:cursor-not-allowed"
                     >
                         장소 삭제하기
                     </button>

@@ -21,8 +21,8 @@ function reply(route: Route, data: unknown, status = 200) {
 }
 async function setup(page: Page) {
   await page.addInitScript(() => {
-    localStorage.setItem('accessToken', 'e2e-token');
     localStorage.setItem('username', 'testuser');
+    localStorage.setItem('accessToken', 'e2e-token');
     for (const id of ['plans', 'plan-detail', 'days', 'day-detail', 'spots', 'spot-detail']) localStorage.setItem(`yume:page-guide:testuser:${id}`, 'done');
   });
   await page.route('**/api/**', route => {

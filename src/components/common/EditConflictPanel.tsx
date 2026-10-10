@@ -63,9 +63,9 @@ export default function EditConflictPanel({ title, fields, onApply, onUseLatest,
           })}
         </div>
         <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
-          <button type="button" onClick={onCancel} className="min-h-10 rounded-lg border border-slate-300 px-4 text-sm font-bold text-slate-700">계속 편집</button>
-          <button type="button" onClick={onUseLatest} className="min-h-10 rounded-lg border border-slate-300 px-4 text-sm font-bold text-slate-700">최신 저장값으로 바꾸기</button>
-          <button type="button" disabled={unresolved.length > 0} onClick={applyMerge} className="min-h-10 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">선택한 값으로 병합 저장</button>
+          <button type="button" onClick={onCancel} className="yume-button yume-button-secondary px-4">계속 편집</button>
+          <button type="button" onClick={onUseLatest} className="yume-button yume-button-secondary px-4">최신 저장값으로 바꾸기</button>
+          <button type="button" disabled={unresolved.length > 0} onClick={applyMerge} className="yume-button yume-button-primary px-4">선택한 값으로 병합 저장</button>
         </div>
       </section>
     </div>

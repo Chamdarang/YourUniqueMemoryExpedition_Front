@@ -25,7 +25,7 @@ export default function PurchaseForm({ value, onChange, onSave, onCancel, editin
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState<FieldErrors>({});
     const id = (field: string) => `${prefix}-${field}`;
-    const inputStyle = 'min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900';
+    const inputStyle = 'yume-input';
 
     useEffect(() => {
         const frame = requestAnimationFrame(() => {
@@ -77,7 +77,7 @@ export default function PurchaseForm({ value, onChange, onSave, onCancel, editin
     return (
         <form ref={formRef} aria-label={editing ? '기념품 정보 수정' : '새 기념품 등록'} aria-busy={saving} noValidate
             onSubmit={event => { event.preventDefault(); void save(); }}
-            className="@container scroll-mt-4 space-y-4 rounded-3xl border border-gray-200 bg-gray-50 p-5 md:p-6">
+            className="yume-card @container scroll-mt-4 space-y-4 p-5 md:p-6">
             <h3 className="font-bold text-gray-900">{editing ? '✏️ 기념품 정보 수정' : '🎁 새 기념품 등록'}</h3>
             <p className="text-xs leading-5 text-gray-600">{selectSpot ? '이름과 장소는 필수입니다.' : '현재 장소에 기념품을 기록합니다.'} 가격·분류·메모는 나중에 추가할 수 있어요.</p>
             {errors.save && <p role="alert" className="text-sm text-red-700">{errors.save}</p>}
@@ -97,8 +97,8 @@ export default function PurchaseForm({ value, onChange, onSave, onCancel, editin
                 </div>
                 {field('note', '메모 (선택)', <textarea id={id('note')} maxLength={500} rows={2} className={`${inputStyle} py-3`} value={value.note ?? ''} placeholder="예약 정보나 기억할 내용을 적어 주세요." onChange={event => update({ note: event.target.value })} />)}
                 <div className="flex flex-wrap justify-end gap-2">
-                    {onCancel && <button type="button" onClick={onCancel} className="min-h-11 rounded-xl border border-gray-300 bg-white px-5 text-sm font-semibold text-gray-700">취소</button>}
-                    <button type="submit" className="min-h-11 rounded-xl bg-pink-600 px-6 text-sm font-bold text-white hover:bg-pink-700">{saving ? '저장 중…' : editing ? '수정 완료' : '저장하기'}</button>
+                    {onCancel && <button type="button" onClick={onCancel} className="yume-button yume-button-secondary px-5">취소</button>}
+                    <button type="submit" className="yume-button yume-button-primary px-6">{saving ? '저장 중…' : editing ? '수정 완료' : '저장하기'}</button>
                 </div>
             </fieldset>
         </form>

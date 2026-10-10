@@ -1,5 +1,6 @@
 import type { DayRouteAuditLeg } from '../types/route';
 import { decodeGooglePolyline } from './polylineUtils';
+import { MAP_COLORS } from './mapStyles';
 
 interface RoutePointSource {
   lat: number | null;
@@ -52,7 +53,7 @@ export function drawAuditedRouteLeg({ mapsLibrary, map, leg, from, to }: DrawAud
     addPolyline({
       path,
       geodesic: false,
-      strokeColor: '#3B82F6',
+      strokeColor: MAP_COLORS.route,
       strokeOpacity: 0.8,
       strokeWeight: 5,
       zIndex: 20,
@@ -64,7 +65,7 @@ export function drawAuditedRouteLeg({ mapsLibrary, map, leg, from, to }: DrawAud
     });
 
     if (leg.status !== 'OK') {
-      const statusColor = leg.status === 'ERROR' ? '#ef4444' : '#f59e0b';
+      const statusColor = leg.status === 'ERROR' ? MAP_COLORS.error : MAP_COLORS.warning;
       addPolyline({
         path,
         geodesic: false,
@@ -78,7 +79,7 @@ export function drawAuditedRouteLeg({ mapsLibrary, map, leg, from, to }: DrawAud
       });
     }
   } else {
-    const color = leg.status === 'ERROR' ? '#ef4444' : leg.status === 'WARNING' ? '#f59e0b' : '#64748b';
+    const color = leg.status === 'ERROR' ? MAP_COLORS.error : leg.status === 'WARNING' ? MAP_COLORS.warning : MAP_COLORS.routeFallback;
     addPolyline({
       path,
       geodesic: true,

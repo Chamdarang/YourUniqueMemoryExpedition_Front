@@ -14,7 +14,7 @@ export default function PurchaseCard({ purchase, onToggleStatus, onEdit, onDelet
     const statusInfo = getPurchaseStatusInfo(purchase.status);
 
     return (
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm relative group hover:border-gray-200 transition-all">
+        <div className="yume-card yume-card-interactive relative p-5 group">
             <div className="flex justify-between items-start mb-3">
                 <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black border uppercase tracking-wider ${kindInfo.color}`}>
                   {kindInfo.icon} {kindInfo.label}
@@ -30,7 +30,7 @@ export default function PurchaseCard({ purchase, onToggleStatus, onEdit, onDelet
             <div className="mb-4">
                 <div className="flex items-center gap-2 mb-1.5">
                     <h4 className="font-black text-gray-900 text-lg truncate flex-1">{purchase.itemName}</h4>
-                    <button type="button" aria-label={`${purchase.itemName} 수정`} onClick={() => onEdit(purchase)} className="min-h-11 min-w-11 p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-all">✏️</button>
+                    <button type="button" aria-label={`${purchase.itemName} 수정`} onClick={() => onEdit(purchase)} className="yume-icon-button yume-icon-button-primary min-h-11 min-w-11">✏️</button>
                 </div>
                 <div className="flex items-baseline gap-1.5">
                     <span className="text-sm font-black text-blue-600 font-mono tracking-tighter">
@@ -48,7 +48,7 @@ export default function PurchaseCard({ purchase, onToggleStatus, onEdit, onDelet
 
             <div className="flex gap-2 pt-3 border-t border-gray-50">
                 {purchase.spotUserId && purchase.spotUserId !== 0 ? (
-                    <Link to={`/spots/${purchase.spotUserId}`} className="inline-flex min-h-11 flex-1 items-center justify-center py-2.5 text-center text-xs font-black text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                    <Link to={`/spots/${purchase.spotUserId}`} className="yume-button yume-button-secondary flex-1 text-center">
                         📍 장소확인
                     </Link>
                 ) : (
@@ -56,7 +56,7 @@ export default function PurchaseCard({ purchase, onToggleStatus, onEdit, onDelet
                         📍 장소미지정
                     </div>
                 )}
-                <button type="button" aria-label={`${purchase.itemName} 삭제`} onClick={() => onDelete(purchase.id)} className="min-h-11 min-w-11 flex-1 py-2.5 text-xs font-black text-red-400 bg-red-50/50 rounded-xl hover:bg-red-50 hover:text-red-600 transition-colors">
+                <button type="button" aria-label={`${purchase.itemName} 삭제`} onClick={() => onDelete(purchase.id)} className="yume-button yume-button-danger-outline flex-1">
                     삭제
                 </button>
             </div>

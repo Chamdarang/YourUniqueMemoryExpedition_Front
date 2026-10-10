@@ -9,7 +9,7 @@ interface DayCardProps {
 
 export default function DayCard({ day }: DayCardProps) {
   return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition group flex flex-col relative h-full">
+      <div className="yume-card yume-card-interactive overflow-hidden group flex flex-col relative h-full">
 
         {/* 상단 포인트 컬러 (오렌지) */}
         <div className="h-1.5 bg-orange-400 w-full" />
@@ -38,7 +38,7 @@ export default function DayCard({ day }: DayCardProps) {
           {/* 액션 버튼 */}
           <Link
               to={`/days/${day.id}`}
-              className="mt-auto block w-full text-center py-2.5 rounded-lg border border-gray-200 text-gray-600 font-bold text-sm hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200 transition"
+              className="yume-button yume-button-primary mt-auto w-full"
           >
             일정 짜기 ✏️
           </Link>

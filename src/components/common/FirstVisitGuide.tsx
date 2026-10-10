@@ -139,10 +139,10 @@ export default function FirstVisitGuide({ onClose, steps = onboardingSteps, labe
           <button type="button" onClick={onClose} className="min-h-11 min-w-11 -mr-1 -mt-1 shrink-0 rounded px-1 text-lg leading-none text-slate-400 hover:text-slate-700" aria-label="가이드 닫기">×</button>
         </div>
         <div className="mt-4 flex items-center justify-between">
-          <button type="button" onClick={onClose} className="text-sm text-slate-500 hover:text-slate-800">건너뛰기</button>
+          <button type="button" onClick={onClose} className="yume-button yume-button-ghost">건너뛰기</button>
           <div className="flex items-center gap-2">
-            {stepIndex > 0 && <button type="button" onClick={() => setStepIndex(index => index - 1)} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">이전</button>}
-            <button type="button" onClick={next} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">
+            {stepIndex > 0 && <button type="button" onClick={() => setStepIndex(index => index - 1)} className="yume-button yume-button-secondary">이전</button>}
+            <button type="button" onClick={next} className="yume-button yume-button-primary">
               {stepIndex === steps.length - 1 ? '시작하기' : '다음'}
             </button>
           </div>

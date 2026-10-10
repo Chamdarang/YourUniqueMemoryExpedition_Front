@@ -39,7 +39,7 @@ export default function SpotList({ spots, onDelete, onToggleVisit, filtered, onR
         {/* ------------------------------------------------------
           🖥️ [PC용 뷰] 테이블 형태
       ------------------------------------------------------ */}
-        <div className="hidden md:block bg-white border-2 border-gray-100 rounded-xl overflow-hidden shadow-sm">
+        <div className="yume-card hidden overflow-hidden md:block">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-100 table-fixed">
               <colgroup>

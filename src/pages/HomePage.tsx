@@ -21,6 +21,7 @@ import type { Transportation } from "../types/enums";
 import { useFeedback } from "../components/common/useFeedback";
 import { getOfflineHomeSnapshot } from "../utils/offlineHomeStorage";
 import FirstVisitGuide from "../components/common/FirstVisitGuide";
+import { MAP_COLORS } from "../utils/mapStyles";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
@@ -105,7 +106,7 @@ function MapDirections({ schedules }: { schedules: DayScheduleResponse[] }) {
         .filter(pos => !isNaN(pos.lat) && pos.lat !== 0);
     if (path.length > 0) {
       const newPolyline = new mapsLibrary.Polyline({
-        path, geodesic: true, strokeColor: "#3B82F6", strokeOpacity: 0.8, strokeWeight: 4,
+        path, geodesic: true, strokeColor: MAP_COLORS.route, strokeOpacity: 0.8, strokeWeight: 4,
         icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW }, offset: '50%', repeat: '50px' }]
       });
       newPolyline.setMap(map);
@@ -368,13 +369,13 @@ export default function HomePage() {
 
         <div data-guide-target="home-plan" className="flex-1 min-h-0 mt-3 overflow-hidden flex flex-col mb-4">
           {!upcomingPlan ? (
-              <div className="bg-white rounded-2xl p-8 border border-gray-200 text-center shadow-sm">
+              <div className="yume-card p-8 text-center">
                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">☕</div>
                 <h3 className="text-lg font-bold text-gray-800 mb-2">다음 여행을 준비해볼까요?</h3>
-                <Link to="/plans/create" className="inline-flex bg-blue-600 text-white font-bold py-3 px-6 rounded-xl transition hover:bg-blue-700">새 여행 계획하기</Link>
+              <Link to="/plans/create" className="yume-button yume-button-primary">새 여행 계획하기</Link>
               </div>
           ) : status === 'ONGOING' ? (
-              <div className="bg-white rounded-2xl shadow-sm border border-blue-100 overflow-hidden flex flex-col flex-1 min-h-0">
+              <div className="yume-card overflow-hidden flex flex-col flex-1 min-h-0">
                 <div className="bg-blue-50 p-4 border-b border-blue-100 flex justify-between items-center shrink-0">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
@@ -409,7 +410,7 @@ export default function HomePage() {
                             {displaySchedules.flatMap((schedule, index) => schedule.lat != null && schedule.lng != null ? [{ schedule, index }] : []).map(({ schedule, index }) => {
                               const isActive = (schedule.id === activeScheduleId || index === activeMovingIndex);
                               return <AdvancedMarker key={schedule.id} position={{ lat: Number(schedule.lat), lng: Number(schedule.lng) }} zIndex={isActive ? 100 : 1}>
-                                <NumberedMarker number={isSimpleDay ? undefined : index + 1} color={isActive ? "#EF4444" : "#3B82F6"} active={isActive} />
+                                <NumberedMarker number={isSimpleDay ? undefined : index + 1} color={isActive ? MAP_COLORS.current : MAP_COLORS.route} active={isActive} />
                               </AdvancedMarker>;
                             })}
                           </Map>
@@ -435,7 +436,7 @@ export default function HomePage() {
                                     <div className="inline-flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100 shadow-sm animate-in fade-in slide-in-from-right-1 w-auto max-w-full">
                                       <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse shrink-0"></span>
                                       {/* 텍스트는 가용한 공간 안에서만 최대한 노출 후 말줄임표 */}
-                                      <span className="text-[10px] font-bold text-blue-700 truncate whitespace-nowrap">
+                                      <span className="text-xs font-bold text-blue-700 truncate whitespace-nowrap">
                                       {currentStatusText}
                                     </span>
                                     </div>
@@ -443,24 +444,24 @@ export default function HomePage() {
                               </div>
 
                               {/* 시간 표시: 우측 고정 */}
-                              <span className="text-[10px] text-gray-400 font-mono shrink-0">
+                              <span className="text-xs text-gray-500 font-mono shrink-0">
                                 {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                               </span>
                             </div>
                             <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-blue-100 bg-white px-3 py-2">
                               <div>
-                                <div className="text-[10px] font-bold text-gray-400">당일 지연 보정</div>
+                                <div className="text-xs font-bold text-gray-500">당일 지연 보정</div>
                                 <div className={`text-sm font-black ${delayMinutes === 0 ? 'text-gray-500' : 'text-orange-600'}`}>
                                   {delayMinutes === 0 ? '원래 시간' : `${delayMinutes > 0 ? '+' : ''}${delayMinutes}분`}
                                 </div>
                               </div>
-                              <div className="flex gap-1">
-                                <button type="button" onClick={() => changeDelay(delayMinutes - 5)} className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-bold text-gray-600 hover:bg-gray-50">-5</button>
-                                <button type="button" onClick={() => changeDelay(delayMinutes + 5)} className="rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-bold text-orange-600 hover:bg-orange-100">+5</button>
-                                <button type="button" onClick={() => changeDelay(0)} disabled={delayMinutes === 0} className="rounded-lg px-2.5 py-1 text-xs font-bold text-gray-400 hover:bg-gray-100 disabled:opacity-30">초기화</button>
+                              <div className="flex gap-1.5">
+                                <button type="button" onClick={() => changeDelay(delayMinutes - 5)} className="yume-button yume-button-secondary px-3">-5분</button>
+                                <button type="button" onClick={() => changeDelay(delayMinutes + 5)} className="yume-button yume-button-warm px-3">+5분</button>
+                                <button type="button" onClick={() => changeDelay(0)} disabled={delayMinutes === 0} className="yume-button yume-button-secondary px-3">초기화</button>
                               </div>
                             </div>
-                            <p className="text-[8px] text-orange-400 font-medium leading-none mt-0.5">※ 주황색 시간은 여유시간 포함</p>
+                            <p className="text-xs text-orange-600 font-medium mt-1">※ 주황색 시간은 여유시간 포함</p>
                           </div>
 
                           <div className="space-y-0 mt-2 pb-10 relative z-10">
@@ -484,7 +485,7 @@ export default function HomePage() {
                                           <div className="flex-1 min-w-0 py-1 pl-2">
                                             <div className={`flex items-center gap-2 rounded-lg px-3 py-1.5 border transition-all ${isMovingActive ? 'bg-blue-100 border-blue-300 ring-1 ring-blue-300' : 'bg-white border-blue-50/50'}`}>
                                               <span className={`text-xs font-bold truncate ${isMovingActive ? 'text-blue-800' : 'text-blue-600'}`}>{cleanMemoTags(item.movingMemo) || `${getTransLabel(item.transportation)} 이동`}</span>
-                                              <span className="text-[10px] font-bold text-gray-500 whitespace-nowrap">
+                                                  <span className="text-xs font-bold text-gray-600 whitespace-nowrap">
                                                   {item.movingDuration - mi}{mi > 0 && <span className="text-orange-500 ml-0.5">+{mi}</span>}분
                                               </span>
                                             </div>
@@ -502,7 +503,7 @@ export default function HomePage() {
                                         <div className={`rounded-xl p-3 border shadow-sm transition relative overflow-hidden ${item.isChecked ? 'border-green-200 bg-green-50/70 opacity-75' : item.isSkipped ? 'border-gray-200 bg-gray-100 opacity-60' : isActive ? 'bg-white border-orange-300 ring-2 ring-orange-100' : 'bg-white border-gray-200'}`}>
                                           <div className="flex justify-between items-start gap-2">
                                             <h4 className={`text-sm font-bold truncate flex-1 ${isActive ? 'text-gray-900' : 'text-gray-600'}`}>{item.spotName || "장소 미정"}</h4>
-                                            <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                                            <span className="text-xs text-gray-500 whitespace-nowrap">
                                                 {item.duration - si}{si > 0 && <span className="text-orange-500 ml-0.5">+{si}</span>}분
                                             </span>
                                           </div>
@@ -513,15 +514,15 @@ export default function HomePage() {
                                                 href={`https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lng}&travelmode=${getTravelMode(item.transportation)}`}
                                                 target="_blank"
                                                 rel="noreferrer"
-                                                className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
+                                                className="yume-button yume-button-soft"
                                               >
                                                 길찾기 시작
                                               </a>
                                             )}
-                                            <button type="button" disabled={isOffline || isUsingCachedData} onClick={() => void handleComplete(item)} className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-50 ${item.isChecked ? 'border-green-300 bg-green-600 text-white' : 'border-green-200 bg-white text-green-700'}`}>
+                                            <button type="button" aria-pressed={item.isChecked} disabled={isOffline || isUsingCachedData} onClick={() => void handleComplete(item)} className={`yume-button ${item.isChecked ? 'yume-button-success' : 'yume-button-success-outline'}`}>
                                               {item.isChecked ? '완료 취소' : '도착 완료'}
                                             </button>
-                                            <button type="button" disabled={isOffline || isUsingCachedData} onClick={() => void handleSkip(item)} className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-50 ${item.isSkipped ? 'border-gray-400 bg-gray-600 text-white' : 'border-gray-200 bg-white text-gray-500'}`}>
+                                            <button type="button" aria-pressed={item.isSkipped} disabled={isOffline || isUsingCachedData} onClick={() => void handleSkip(item)} className={`yume-button ${item.isSkipped ? 'yume-button-neutral-solid' : 'yume-button-neutral-outline'}`}>
                                               {item.isSkipped ? '건너뛰기 취소' : '건너뛰기'}
                                             </button>
                                           </div>

@@ -119,9 +119,9 @@ export default function AccountSettingsPage() {
         <p className="mt-2 text-sm text-slate-500">프로필과 로그인 정보를 관리할 수 있어요.</p>
       </header>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+      <section className="yume-card p-5 md:p-6">
         <h2 className="text-lg font-bold text-slate-900">프로필</h2>
-        <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3">
+        <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3">
           <p className="text-xs font-medium text-slate-500">로그인 아이디</p>
           <p className="mt-1 font-semibold text-slate-800">{profile?.username || localStorage.getItem('username')}</p>
           <p className="mt-1 text-xs text-slate-500">아이디는 공동 계획 초대와 로그인에 사용됩니다.</p>
@@ -129,49 +129,49 @@ export default function AccountSettingsPage() {
         <form onSubmit={handleNicknameSubmit} className="mt-5">
           <label htmlFor="account-nickname" className="mb-1.5 block text-sm font-semibold text-slate-700">닉네임</label>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <input id="account-nickname" value={nickname} onChange={event => setNickname(event.target.value)} maxLength={100} required className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
-            <button type="submit" disabled={savingNickname || !nickname.trim() || nickname.trim() === profile?.nickname} className="rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">{savingNickname ? '저장 중…' : '닉네임 저장'}</button>
+            <input id="account-nickname" value={nickname} onChange={event => setNickname(event.target.value)} maxLength={100} required className="yume-input min-w-0 flex-1" />
+            <button type="submit" disabled={savingNickname || !nickname.trim() || nickname.trim() === profile?.nickname} className="yume-button yume-button-primary">{savingNickname ? '저장 중…' : '닉네임 저장'}</button>
           </div>
         </form>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+      <section className="yume-card p-5 md:p-6">
         <h2 className="text-lg font-bold text-slate-900">비밀번호 변경</h2>
         <p className="mt-1 text-sm text-slate-500">현재 비밀번호를 확인한 뒤 새 비밀번호로 변경합니다.</p>
         <form onSubmit={handlePasswordSubmit} className="mt-4 space-y-4">
           <div>
             <label htmlFor="current-password" className="mb-1.5 block text-sm font-semibold text-slate-700">현재 비밀번호</label>
-            <input id="current-password" type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} required className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+            <input id="current-password" type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} required className="yume-input" />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="new-password" className="mb-1.5 block text-sm font-semibold text-slate-700">새 비밀번호</label>
-              <input id="new-password" type="password" autoComplete="new-password" minLength={4} maxLength={72} value={newPassword} onChange={event => setNewPassword(event.target.value)} required className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+              <input id="new-password" type="password" autoComplete="new-password" minLength={4} maxLength={72} value={newPassword} onChange={event => setNewPassword(event.target.value)} required className="yume-input" />
             </div>
             <div>
               <label htmlFor="new-password-confirm" className="mb-1.5 block text-sm font-semibold text-slate-700">새 비밀번호 확인</label>
-              <input id="new-password-confirm" type="password" autoComplete="new-password" minLength={4} maxLength={72} value={newPasswordConfirm} onChange={event => setNewPasswordConfirm(event.target.value)} required className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+              <input id="new-password-confirm" type="password" autoComplete="new-password" minLength={4} maxLength={72} value={newPasswordConfirm} onChange={event => setNewPasswordConfirm(event.target.value)} required className="yume-input" />
             </div>
           </div>
-          <button type="submit" disabled={savingPassword || !currentPassword || !newPassword || !newPasswordConfirm} className="rounded-xl border border-slate-300 px-5 py-2.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">{savingPassword ? '변경 중…' : '비밀번호 변경'}</button>
+          <button type="submit" disabled={savingPassword || !currentPassword || !newPassword || !newPasswordConfirm} className="yume-button yume-button-secondary px-5">{savingPassword ? '변경 중…' : '비밀번호 변경'}</button>
         </form>
       </section>
 
-      <section className="rounded-2xl border border-red-200 bg-red-50/50 p-5 shadow-sm md:p-6">
+      <section className="yume-card yume-card-error p-5 md:p-6">
         <h2 className="text-lg font-bold text-red-800">계정 탈퇴</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">내 여행과 일정, 장소 보관함, 방문 기록이 삭제됩니다. 공동 편집 중인 다른 사용자의 여행에서는 계정이 제외되며, 삭제 후에는 복구할 수 없습니다.</p>
         <form onSubmit={handleDeleteAccount} className="mt-4 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="delete-password" className="mb-1.5 block text-sm font-semibold text-slate-700">현재 비밀번호</label>
-              <input id="delete-password" type="password" autoComplete="current-password" value={deletePassword} onChange={event => setDeletePassword(event.target.value)} required className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100" />
+              <input id="delete-password" type="password" autoComplete="current-password" value={deletePassword} onChange={event => setDeletePassword(event.target.value)} required className="yume-input" />
             </div>
             <div>
               <label htmlFor="delete-confirmation" className="mb-1.5 block text-sm font-semibold text-slate-700">확인을 위해 ‘탈퇴’ 입력</label>
-              <input id="delete-confirmation" value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} required className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100" />
+              <input id="delete-confirmation" value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} required className="yume-input" />
             </div>
           </div>
-          <button type="submit" disabled={deletingAccount || !deletePassword || deleteConfirmation !== '탈퇴'} className="rounded-xl bg-red-700 px-5 py-2.5 font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50">{deletingAccount ? '삭제 중…' : '계정 탈퇴'}</button>
+          <button type="submit" disabled={deletingAccount || !deletePassword || deleteConfirmation !== '탈퇴'} className="yume-button yume-button-danger-solid px-5">{deletingAccount ? '삭제 중…' : '계정 탈퇴'}</button>
         </form>
       </section>
     </div>

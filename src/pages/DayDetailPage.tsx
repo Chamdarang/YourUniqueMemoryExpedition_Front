@@ -36,6 +36,7 @@ import { useScheduleExport } from "../components/common/useScheduleExport";
 import { getStaticMapQuery } from "../components/common/scheduleExportUtils";
 import { useFeedback } from "../components/common/useFeedback";
 import { drawAuditedRouteLeg } from "../utils/mapRoutePolylines";
+import { MAP_COLORS } from "../utils/mapStyles";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const scrollbarHideStyle = `.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`;
@@ -87,7 +88,7 @@ function MapDirections({ schedules, mapViewMode, auditResult }: { schedules: Day
                             { lat: Number(to.lat), lng: Number(to.lng) },
                         ],
                         geodesic: true,
-                        strokeColor: '#3B82F6',
+                        strokeColor: MAP_COLORS.route,
                         strokeOpacity: 0.8,
                         strokeWeight: 5,
                         zIndex: 10,
@@ -108,7 +109,7 @@ function MapDirections({ schedules, mapViewMode, auditResult }: { schedules: Day
             const fallback = new mapsLibrary.Polyline({
                 path,
                 geodesic: true,
-                strokeColor: '#3B82F6',
+                strokeColor: MAP_COLORS.route,
                 strokeOpacity: 0.8,
                 strokeWeight: 5,
                 zIndex: 10,
@@ -727,19 +728,19 @@ function DayDetailContent() {
                                 const lat = Number(s.lat);
                                 const lng = Number(s.lng);
                                 if (!lat || !lng) return null;
-                                return <AdvancedMarker key={s.id} position={{ lat, lng }}><NumberedMarker number={dayDetail?.scheduleMode === 'SIMPLE' ? undefined : index + 1} color={'#3B82F6'} /></AdvancedMarker>;
+                                return <AdvancedMarker key={s.id} position={{ lat, lng }}><NumberedMarker number={dayDetail?.scheduleMode === 'SIMPLE' ? undefined : index + 1} color={MAP_COLORS.route} /></AdvancedMarker>;
                             })}
                             {tempSelectedSpot && (
-                                <><AdvancedMarker position={{ lat: tempSelectedSpot.lat, lng: tempSelectedSpot.lng }}><Pin background={'#22c55e'} borderColor={'#15803d'} glyphColor={'white'} /></AdvancedMarker>
+                                <><AdvancedMarker position={{ lat: tempSelectedSpot.lat, lng: tempSelectedSpot.lng }}><Pin background={MAP_COLORS.saved} borderColor={MAP_COLORS.savedBorder} glyphColor={'white'} /></AdvancedMarker>
                                     <InfoWindow position={{ lat: tempSelectedSpot.lat, lng: tempSelectedSpot.lng }} onCloseClick={() => setTempSelectedSpot(null)} headerContent={<div className="font-bold text-sm">{tempSelectedSpot.spotName}</div>}>
                                         <div className="p-1 min-w-[200px]"><p className="text-xs text-gray-500 mb-3">{tempSelectedSpot.address}</p>
-                                            <div className="flex gap-2"><button onClick={handleConfirmScheduleOnly} className="flex-1 bg-white border border-gray-300 text-gray-700 text-xs py-2 rounded-lg hover:bg-gray-50 font-bold">일정에만 추가</button><button onClick={handleConfirmRegister} className="flex-1 bg-green-600 text-white text-xs py-2 rounded-lg hover:bg-green-700 font-bold">내 장소 등록 & 추가</button></div>
+                                            <div className="flex gap-2"><button type="button" onClick={handleConfirmScheduleOnly} className="yume-button yume-button-secondary flex-1">일정에만 추가</button><button type="button" onClick={handleConfirmRegister} className="yume-button yume-button-primary flex-1">내 장소 등록 & 추가</button></div>
                                         </div>
                                     </InfoWindow></>
                             )}
                         </Map>
                         {routeAuditResult && !routeAuditStale && (
-                            <div className="absolute right-3 top-3 z-40 rounded-xl border border-gray-200 bg-white/95 px-3 py-2 text-[10px] font-bold text-gray-600 shadow-lg backdrop-blur">
+                            <div className="absolute right-3 top-3 z-40 rounded-xl border border-gray-200 bg-white/95 px-3 py-2 text-xs font-bold text-gray-600 shadow-lg backdrop-blur">
                                 <div className="mb-1 font-black text-gray-800">점검 경로</div>
                                 <div className="flex items-center gap-1.5"><span className="h-1 w-5 rounded bg-blue-600" /> 실제 경로</div>
                                 <div className="mt-1 flex items-center gap-1.5"><span className="h-1 w-5 border-t-2 border-dashed border-amber-500" /> 시간 확인 필요</div>
@@ -748,16 +749,16 @@ function DayDetailContent() {
                             </div>
                         )}
                         <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-50 w-full px-6 pointer-events-none">
-                            <button onClick={() => setMobileViewMode('LIST')} className="pointer-events-auto mx-auto bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform">🔙 목록 보기</button>
+                            <button onClick={() => setMobileViewMode('LIST')} className="yume-button yume-button-floating pointer-events-auto mx-auto">🔙 목록 보기</button>
                         </div>
                     </div>
 
                     {/* [2] 일정 리스트 영역 */}
                     <div className={`flex flex-col w-full h-full bg-white md:w-1/2 relative z-10 transition-transform duration-300 ${mobileViewMode === 'MAP' ? 'translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
                         {/* 헤더 */}
-                        <div data-guide-target="day-detail-toolbar" className="px-4 py-3 md:px-5 md:py-4 border-b border-gray-100 bg-white/95 backdrop-blur z-30 flex-shrink-0 flex flex-col gap-3">
+                        <div data-guide-target="day-detail-toolbar" className="yume-detail-toolbar px-4 py-3 md:px-5 md:py-4 border-b backdrop-blur z-30 flex-shrink-0 flex flex-col gap-3">
                             <div className="flex items-center gap-2 w-full">
-                                <button onClick={() => navigate(-1)} aria-label="이전 화면" className="flex h-11 w-11 items-center justify-center text-gray-500 hover:bg-gray-100 rounded-full shrink-0">🔙</button>
+                                <button onClick={() => navigate(-1)} aria-label="이전 화면" className="yume-icon-button h-11 w-11 shrink-0">🔙</button>
                                 <input
                                     type="text"
                                     className="flex-1 min-w-0 text-xl md:text-2xl font-black text-gray-900 outline-none bg-transparent placeholder-gray-300 truncate"
@@ -775,29 +776,29 @@ function DayDetailContent() {
                                     {liveConnectionState === 'connected' ? '● 실시간 동기화 중' : liveConnectionState === 'unavailable' ? '실시간 연결을 사용할 수 없습니다' : liveConnectionState === 'paused' ? '탭이 숨겨져 있어 연결을 쉬는 중' : '실시간 연결 중…'}
                                 </span>}
                             </div>
-                            {remoteUpdatePending && <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                            {remoteUpdatePending && <div role="status" className="yume-card yume-card-info flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
                                 <span>{isAnyDirty ? '공동 편집자가 일정을 바꿨습니다. 현재 편집을 저장하면 최신 내용으로 동기화합니다.' : '공동 편집자가 일정을 바꿨습니다. 최신 내용을 불러옵니다.'}</span>
-                                <button type="button" disabled={isAnyDirty} onClick={() => void refreshForLiveUpdate()} className="min-h-9 rounded-md bg-white px-3 font-semibold text-blue-700 disabled:opacity-50">최신 내용 불러오기</button>
+                                <button type="button" disabled={isAnyDirty} onClick={() => void refreshForLiveUpdate()} className="yume-button yume-button-soft">최신 내용 불러오기</button>
                             </div>}
                             {headerSaveState === 'ERROR' && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-red-700">
                                 <span>{titleForm.trim() ? '변경사항을 저장하지 못했습니다. 입력한 내용은 유지됩니다.' : '일정 제목을 입력해 주세요.'}</span>
-                                <button type="button" onClick={() => void handleUpdateDayInfo()} disabled={!titleForm.trim()} className="min-h-11 rounded-lg bg-red-50 px-3 font-semibold disabled:opacity-50">저장 다시 시도</button>
+                                <button type="button" onClick={() => void handleUpdateDayInfo()} disabled={!titleForm.trim()} className="yume-button yume-button-primary">저장 다시 시도</button>
                             </div>}
                             <div className="flex flex-wrap items-center gap-2">
                                 <button
                                     onClick={() => setShowInjury(!showInjury)}
-                                    className={`min-h-11 px-3 rounded-lg text-xs font-bold transition border shadow-sm shrink-0 whitespace-nowrap ${showInjury ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                                    className={`yume-button shrink-0 whitespace-nowrap ${showInjury ? 'yume-button-warm' : 'yume-button-secondary'}`}
                                 >
                                     ⚽ {showInjury ? '여유시간 표시' : '여유시간 숨김'}
                                 </button>
-                                <button onClick={handleExportClick} className="min-h-11 px-3 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition text-xs font-bold flex items-center gap-1 shrink-0 whitespace-nowrap">
+                                <button onClick={handleExportClick} className="yume-button yume-button-secondary shrink-0 whitespace-nowrap">
                                     📸 이미지로 내보내기
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => void handleRouteAudit()}
                                     disabled={routeAuditLoading}
-                                    className="min-h-11 px-3 text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition text-xs font-bold flex items-center gap-1 shrink-0 whitespace-nowrap disabled:cursor-wait disabled:opacity-60"
+                                    className="yume-button yume-button-soft shrink-0 whitespace-nowrap disabled:cursor-wait"
                                 >
                                     {routeAuditLoading
                                         ? '경로 점검 중…'
@@ -807,7 +808,7 @@ function DayDetailContent() {
                                 </button>
                             </div>
 
-                            <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
+                            <div className="rounded-xl border border-orange-100 bg-orange-50 p-3">
                                 <textarea
                                     className="w-full bg-transparent outline-none text-sm text-gray-600 resize-none font-medium"
                                     rows={2}
@@ -849,7 +850,7 @@ function DayDetailContent() {
                             </DndContext>
                         </div>
                         <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-40 w-full px-6 pointer-events-none">
-                            <button onClick={() => setMobileViewMode('MAP')} className="pointer-events-auto mx-auto bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform">🗺️ 지도 보기</button>
+                            <button onClick={() => setMobileViewMode('MAP')} className="yume-button yume-button-floating pointer-events-auto mx-auto">🗺️ 지도 보기</button>
                         </div>
                     </div>
                 </div>

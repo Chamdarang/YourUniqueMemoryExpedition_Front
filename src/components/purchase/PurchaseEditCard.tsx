@@ -35,14 +35,14 @@ export default function PurchaseEditCard({
     const statusInfo = getPurchaseStatusInfo(data.status);
 
     return (
-        <div className="p-6 bg-white border border-gray-100 rounded-[2rem] transition-all relative group overflow-hidden hover:shadow-xl">
+        <div className="yume-card yume-card-interactive relative p-6 group overflow-hidden">
             <div className="flex justify-between items-start mb-4">
                 <span className={`text-xs font-black px-3 py-1 rounded-full border tracking-widest ${statusInfo.color}`}>
                     {statusInfo.label}
                 </span>
                 <div className="flex gap-2">
-                    <button type="button" aria-label={`${data.itemName} 수정`} onClick={() => onEditMode?.(data)} className="min-h-11 min-w-11 p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-colors">✏️</button>
-                    <button type="button" aria-label={`${data.itemName} 삭제`} onClick={() => onDelete?.(data.id)} className="min-h-11 min-w-11 p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-600 hover:text-white transition-colors">🗑️</button>
+                    <button type="button" aria-label={`${data.itemName} 수정`} onClick={() => onEditMode?.(data)} className="yume-icon-button yume-icon-button-primary min-h-11 min-w-11">✏️</button>
+                    <button type="button" aria-label={`${data.itemName} 삭제`} onClick={() => onDelete?.(data.id)} className="yume-icon-button yume-icon-button-danger min-h-11 min-w-11">🗑️</button>
                 </div>
             </div>
 

@@ -9,6 +9,7 @@ import { getSchedulesByDay, ScheduleEditConflictError } from "../../api/schedule
 import { estimateRoute } from "../../api/routeApi";
 import { getSpotDisplayName, getSpotTypeInfo, mapGoogleTypeToSpotType } from "../../utils/spotUtils";
 import { decodeGooglePolyline } from "../../utils/polylineUtils";
+import { MAP_COLORS } from "../../utils/mapStyles";
 
 // Types
 import type { DayScheduleResponse, ScheduleUpdateRequest } from "../../types/schedule";
@@ -271,7 +272,7 @@ export default function ScheduleItem({
             const polyline = new google.maps.Polyline({
                 map,
                 path,
-                strokeColor: "#2563EB",
+                strokeColor: MAP_COLORS.route,
                 strokeOpacity: 0.9,
                 strokeWeight: 5,
                 zIndex: 50,
@@ -386,12 +387,12 @@ export default function ScheduleItem({
             setSpotFeedback(null);
             try {
                 const place = new google.maps.places.Place({ id: spot.placeId });
-                await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location', 'types'] });
+                await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location', 'types', 'primaryType'] });
                 if (place.location) {
                     const createReq: SpotCreateRequest = {
                         placeId: spot.placeId!,
                         spotName: place.displayName || spot.spotName,
-                        spotType: mapGoogleTypeToSpotType(place.types),
+                        spotType: mapGoogleTypeToSpotType(place.types, place.primaryType),
                         address: place.formattedAddress || spot.address || '',
                         lat: place.location.lat(),
                         lng: place.location.lng(),
@@ -580,13 +581,13 @@ export default function ScheduleItem({
                     type="button"
                     disabled={routeLoading || isRegistering || !supportsAutomaticRoute(form.transportation)}
                     onClick={() => calculateCurrentRoute()}
-                    className="min-h-11 shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 shadow-sm hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="yume-button yume-button-soft shrink-0"
                 >
                     {isRegistering ? "장소 등록 중…" : routeLoading ? "검색 중…" : routeEstimate ? "다시 검색" : "소요시간 검색"}
                 </button>
             </div>
             <select
-                className="min-h-11 mb-2 w-full rounded-lg border border-blue-200 bg-white p-2 text-sm font-bold text-blue-900 outline-none focus:ring-2 focus:ring-blue-300"
+                className="yume-input yume-input-soft mb-2 font-bold"
                 value={form.transportation}
                 onChange={event => handleTransportationChange(event.target.value as Transportation)}
             >
@@ -605,7 +606,7 @@ export default function ScheduleItem({
                     href={googleMapsDirectionsUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="mb-2 block rounded-lg border border-blue-200 bg-white px-3 py-2 text-center text-xs font-bold text-blue-700 shadow-sm hover:bg-blue-100"
+                    className="yume-button yume-button-soft mb-2 w-full"
                 >
                     Google 지도에서 경로 확인
                 </a>
@@ -685,15 +686,15 @@ export default function ScheduleItem({
                                         </div>
                                         {routeEstimator}
                                         <div className="grid grid-cols-2 gap-3 mb-3">
-                                            <div><label className="text-xs text-blue-600 font-bold mb-1 block">수단</label><select className="min-h-11 w-full p-2 border border-blue-200 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-300" value={form.transportation} onChange={e => handleTransportationChange(e.target.value as Transportation)}><option value="WALK">🚶 도보</option><option value="BUS">🚌 버스</option><option value="TRAIN">🚃 열차</option><option value="TAXI">🚕 택시</option><option value="CAR">🚗 자동차</option><option value="SHIP">🚢 배</option><option value="AIRPLANE">✈️ 비행기</option></select></div>
-                                            <div><label className="text-xs text-blue-600 font-bold mb-1 block">이동 메모</label><input type="text" className="min-h-11 w-full p-2 border border-blue-200 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-300" placeholder="예) 205번 버스" value={form.movingMemo} onChange={e => setForm({...form, movingMemo: e.target.value})} /></div>
+                                            <div><label className="text-xs text-gray-600 font-bold mb-1 block">수단</label><select className="yume-input yume-input-soft font-bold" value={form.transportation} onChange={e => handleTransportationChange(e.target.value as Transportation)}><option value="WALK">🚶 도보</option><option value="BUS">🚌 버스</option><option value="TRAIN">🚃 열차</option><option value="TAXI">🚕 택시</option><option value="CAR">🚗 자동차</option><option value="SHIP">🚢 배</option><option value="AIRPLANE">✈️ 비행기</option></select></div>
+                                            <div><label className="text-xs text-gray-600 font-bold mb-1 block">이동 메모</label><input type="text" className="yume-input yume-input-soft" placeholder="예) 205번 버스" value={form.movingMemo} onChange={e => setForm({...form, movingMemo: e.target.value})} /></div>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             {saveState !== 'IDLE' && <span role="status" className={`shrink-0 text-xs font-semibold ${saveState === 'ERROR' ? 'text-red-600' : saveState === 'SAVED' ? 'text-emerald-700' : 'text-slate-500'}`}>
                                                 {saveState === 'SAVING' ? '저장 중…' : saveState === 'SAVED' ? '저장 완료' : '저장 실패'}
                                             </span>}
-                                            <button onClick={handleCancel} className="min-h-11 flex-1 bg-white border border-blue-200 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">취소</button>
-                                            <button onClick={handleDone} disabled={saveState === 'SAVING'} className="min-h-11 flex-1 bg-blue-500 text-white py-2 rounded-lg text-sm font-bold hover:bg-blue-600 disabled:cursor-wait disabled:opacity-60">저장</button>
+                                            <button type="button" onClick={handleCancel} className="yume-button yume-button-secondary flex-1">취소</button>
+                                            <button type="button" onClick={handleDone} disabled={saveState === 'SAVING'} className="yume-button yume-button-primary flex-1">저장</button>
                                         </div>
                                     </div>
                                 )}
@@ -704,16 +705,16 @@ export default function ScheduleItem({
                     {/* 이동 시간 추가 버튼 (index 활용) */}
                     {index !== 0 && schedule.movingDuration === 0 && editMode === 'NONE' && (
                         <div className="mb-2 flex justify-center group/add-move">
-                            <button onClick={() => setEditMode('MOVE')} className="min-h-11 text-xs text-gray-600 font-bold bg-gray-50 px-3 py-1 rounded-full border border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition flex items-center gap-1">
+                            <button type="button" onClick={() => setEditMode('MOVE')} className="yume-button yume-button-secondary rounded-full text-xs">
                                 <span>➕</span> 이동 시간 추가
                             </button>
                         </div>
                     )}
 
                     {/* 3. 메인 일정 카드 */}
-                    <div className={`rounded-xl border transition relative z-10 overflow-hidden
-                      ${editMode === 'MAIN' ? 'border-orange-400 ring-2 ring-orange-100 bg-white' : 'bg-white border-gray-200 hover:border-gray-300 cursor-pointer'}
-                      ${isPickingMap ? 'ring-4 ring-green-400 border-green-500' : ''}`}
+                    <div className={`yume-card yume-card-interactive relative z-10 overflow-hidden
+                      ${editMode === 'MAIN' ? 'yume-card-editing' : 'cursor-pointer'}
+                      ${isPickingMap ? 'yume-card-map-picking' : ''}`}
                          onClick={() => editMode === 'NONE' && setEditMode('MAIN')}>
                         {conflictState ? (
                             <ScheduleConflictPanel
@@ -767,7 +768,7 @@ export default function ScheduleItem({
                                 <div className="mb-4 relative" ref={dropdownRef}>
                                     <div className="flex justify-between items-end mb-1">
                                         <label className="text-sm text-gray-500 font-bold">장소 이름</label>
-                                        <button onClick={onRequestMapPick} className={`min-h-11 text-xs font-bold px-2 py-1 rounded border transition flex items-center gap-1 ${isPickingMap ? 'bg-green-500 text-white border-green-500' : 'bg-white text-green-600 border-green-200 hover:bg-green-50'}`}>{isPickingMap ? '📍 선택 중...' : '🗺️ 지도에서 찍기'}</button>
+                                        <button onClick={onRequestMapPick} className={`schedule-compact-action min-h-9 text-[11px] font-bold px-2 rounded border transition flex items-center gap-1 ${isPickingMap ? 'bg-green-500 text-white border-green-500' : 'bg-white text-green-600 border-green-200 hover:bg-green-50'}`}>{isPickingMap ? '📍 선택 중...' : '🗺️ 지도에서 찍기'}</button>
                                     </div>
                                     <div className="flex bg-gray-100 p-1 rounded-lg mb-2">
                                         <button onClick={() => { setSearchMode('MINE'); setSearchResults([]); setSelectedSpotInfo(null); setIsDropdownOpen(Boolean(searchTerm.trim())); }} className={`min-h-11 flex-1 py-1.5 text-xs font-bold rounded-md transition ${searchMode === 'MINE' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-600'}`}>내 장소</button>
@@ -829,45 +830,45 @@ export default function ScheduleItem({
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                     <div>
-                                        <div className="mb-1 flex items-center justify-between gap-2">
+                                        <div className="mb-1 flex h-6 items-center justify-between gap-2">
                                             <label htmlFor={`schedule-start-${schedule.id}`} className="text-sm text-gray-500 font-bold">시작 시간</label>
-                                            <label className="flex cursor-pointer items-center gap-1.5 text-xs font-bold text-violet-600" title="앞 일정 종료시간과 관계없이 입력한 시간부터 시작합니다.">
+                                            <label className="inline-flex h-6 cursor-pointer items-center gap-1.5 text-xs font-bold text-violet-600" title="앞 일정 종료시간과 관계없이 입력한 시간부터 시작합니다.">
                                                 <input
                                                     type="checkbox"
-                                                    className="min-h-11 accent-violet-600"
+                                                    className="h-4 w-4 accent-violet-600"
                                                     checked={form.fixedStartTime}
                                                     onChange={e => setForm({...form, fixedStartTime: e.target.checked})}
                                                 />
                                                 시간 고정
                                             </label>
                                         </div>
-                                        <input id={`schedule-start-${schedule.id}`} type="time" className={`min-h-11 w-full p-3 border rounded-xl text-sm font-bold outline-none ${form.fixedStartTime ? 'border-violet-300 bg-violet-50 text-violet-900' : 'border-gray-200 bg-gray-50'}`} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})} />
+                                        <input id={`schedule-start-${schedule.id}`} type="time" className={`yume-input yume-input-soft font-bold ${form.fixedStartTime ? 'yume-input-fixed' : ''}`} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})} />
                                         {form.fixedStartTime && <p className="mt-1 text-xs font-medium text-violet-500">앞 일정과 이어 계산하지 않습니다.</p>}
                                     </div>
-                                    <div><label htmlFor={`schedule-stay-${schedule.id}`} className="text-sm text-gray-500 font-bold block mb-1">기본 체류(분)</label><input id={`schedule-stay-${schedule.id}`} type="number" className="min-h-11 w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm font-bold outline-none" value={baseStay} onChange={e => setBaseStay(Math.max(0, Number(e.target.value)))} /></div>
+                                    <div><label htmlFor={`schedule-stay-${schedule.id}`} className="mb-1 flex h-6 items-center text-sm text-gray-500 font-bold">기본 체류(분)</label><input id={`schedule-stay-${schedule.id}`} type="number" className="yume-input yume-input-soft font-bold" value={baseStay} onChange={e => setBaseStay(Math.max(0, Number(e.target.value)))} /></div>
                                 </div>
 
-                                <div className="mb-4 p-3 bg-orange-50 rounded-xl border border-orange-100">
-                                    <div className="flex flex-wrap justify-between items-center gap-2 mb-2">
+                                <div className="mb-3 p-2 bg-orange-50 rounded-xl border border-orange-100">
+                                    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5">
                                         <label className="text-xs text-orange-600 font-bold">일정 여유시간</label>
-                                        <div className="flex flex-wrap items-center gap-1 min-w-0">
+                                        <div className="flex flex-wrap items-center gap-1 min-w-0 sm:justify-end">
                                             {INJURY_OPTIONS.map(m => (
-                                                <button key={m} aria-label={`일정 여유시간 ${m}분`} aria-pressed={stayInjury === m} onClick={() => setStayInjury(m)} className={`min-h-11 min-w-11 text-xs px-2 py-0.5 rounded border transition font-bold ${stayInjury === m ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-500 border-gray-200'}`}>{m === 0 ? "0" : `+${m}`}</button>
+                                                <button key={m} aria-label={`일정 여유시간 ${m}분`} aria-pressed={stayInjury === m} onClick={() => setStayInjury(m)} className={`schedule-injury-choice min-h-9 min-w-9 text-[11px] px-1 py-0.5 rounded-md border transition font-semibold ${stayInjury === m ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-500 border-gray-200'}`}>{m === 0 ? "0" : `+${m}`}</button>
                                             ))}
-                                            <input type="number" className="min-h-11 w-12 p-1 text-right border rounded text-xs font-bold text-orange-600 outline-none" value={stayInjury} onChange={e => setStayInjury(Math.max(0, Number(e.target.value)))} />
+                                            <input type="number" aria-label="일정 여유시간 직접 입력" className="schedule-injury-choice min-h-9 w-9 p-1 text-right border rounded-md text-xs font-semibold text-orange-600 outline-none" value={stayInjury} onChange={e => setStayInjury(Math.max(0, Number(e.target.value)))} />
                                             <span className="text-xs text-orange-600 font-bold">분</span>
                                         </div>
                                     </div>
-                                    <div className="text-right text-xs font-bold text-orange-600">총 체류 예정: {formatSimple(baseStay + stayInjury)}</div>
+                                    <div className="mt-1.5 text-right text-xs font-bold text-orange-600">총 체류 예정: {formatSimple(baseStay + stayInjury)}</div>
                                 </div>
 
-                                <div className="mb-4"><label className="text-sm text-gray-500 font-bold block mb-1">메모</label><textarea className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm outline-none resize-none" rows={2} value={form.memo} onChange={e => setForm({...form, memo: e.target.value})} /></div>
+                                <div className="mb-4"><label className="text-sm text-gray-500 font-bold block mb-1">메모</label><textarea className="yume-input yume-input-soft resize-none" rows={2} value={form.memo} onChange={e => setForm({...form, memo: e.target.value})} /></div>
                                 <div className="flex items-center gap-2 pt-2">
                                     {saveState !== 'IDLE' && <span role="status" className={`shrink-0 text-xs font-semibold ${saveState === 'ERROR' ? 'text-red-600' : saveState === 'SAVED' ? 'text-emerald-700' : 'text-slate-500'}`}>
                                         {saveState === 'SAVING' ? '저장 중…' : saveState === 'SAVED' ? '저장 완료' : '저장 실패'}
                                     </span>}
-                                    <button onClick={handleCancel} className="min-h-11 flex-1 bg-white border border-gray-200 py-3 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">취소</button>
-                                    <button onClick={handleDone} disabled={saveState === 'SAVING'} className="min-h-11 flex-1 bg-orange-500 text-white py-3 rounded-xl text-sm font-bold hover:bg-orange-600 shadow-md disabled:cursor-wait disabled:opacity-60">저장</button>
+                                    <button onClick={handleCancel} className="yume-button yume-button-secondary min-h-11 flex-1">취소</button>
+                                    <button onClick={handleDone} disabled={saveState === 'SAVING'} className="yume-button yume-button-primary min-h-11 flex-1">저장</button>
                                 </div>
                             </div>
                         )}
@@ -875,8 +876,8 @@ export default function ScheduleItem({
 
                     {/* 일정 사이 추가 버튼 (onInsert 활용) */}
                     {!isDragging && (
-                        <div className="mt-2 flex justify-center">
-                            <button type="button" aria-label={`${schedule.spotName || '일정'} 다음에 일정 추가`} className="min-h-11 rounded-xl border border-orange-200 bg-orange-50 px-4 text-xs font-bold text-orange-700 hover:bg-orange-100 focus-visible:ring-2 focus-visible:ring-orange-400" onClick={event => { event.stopPropagation(); onInsert(index + 1); }}>+ 다음 일정 추가</button>
+                        <div className="mt-1.5 flex justify-center">
+                            <button type="button" aria-label={`${schedule.spotName || '일정'} 다음에 일정 추가`} className="schedule-compact-action min-h-9 rounded-lg border border-orange-200 bg-orange-50 px-3 text-[11px] font-bold text-orange-700 hover:bg-orange-100 focus-visible:ring-2 focus-visible:ring-orange-400" onClick={event => { event.stopPropagation(); onInsert(index + 1); }}>+ 다음 일정 추가</button>
                         </div>
                     )}
                 </div>

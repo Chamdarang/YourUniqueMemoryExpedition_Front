@@ -62,7 +62,7 @@ export default function ScheduleConflictPanel({ base, mine, latest, busy = false
         <button type="button" disabled={busy} onClick={onCancel} className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 disabled:opacity-50">
           내 수정 취소하고 최신 값 사용
         </button>
-        <button type="button" disabled={busy || !canApply} onClick={() => void onApply(mergeScheduleConflict(base, mine, latest, choices))} className="min-h-11 rounded-lg bg-blue-600 px-4 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="button" disabled={busy || !canApply} onClick={() => void onApply(mergeScheduleConflict(base, mine, latest, choices))} className="yume-button yume-button-primary px-4">
           {busy ? '저장 중…' : '선택한 값으로 병합 저장'}
         </button>
       </div>

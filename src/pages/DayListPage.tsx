@@ -114,7 +114,7 @@ export default function DayListPage() {
                     data-guide-target="days-create"
                     data-guide-state={isCreating ? 'open' : 'closed'}
                     onClick={() => setIsCreating(!isCreating)}
-                    className="bg-gray-900 hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg transition whitespace-nowrap text-sm shrink-0 h-10 md:h-auto flex items-center"
+                    className={`yume-button shrink-0 whitespace-nowrap ${isCreating ? 'yume-button-secondary' : 'yume-button-primary'}`}
                 >
                     {isCreating ? '닫기' : '+ 새 일정'}
                 </button>
@@ -126,7 +126,7 @@ export default function DayListPage() {
                     <input
                         type="text"
                         aria-label="하루 코스 제목 검색" placeholder="하루 코스 제목 검색..."
-                        className="w-full pl-4 pr-12 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-white transition shadow-sm"
+                        className="yume-input yume-input-search"
                         value={keyword}
                         onChange={(e) => setKeyword(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -134,7 +134,7 @@ export default function DayListPage() {
                     <button
                         aria-label="하루 코스 검색 실행"
                         onClick={handleSearch}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-orange-500 transition rounded-lg hover:bg-orange-50"
+                        className="yume-icon-button absolute right-1 top-1/2 -translate-y-1/2 text-blue-600"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
@@ -151,14 +151,14 @@ export default function DayListPage() {
                     </h3>
                     <form onSubmit={handleCreate} className="space-y-3">
                         <p className="text-xs text-gray-600">여행 날짜를 정하기 전 후보 코스를 만들어 두세요. 저장한 코스는 여행 일정에 가져올 수 있어요.</p>
-                        <div data-guide-target="days-create-mode" className="grid grid-cols-2 gap-2 rounded-xl bg-gray-50 p-1.5">
-                            <button type="button" onClick={() => setNewDayMode('SIMPLE')} className={`rounded-lg px-3 py-2.5 text-sm font-bold transition ${newDayMode === 'SIMPLE' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>
+                        <div data-guide-target="days-create-mode" className="yume-segmented grid grid-cols-2">
+                            <button type="button" aria-pressed={newDayMode === 'SIMPLE'} onClick={() => setNewDayMode('SIMPLE')} className="yume-segment flex-col text-center">
                                 간편 일정
-                                <span className="mt-0.5 block text-[10px] font-medium opacity-75">장소 · 시간 · 메모만</span>
+                                <span className="mt-0.5 block text-xs font-medium opacity-75">장소 · 시간 · 메모만</span>
                             </button>
-                            <button type="button" onClick={() => setNewDayMode('DETAILED')} className={`rounded-lg px-3 py-2.5 text-sm font-bold transition ${newDayMode === 'DETAILED' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>
+                            <button type="button" aria-pressed={newDayMode === 'DETAILED'} onClick={() => setNewDayMode('DETAILED')} className="yume-segment flex-col text-center">
                                 상세 일정
-                                <span className="mt-0.5 block text-[10px] font-medium opacity-75">체류 · 이동 · 교통수단 포함</span>
+                                <span className="mt-0.5 block text-xs font-medium opacity-75">체류 · 이동 · 교통수단 포함</span>
                             </button>
                         </div>
                         <div className="flex gap-3">
@@ -171,7 +171,7 @@ export default function DayListPage() {
                             className="flex-1 px-4 py-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white transition"
                             autoFocus
                         />
-                        <button data-guide-target="days-create-submit" type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl transition shadow-md whitespace-nowrap">
+                        <button data-guide-target="days-create-submit" type="submit" className="yume-button yume-button-primary whitespace-nowrap">
                             생성
                         </button>
                         </div>
