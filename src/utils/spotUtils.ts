@@ -27,13 +27,4 @@ export const getSpotDisplayName = (
     spot: Pick<SpotResponse, "displayName" | "spotName">
 ) => spot.displayName?.trim() || spot.spotName;
 
-export const mapGoogleTypeToSpotType = (types: string[] = []): SpotType => {
-    if (types.includes('restaurant') || types.includes('food')) return 'FOOD';
-    if (types.includes('cafe') || types.includes('coffee_shop')) return 'CAFE';
-    if (types.includes('tourist_attraction')) return 'LANDMARK';
-    if (types.includes('park')) return 'PARK';
-    if (types.includes('lodging')) return 'ACCOMMODATION';
-    if (types.includes('store') || types.includes('shopping_mall')) return 'SHOPPING';
-    if (types.includes('transit_station') || types.includes('train_station')) return 'STATION';
-    return 'OTHER';
-};
+export { mapGoogleTypeToSpotType } from "./mapUtils";

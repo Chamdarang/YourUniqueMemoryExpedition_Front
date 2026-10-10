@@ -25,6 +25,7 @@ export interface SpotResponse {
 export interface SpotCreateRequest {
   placeId?: string;       
   spotName: string;
+  customName?: string | null;
   spotType: SpotType;
   address: string;
   shortAddress?: string;  
@@ -35,7 +36,7 @@ export interface SpotCreateRequest {
   isVisit: boolean;
   description?: string;   
   metadata: Record<string, unknown>;
-  //userMetadata: Record<string, unknown>;
+  userMetadata?: Record<string, unknown>;
 }
 
 // 2. [신규] 상세 조회용 (그룹, 구매 목록 포함)
@@ -61,17 +62,6 @@ export interface SpotUpdateRequest {
   userMetadata?: Record<string, unknown>;
   
 }
-
-export interface SpotDuplicateCandidate {
-  first: SpotResponse;
-  second: SpotResponse;
-  reason: string;
-  distanceMeters: number;
-}
-
-
-
-
 
 
 
