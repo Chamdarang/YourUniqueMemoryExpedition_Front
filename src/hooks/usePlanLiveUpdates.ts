@@ -17,15 +17,28 @@ export const usePlanLiveUpdates = (
   const onUnavailableRef = useRef(onUnavailable);
   const hasConnectedRef = useRef(false);
   const [pageVisible, setPageVisible] = useState(() => typeof document === 'undefined' || document.visibilityState !== 'hidden');
+  const [pageResumeVersion, setPageResumeVersion] = useState(0);
   const [connectionState, setConnectionState] = useState<PlanLiveConnectionState>(planId ? 'connecting' : 'disabled');
 
   useEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);
   useEffect(() => { onUnavailableRef.current = onUnavailable; }, [onUnavailable]);
   useEffect(() => {
     const updateVisibility = () => setPageVisible(document.visibilityState !== 'hidden');
+    const pausePage = () => setPageVisible(false);
+    const resumePage = (event: PageTransitionEvent) => {
+      updateVisibility();
+      // A bfcache restore may batch the hide/show state changes into the same value.
+      if (event.persisted) setPageResumeVersion(version => version + 1);
+    };
     document.addEventListener('visibilitychange', updateVisibility);
+    window.addEventListener('pagehide', pausePage);
+    window.addEventListener('pageshow', resumePage);
     updateVisibility();
-    return () => document.removeEventListener('visibilitychange', updateVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', updateVisibility);
+      window.removeEventListener('pagehide', pausePage);
+      window.removeEventListener('pageshow', resumePage);
+    };
   }, []);
 
   useEffect(() => {
@@ -41,8 +54,19 @@ export const usePlanLiveUpdates = (
     let stopped = false;
     let controller: AbortController | null = null;
     let reconnectTimer: number | null = null;
+    let finishReconnectWait: (() => void) | null = null;
     let reconnectAttempt = 0;
     let connectionStartedAt = 0;
+
+    const stop = () => {
+      stopped = true;
+      controller?.abort();
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      finishReconnectWait?.();
+      finishReconnectWait = null;
+    };
+    // pagehide must abort synchronously; React cleanup may not run before unloading/bfcache.
+    window.addEventListener('pagehide', stop);
 
     const connect = async () => {
       while (!stopped) {
@@ -53,8 +77,9 @@ export const usePlanLiveUpdates = (
           await subscribeToPlanLiveUpdates(
             planId,
             controller.signal,
-            () => onUpdateRef.current(),
+            () => { if (!stopped) onUpdateRef.current(); },
             () => {
+              if (stopped) return;
               connectionStartedAt = Date.now();
               setConnectionState('connected');
               if (hasConnectedRef.current) onUpdateRef.current();
@@ -83,18 +108,22 @@ export const usePlanLiveUpdates = (
         );
         reconnectAttempt = Math.min(reconnectAttempt + 1, 5);
         await new Promise<void>(resolve => {
-          reconnectTimer = window.setTimeout(resolve, jitteredDelay);
+          finishReconnectWait = resolve;
+          reconnectTimer = window.setTimeout(() => {
+            reconnectTimer = null;
+            finishReconnectWait = null;
+            resolve();
+          }, jitteredDelay);
         });
       }
     };
 
     void connect();
     return () => {
-      stopped = true;
-      controller?.abort();
-      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      window.removeEventListener('pagehide', stop);
+      stop();
     };
-  }, [pageVisible, planId, shareToken]);
+  }, [pageVisible, pageResumeVersion, planId, shareToken]);
 
   return connectionState;
 };

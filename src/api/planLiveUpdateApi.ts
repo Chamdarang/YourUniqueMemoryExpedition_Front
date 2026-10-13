@@ -65,6 +65,12 @@ export const subscribeToPlanLiveUpdates = async (
       }
     }
   } finally {
-    reader.releaseLock();
+    try {
+      await reader.cancel();
+    } catch {
+      // An aborted fetch has already closed the stream.
+    } finally {
+      reader.releaseLock();
+    }
   }
 };
