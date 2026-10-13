@@ -14,6 +14,7 @@ export interface SpotSearchParams {
 
 interface Props {
     onSearch: (params: SpotSearchParams) => void;
+    initialFilter?: SpotSearchParams;
 }
 
 // ----------------------------------------------------------------
@@ -34,8 +35,9 @@ const SPOT_TYPES: (SpotType | 'ALL')[] = [
 // 🚀 컴포넌트
 // ----------------------------------------------------------------
 
-export default function SpotFilter({ onSearch }: Props) {
-    const [params, setParams] = useState<SpotSearchParams>({
+export default function SpotFilter({ onSearch, initialFilter }: Props) {
+    const [showFilters, setShowFilters] = useState(false);
+    const [params, setParams] = useState<SpotSearchParams>(initialFilter || {
         keyword: '',
         type: 'ALL',
         isVisit: 'ALL',
@@ -50,24 +52,28 @@ export default function SpotFilter({ onSearch }: Props) {
     };
 
     return (
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-6 space-y-4 md:space-y-0 md:flex md:items-center md:gap-4 font-sans">
+        <div className="yume-card mb-6 p-4 font-sans">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 md:flex-nowrap md:gap-4">
 
             {/* 1. 키워드 검색 */}
-            <div className="flex-1 relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+            <div className="relative min-w-0 basis-full md:flex-1 md:basis-0">
                 <input
                     type="text" aria-label="장소명 또는 주소 검색"
                     placeholder="장소명 또는 주소 검색..."
-                    className="min-h-11 w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-gray-900 transition text-sm font-medium"
+                    className="yume-input text-sm"
                     value={params.keyword}
                     onChange={(e) => setParams({ ...params, keyword: e.target.value })}
                     onKeyDown={handleKeyDown}
                 />
             </div>
+            <button type="button" aria-expanded={showFilters} aria-controls="spot-filter-options" onClick={() => setShowFilters(open => !open)} className="yume-button yume-button-secondary flex-1 md:hidden">필터</button>
+            <button type="button" onClick={handleSearch} className="yume-button yume-button-primary flex-1 md:flex-none md:shrink-0">조회</button>
+          </div>
+          <div id="spot-filter-options" className={`${showFilters ? 'grid' : 'hidden'} mt-3 grid-cols-2 gap-3 md:grid`}>
 
             {/* 2. 유형 필터 (공통 유틸리티 SPOT_TYPE_INFO 매핑) */}
             <select aria-label="장소 유형 필터"
-                className="min-h-11 w-full md:w-40 px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-gray-900 bg-white text-sm font-bold cursor-pointer"
+                className="yume-input min-w-0 cursor-pointer text-sm"
                 value={params.type}
                 onChange={(e) => setParams({ ...params, type: e.target.value as SpotType | 'ALL' })}
             >
@@ -84,7 +90,7 @@ export default function SpotFilter({ onSearch }: Props) {
 
             {/* 3. 방문 여부 필터 */}
             <select aria-label="방문 상태 필터"
-                className="min-h-11 w-full md:w-32 px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-gray-900 bg-white text-sm font-bold cursor-pointer"
+                className="yume-input min-w-0 cursor-pointer text-sm"
                 value={params.isVisit}
                 onChange={(e) => setParams({ ...params, isVisit: e.target.value as 'ALL' | 'VISITED' | 'NOT_VISITED' })}
             >
@@ -93,13 +99,8 @@ export default function SpotFilter({ onSearch }: Props) {
                 <option value="NOT_VISITED">⬜ 미방문</option>
             </select>
 
-            {/* 4. 조회 버튼 */}
-            <button
-                onClick={handleSearch}
-                className="yume-button yume-button-primary w-full px-8 md:w-auto"
-            >
-                조회
-            </button>
+          </div>
+          {!showFilters && (params.type !== 'ALL' || params.isVisit !== 'ALL') && <p className="mt-2 text-xs text-gray-600 md:hidden">선택 필터: {[params.type !== 'ALL' ? SPOT_TYPE_INFO[params.type]?.label : '', params.isVisit === 'VISITED' ? '방문함' : params.isVisit === 'NOT_VISITED' ? '미방문' : ''].filter(Boolean).join(' · ')}</p>}
         </div>
     );
 }

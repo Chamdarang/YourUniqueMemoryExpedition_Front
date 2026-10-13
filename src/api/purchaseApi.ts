@@ -59,6 +59,7 @@ export const getAllPurchases = async (
   if (params.kind) queryObj.kind = params.kind;
   if (params.status) queryObj.status = params.status;
   if (params.category) queryObj.category = params.category;
+  if (params.unbound) queryObj.unbound = 'true';
 
   const query = new URLSearchParams(queryObj).toString();
   const res = await fetchWithAuth(`/api/purchases?${query}`, {

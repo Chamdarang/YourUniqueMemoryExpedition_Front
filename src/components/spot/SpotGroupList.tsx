@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 // API
 import { getAllGroups, getGroupById, updateGroup, removeSpotFromGroup, deleteGroup } from "../../api/groupApi";
@@ -13,10 +14,11 @@ import { useFeedback } from '../common/useFeedback';
 import LoadErrorState from '../common/LoadErrorState';
 
 interface Props {
-  initialGroupName?: string; // URL 타고 들어왔을 때 자동 진입용
+  initialGroupId?: number;
 }
 
-export default function SpotGroupList({ initialGroupName }: Props) {
+export default function SpotGroupList({ initialGroupId }: Props) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { confirm, showToast } = useFeedback();
   // ----------------------------------------------------------------
   // 🧠 State
@@ -85,7 +87,7 @@ export default function SpotGroupList({ initialGroupName }: Props) {
   useEffect(() => {
     let active = true;
     void fetchGroups().then(data => {
-      const target = data?.find(group => group.groupName === initialGroupName);
+      const target = data?.find(group => group.id === initialGroupId);
       if (!active || !target) return;
       setSelectedGroupId(target.id);
       setSelectedGroupName(target.groupName);
@@ -93,7 +95,7 @@ export default function SpotGroupList({ initialGroupName }: Props) {
     });
     const versionRef = requestVersion;
     return () => { active = false; versionRef.current++; };
-  }, [fetchGroups, loadGroup, initialGroupName]);
+  }, [fetchGroups, loadGroup, initialGroupId]);
 
   // 목록으로 돌아가기
   const handleBack = () => {
@@ -101,7 +103,15 @@ export default function SpotGroupList({ initialGroupName }: Props) {
     setGroupSpots([]);
     setDetailError(null);
     setIsEditing(false);
-    void fetchGroups(); // 그룹별 장소 개수 등 최신화
+    if (searchParams.has('groupId')) {
+      setSearchParams(current => {
+        const next = new URLSearchParams(current);
+        next.delete('groupId');
+        return next;
+      }, { replace: true });
+    } else {
+      void fetchGroups(); // 그룹별 장소 개수 등 최신화
+    }
   };
 
   // 그룹 이름 수정 시작
@@ -173,17 +183,17 @@ export default function SpotGroupList({ initialGroupName }: Props) {
             <div>
               <button
                   onClick={handleBack}
-                  className="min-h-11 mb-4 flex items-center text-sm font-bold text-gray-500 hover:text-blue-600 transition"
+                  className="yume-button yume-button-secondary mb-4"
               >
-                ← 📂 그룹 목록으로 돌아가기
+                ← 그룹 목록
               </button>
 
-              <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 mb-6">
+              <div className="yume-card mb-4 p-4 md:p-5">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
 
                   {/* 타이틀 영역 (수정 모드 분기) */}
-                  <div className="flex items-center gap-3 flex-1">
-                    <span className="text-3xl">🏷️</span>
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-50 text-lg" aria-hidden="true">📂</span>
 
                     {isEditing ? (
                         <div className="flex flex-wrap gap-2 w-full md:w-auto min-w-0">
@@ -198,9 +208,9 @@ export default function SpotGroupList({ initialGroupName }: Props) {
                           <button onClick={() => setIsEditing(false)} className="yume-button yume-button-secondary whitespace-nowrap">취소</button>
                         </div>
                     ) : (
-                        <div>
-                          <h2 className="text-xl font-bold text-blue-900">#{selectedGroupName}</h2>
-                          <p className="text-sm text-blue-600">총 {groupSpots.length}개의 장소</p>
+                        <div className="min-w-0">
+                          <h2 className="truncate text-lg font-extrabold text-gray-900">{selectedGroupName}</h2>
+                          <p className="mt-0.5 text-sm text-gray-500">장소 {groupSpots.length}개</p>
                         </div>
                     )}
                   </div>
@@ -226,7 +236,7 @@ export default function SpotGroupList({ initialGroupName }: Props) {
               </div>
 
               {/* 장소 리스트 */}
-              <div className="yume-card p-1">
+              <div>
                 {groupSpots.length === 0 ? (!loading && !detailError && (
                     <div className="text-center py-12">
                       <p className="text-gray-400">이 그룹에 저장된 장소가 없습니다.</p>

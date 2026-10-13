@@ -15,6 +15,7 @@ const SpotDetailPage = lazy(() => import("./pages/SpotDetailPage"));
 const SpotDataUpdater = lazy(() => import("./pages/SpotDataUpdater"));
 const SharedPlanPage = lazy(() => import("./pages/SharedPlanPage"));
 const AccountSettingsPage = lazy(() => import("./pages/AccountSettingsPage"));
+const GoshuinBooksPage = lazy(() => import("./pages/GoshuinBooksPage"));
 
 // Components
 import Layout from "./components/common/Layout";
@@ -60,6 +61,8 @@ export const router = createBrowserRouter([
             { path: "/spots", element: <SpotListPage /> },
             { path: "/spots/test/renew", element: <SpotDataUpdater /> },
             { path: "/spots/:id", element: <SpotDetailPage /> },
+            { path: "/goshuin-books", element: <GoshuinBooksPage /> },
+            { path: "/goshuin-books/:bookId", element: <GoshuinBooksPage /> },
 
             // 계정 관리
             { path: "/account", element: <AccountSettingsPage /> },

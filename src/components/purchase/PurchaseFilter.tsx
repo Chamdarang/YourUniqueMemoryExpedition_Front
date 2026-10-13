@@ -5,6 +5,7 @@ import type { PurchaseKind, PurchaseStatus } from "../../types/enums";
 import PurchaseForm from './PurchaseForm';
 
 interface Props {
+    initialFilter?: PurchaseSearchParams;
     selectedSpotName?: string;
     onSearch: (params: PurchaseSearchParams) => void;
     onSave: (data: SpotPurchaseSaveRequest & { spotUserId: number }, editingId: number | null) => Promise<void>;
@@ -17,10 +18,10 @@ interface Props {
 }
 
 export default function PurchaseFilter({
-                                           selectedSpotName, onSearch, onSave, isAdding, setIsAdding,
+                                           initialFilter, selectedSpotName, onSearch, onSave, isAdding, setIsAdding,
                                            editingId, setEditingId, formPurchase, setFormPurchase
                                        }: Props) {
-    const [pFilterDraft, setPFilterDraft] = useState<PurchaseSearchParams>({ keyword: '', category: '' });
+    const [pFilterDraft, setPFilterDraft] = useState<PurchaseSearchParams>(initialFilter || { keyword: '', category: '' });
 
     const closeForm = () => {
         setIsAdding(false);

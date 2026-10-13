@@ -35,8 +35,8 @@ export default function PurchaseEditCard({
     const statusInfo = getPurchaseStatusInfo(data.status);
 
     return (
-        <div className="yume-card yume-card-interactive relative p-6 group overflow-hidden">
-            <div className="flex justify-between items-start mb-4">
+        <div className="yume-card yume-card-interactive relative p-4 group overflow-hidden">
+            <div className="flex justify-between items-start mb-2">
                 <span className={`text-xs font-black px-3 py-1 rounded-full border tracking-widest ${statusInfo.color}`}>
                     {statusInfo.label}
                 </span>
@@ -46,17 +46,17 @@ export default function PurchaseEditCard({
                 </div>
             </div>
 
-            <h5 className="font-black text-gray-800 text-xl leading-tight truncate mb-1">{data.itemName}</h5>
+            <h5 className="font-black text-gray-800 text-lg leading-tight truncate mb-1">{data.itemName}</h5>
 
-            <div className="flex items-center gap-1.5 mb-3">
+            <div className="flex items-center gap-1.5 mb-2">
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-md uppercase border ${kindInfo.color}`}>
                     {kindInfo.icon} {kindInfo.label}
                 </span>
                 {data.category && <span className="text-xs font-bold text-gray-400">• {data.category}</span>}
             </div>
 
-            <div className="flex items-center gap-2 border-t border-gray-50 pt-4 mt-2">
-                <p className="text-base font-black text-blue-600 font-mono">
+            <div className="flex items-center gap-2 border-t border-gray-50 pt-3 mt-2">
+                <p className="text-sm font-black text-blue-600 font-mono">
                     {formatPurchasePrice(data.price, data.currency)}
                 </p>
                 <span className="text-gray-300">|</span>
@@ -64,8 +64,8 @@ export default function PurchaseEditCard({
             </div>
 
             {data.note && (
-                <div className="mt-4 p-4 bg-gray-50/50 rounded-2xl border border-gray-100/50">
-                    <p className="text-sm text-gray-500 italic leading-relaxed break-keep">"{data.note}"</p>
+                <div className="mt-3 p-3 bg-gray-50/50 rounded-xl border border-gray-100/50">
+                    <p className="text-xs text-gray-500 italic leading-relaxed break-keep">"{data.note}"</p>
                 </div>
             )}
         </div>

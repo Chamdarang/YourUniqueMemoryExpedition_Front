@@ -2,6 +2,10 @@ import type { PurchaseKind, PurchaseStatus } from "./enums";
 
 // 3. 구매 기록 (기존 유지)
 export interface SpotPurchaseResponse {
+  goshuinBookId?: number | null;
+  goshuinOrder?: number | null;
+  photoId?: string | null;
+  recordVersion?: number;
   id: number;
   spotUserId: number;
   spotName: string;
@@ -18,6 +22,7 @@ export interface SpotPurchaseResponse {
 
 // PurchaseCreateRequest, PurchaseUpdateRequest 대응
 export interface SpotPurchaseSaveRequest {
+  recordVersion?: number;
   kind: PurchaseKind;
   category: string;
   itemName: string;
@@ -45,6 +50,7 @@ export interface SpotPurchaseResponse {
 }
 
 export interface PurchaseSearchParams {
+  unbound?: boolean;
   keyword?: string;
   kind?: PurchaseKind;
   status?: PurchaseStatus;

@@ -47,8 +47,8 @@ export default function PurchaseForm({ value, onChange, onSave, onCancel, editin
     const save = async () => {
         if (submitting.current) return;
         const next: FieldErrors = {
-            itemName: value.itemName.trim() ? undefined : '기념품 이름을 입력해 주세요.',
-            spot: selectSpot && !value.spotUserId ? '연결할 장소를 선택해 주세요.' : undefined,
+            itemName: value.itemName?.trim() || (editing && value.kind === 'GOSHUIN' && spotName) ? undefined : '기념품 이름을 입력해 주세요.',
+            spot: selectSpot && !value.spotUserId && !(editing && value.kind === 'GOSHUIN' && spotName) ? '연결할 장소를 선택해 주세요.' : undefined,
             price: value.price != null && (!Number.isFinite(value.price) || value.price < 0) ? '가격은 0 이상으로 입력해 주세요.' : undefined,
             quantity: !Number.isInteger(value.quantity) || value.quantity < 1 ? '수량은 1 이상의 정수로 입력해 주세요.' : undefined,
         };
@@ -61,8 +61,8 @@ export default function PurchaseForm({ value, onChange, onSave, onCancel, editin
         }
         submitting.current = true;
         setSaving(true);
-        try { await onSave({ ...value, itemName: value.itemName.trim() }); }
-        catch { setErrors({ save: '기념품을 저장하지 못했습니다. 입력 내용을 유지했으니 다시 시도해 주세요.' }); }
+        try { await onSave({ ...value, itemName: value.itemName?.trim() || '' }); }
+        catch (error) { setErrors({ save: error instanceof Error ? error.message : '기념품을 저장하지 못했습니다. 입력 내용을 유지했으니 다시 시도해 주세요.' }); }
         finally { submitting.current = false; setSaving(false); }
     };
     const field = (key: string, label: string, control: ReactNode, error?: string) => (
@@ -79,11 +79,11 @@ export default function PurchaseForm({ value, onChange, onSave, onCancel, editin
             onSubmit={event => { event.preventDefault(); void save(); }}
             className="yume-card @container scroll-mt-4 space-y-4 p-5 md:p-6">
             <h3 className="font-bold text-gray-900">{editing ? '✏️ 기념품 정보 수정' : '🎁 새 기념품 등록'}</h3>
-            <p className="text-xs leading-5 text-gray-600">{selectSpot ? '이름과 장소는 필수입니다.' : '현재 장소에 기념품을 기록합니다.'} 가격·분류·메모는 나중에 추가할 수 있어요.</p>
+            <p className="text-xs leading-5 text-gray-600">{selectSpot ? '기념품 이름과 장소를 먼저 적어 주세요. 가격이나 메모는 나중에 채워도 괜찮아요.' : '이 장소에서 구입했거나 눈여겨본 기념품을 기록해 보세요. 가격과 메모는 필요할 때 입력하면 됩니다.'}</p>
             {errors.save && <p role="alert" className="text-sm text-red-700">{errors.save}</p>}
             <fieldset disabled={saving} className="space-y-4 disabled:opacity-70">
                 <div className="grid grid-cols-1 gap-4 @md:grid-cols-2 @3xl:grid-cols-4">
-                    {field('itemName', '기념품 이름 (필수)', <input ref={nameRef} id={id('itemName')} aria-required="true" aria-invalid={Boolean(errors.itemName)} aria-describedby={describedBy('itemName')} maxLength={200} placeholder="예: 교토 한정 부적" className={inputStyle} value={value.itemName} onChange={event => update({ itemName: event.target.value })} />, errors.itemName)}
+                    {field('itemName', editing && value.kind === 'GOSHUIN' ? '고슈인 이름 (선택)' : '기념품 이름 (필수)', <input ref={nameRef} id={id('itemName')} aria-required={!(editing && value.kind === 'GOSHUIN')} aria-invalid={Boolean(errors.itemName)} aria-describedby={describedBy('itemName')} maxLength={200} placeholder="예: 교토 한정 부적" className={inputStyle} value={value.itemName || ''} onChange={event => update({ itemName: event.target.value })} />, errors.itemName)}
                     {selectSpot ? <PurchaseSpotSelect value={value.spotUserId || 0} selectedName={spotName} validationError={errors.spot} onChange={spotUserId => update({ spotUserId })} />
                         : <div><p className="mb-1 text-xs font-semibold text-gray-700">장소</p><p className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-700">{spotName || '현재 장소'}</p></div>}
                     {field('kind', '종류', <select id={id('kind')} className={inputStyle} value={value.kind} onChange={event => update({ kind: event.target.value as PurchaseKind })}>{PURCHASE_KIND_KEYS.map(key => <option key={key} value={key}>{getPurchaseKindInfo(key).icon} {getPurchaseKindInfo(key).label}</option>)}</select>)}

@@ -34,7 +34,7 @@ export default function PurchaseList({ purchases, onToggleStatus, onEdit, onDele
             </div>
 
             {/* 🖥️ PC 데스크탑 뷰: 테이블형 목록 */}
-            <div className="hidden md:block bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+            <div className="yume-card hidden overflow-hidden md:block">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-100 table-fixed">
                         <colgroup>
@@ -47,12 +47,12 @@ export default function PurchaseList({ purchases, onToggleStatus, onEdit, onDele
                         </colgroup>
                         <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">유형</th>
-                            <th className="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">아이템명</th>
-                            <th className="px-6 py-4 text-center text-xs font-black text-gray-500 uppercase tracking-widest">상태</th>
-                            <th className="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">가격</th>
-                            <th className="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">수량</th>
-                            <th className="px-6 py-4 text-right text-xs font-black text-gray-500 uppercase tracking-widest">관리</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500">유형</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500">아이템명</th>
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500">상태</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500">가격</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500">수량</th>
+                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500">관리</th>
                         </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-100 font-sans">

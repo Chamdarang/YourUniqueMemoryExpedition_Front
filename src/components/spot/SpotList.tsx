@@ -52,11 +52,11 @@ export default function SpotList({ spots, onDelete, onToggleVisit, filtered, onR
 
               <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">유형</th>
-                <th className="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">장소명</th>
-                <th className="px-4 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">주소</th>
-                <th className="px-4 py-4 text-center text-xs font-black text-gray-500 uppercase tracking-widest">방문여부</th>
-                <th className="px-6 py-4 text-right text-xs font-black text-gray-500 uppercase tracking-widest">관리</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500">유형</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500">장소명</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500">주소</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">방문 여부</th>
+                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500">관리</th>
               </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-50">

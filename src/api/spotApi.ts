@@ -10,6 +10,8 @@ export interface GetSpotsParams {
   keyword?: string;
   spotType?: string;
   isVisit?: string;
+  groupId?: number;
+  ungrouped?: boolean;
   // 지도 주변 검색용 파라미터
   lat?: number;
   lng?: number;
@@ -26,6 +28,8 @@ export const getMySpots = async (params?: GetSpotsParams): Promise<PageResponse<
 
   // 필터링
   if (params?.keyword) query.append('keyword', params.keyword);
+  if (params?.groupId) query.append('groupId', String(params.groupId));
+  if (params?.ungrouped) query.append('ungrouped', 'true');
 
   if (params?.spotType && params.spotType !== 'ALL') {
     query.append('spotType', params.spotType);

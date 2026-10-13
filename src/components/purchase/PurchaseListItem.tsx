@@ -12,40 +12,43 @@ interface Props {
 export default function PurchaseListItem({ purchase, onToggleStatus, onEdit, onDelete }: Props) {
     const kindInfo = getPurchaseKindInfo(purchase.kind);
     const statusInfo = getPurchaseStatusInfo(purchase.status);
+    const title = purchase.itemName || purchase.spotName || '기념품';
 
     return (
-        <tr className="hover:bg-gray-50/50 transition-colors group">
-            <td className="px-6 py-4 whitespace-nowrap">
-                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-black border uppercase tracking-tight ${kindInfo.color}`}>
+        <tr className="group transition-colors hover:bg-gray-50/70">
+            <td className="whitespace-nowrap px-6 py-3">
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold ${kindInfo.color}`}>
                     {kindInfo.icon} {kindInfo.label}
                 </span>
             </td>
-            <td className="px-6 py-4">
-                <div className="flex items-center gap-2">
-                    <div className="text-sm font-black text-gray-900 truncate max-w-[180px]">{purchase.itemName}</div>
-                    <button type="button" aria-label={`${purchase.itemName} 수정`} onClick={() => onEdit(purchase)} className="min-h-11 min-w-11 p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-all shadow-sm">✏️</button>
+            <td className="px-6 py-3">
+                <div className="flex items-center gap-1">
+                    <div className="max-w-[180px] truncate text-sm font-semibold text-gray-900">{purchase.itemName || purchase.spotName}</div>
+                    <button type="button" aria-label={`${title} 수정`} onClick={() => onEdit(purchase)} className="yume-icon-button yume-icon-button-primary">✏️</button>
                 </div>
-                {purchase.note && <div className="text-xs text-gray-500 truncate italic mt-0.5 line-clamp-1">"{purchase.note}"</div>}
+                {purchase.note && <div className="mt-0.5 truncate text-xs text-gray-500 line-clamp-1">{purchase.note}</div>}
+                {purchase.spotName && purchase.spotName !== purchase.itemName && <div className="mt-1 text-xs text-gray-500">{purchase.spotName}</div>}
+                {purchase.kind === 'GOSHUINCHO' && purchase.status === 'ACQUIRED' && <Link to={`/goshuin-books?sourcePurchaseId=${purchase.id}`} className="inline-flex min-h-11 items-center text-xs text-blue-700">첩 만들기·열기</Link>}
             </td>
-            <td className="px-6 py-4 text-center">
+            <td className="px-6 py-3 text-center">
                 <button
                     onClick={() => onToggleStatus(purchase)}
-                    className={`min-h-11 min-w-11 px-2.5 py-1 rounded-full font-black text-xs border transition-all active:scale-95 shadow-sm ${statusInfo.color}`}
+                    className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border px-3 text-xs font-semibold transition-all active:scale-95 md:min-h-10 ${statusInfo.color}`}
                 >
                     {statusInfo.label}
                 </button>
             </td>
-            <td className="px-6 py-4 text-sm font-mono font-black text-blue-600 tracking-tighter">
+            <td className="px-6 py-3 text-sm font-semibold text-gray-800">
                 {formatPurchasePrice(purchase.price, purchase.currency)}
             </td>
-            <td className="px-6 py-4 text-sm font-bold text-gray-500">{purchase.quantity}개</td>
-            <td className="px-6 py-4 text-right space-x-3">
+            <td className="px-6 py-3 text-sm text-gray-500">{purchase.quantity}개</td>
+            <td className="space-x-2 px-6 py-3 text-right">
                 {purchase.spotUserId && purchase.spotUserId !== 0 ? (
-                    <Link to={`/spots/${purchase.spotUserId}`} className="text-gray-500 hover:text-blue-600 transition-colors font-bold text-lg" title="장소보기">📍</Link>
+                    <Link to={`/spots/${purchase.spotUserId}`} className="yume-icon-button yume-icon-button-primary" aria-label="장소 보기" title="장소 보기">📍</Link>
                 ) : (
-                    <span className="text-gray-200 cursor-not-allowed text-lg">📍</span>
+                    <span className="inline-flex h-10 w-10 items-center justify-center text-gray-300" aria-label="연결된 장소 없음">📍</span>
                 )}
-                <button type="button" aria-label={`${purchase.itemName} 삭제`} onClick={() => onDelete(purchase.id)} className="min-h-11 min-w-11 text-gray-500 hover:text-red-500 transition-colors font-bold text-lg" title="삭제">🗑️</button>
+                <button type="button" aria-label={`${title} 삭제`} onClick={() => onDelete(purchase.id)} className="yume-icon-button yume-icon-button-danger" title="삭제">🗑️</button>
             </td>
         </tr>
     );

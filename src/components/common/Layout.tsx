@@ -49,7 +49,7 @@ export default function Layout() {
     { name: '탐색', path: '/map', icon: '🗺️' },
     { name: '내 여행', path: '/plans', icon: '✈️' },
     { name: '하루 코스', path: '/days', icon: '📅' },
-    { name: '장소 보관함', path: '/spots', icon: '⭐' },
+    { name: '내 기록', path: '/spots', icon: '⭐' },
   ];
 
   const pageGuideId: PageGuideId | null = location.pathname === '/map' ? 'explore'
@@ -80,22 +80,23 @@ export default function Layout() {
                 YUME
               </span>
               </div>
-              <span className="text-[0.65rem] text-blue-400 font-medium tracking-wide uppercase">
+              <span className="text-xs text-blue-600 font-medium tracking-wide uppercase">
               Your Unique Memory Expedition
             </span>
             </Link>
           </div>
 
           {/* 메뉴 영역 */}
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <nav aria-label="주요 메뉴" className="flex-1 p-4 space-y-2 overflow-y-auto">
             {menus.map((menu) => (
                 <NavLink
                     key={menu.name}
                     to={menu.path}
+                    aria-label={menu.name}
                     data-guide-target={menu.path === '/' ? 'nav-home' : `nav-${menu.path.slice(1) === 'map' ? 'explore' : menu.path.slice(1)}`}
                     className={({ isActive }) =>
                         `flex items-center gap-3 px-4 py-3 rounded-xl transition font-medium ${
-                            isActive
+                            (isActive || (menu.path === '/spots' && location.pathname.startsWith('/goshuin-books')))
                                 ? 'bg-blue-50 text-blue-600'
                                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                         }`
@@ -145,14 +146,14 @@ export default function Layout() {
           📱 모바일용 상단 헤더
       --------------------------------------------------------- */}
         <header className="md:hidden bg-white border-b border-gray-200 p-4 sticky top-0 z-10 flex justify-between items-center shrink-0">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/" className="flex shrink-0 items-center gap-2">
             <span className="text-2xl">✈️</span>
             <span className="font-black text-lg text-blue-600 tracking-widest">YUME</span>
           </Link>
-          <div className="flex min-w-0 items-center gap-2">
-            <button type="button" onClick={openPageGuide} aria-label="현재 화면 가이드 다시보기" className="min-h-11 min-w-11 rounded-lg text-sm text-slate-600">도움말</button>
-            <Link to="/account" className="max-w-20 truncate text-sm font-medium text-blue-600">{displayName}</Link>
-            <button onClick={() => void handleLogout()} className="text-sm text-gray-500">로그아웃</button>
+          <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+            <button type="button" onClick={openPageGuide} aria-label="현재 화면 가이드 다시보기" className="min-h-11 min-w-11 shrink-0 rounded-lg text-sm text-slate-600">도움말</button>
+            <Link to="/account" className="inline-flex min-h-11 min-w-0 max-w-16 items-center rounded-lg px-1 text-sm font-medium text-blue-600 sm:max-w-20"><span className="truncate">{displayName}</span></Link>
+            <button onClick={() => void handleLogout()} className="min-h-11 shrink-0 rounded-lg px-1 text-sm text-gray-500">로그아웃</button>
           </div>
         </header>
 
@@ -176,15 +177,16 @@ export default function Layout() {
               <NavLink
                   key={menu.name}
                   to={menu.path}
+                  aria-label={menu.name}
                   data-guide-target={menu.path === '/' ? 'nav-home' : `nav-${menu.path.slice(1) === 'map' ? 'explore' : menu.path.slice(1)}`}
                   className={({ isActive }) =>
-                      `flex flex-col items-center p-2 rounded-lg ${
-                          isActive ? 'text-blue-600' : 'text-gray-400'
+                      `flex min-w-0 flex-1 flex-col items-center rounded-lg px-0.5 py-2 ${
+                          (isActive || (menu.path === '/spots' && location.pathname.startsWith('/goshuin-books'))) ? 'text-blue-600' : 'text-gray-400'
                       }`
                   }
               >
-                <span className="text-2xl mb-1">{menu.icon}</span>
-                <span className="text-[10px] font-medium">{menu.name}</span>
+                <span aria-hidden="true" className="text-xl mb-1">{menu.icon}</span>
+                <span className="whitespace-nowrap text-center text-xs font-medium leading-tight">{menu.name}</span>
               </NavLink>
           ))}
 
