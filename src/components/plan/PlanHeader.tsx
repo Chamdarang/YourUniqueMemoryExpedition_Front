@@ -23,6 +23,7 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
   const isOwner = plan.accessRole === 'OWNER';
 
   const [isEditing, setIsEditing] = useState(false);
+  const [isMemoExpanded, setIsMemoExpanded] = useState(false);
   const [editForm, setEditForm] = useState({
     planName: "",
     planStartDate: "",
@@ -191,27 +192,27 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
   const status = getStatusLabel();
 
   return (
-      <div className="mb-8">
+      <div className="mb-4">
 
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden relative group transition-all hover:shadow-md">
-          <div className="h-3 bg-blue-500 w-full" />
-          <div className="p-6 md:p-8">
+        <div className="yume-card overflow-hidden">
+          <div className="p-4 md:p-5">
             {!isEditing ? (
                 <div className="flex flex-col gap-4">
-                  <div className="flex justify-between items-start">
-                    <div className="flex gap-2">
+                  <div className="flex flex-wrap justify-between items-start gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <span className={`px-3 py-1 rounded-full text-xs font-extrabold tracking-wide ${status.color}`}>{status.text}</span>
                       {viewDuration.valid && (<span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600">{viewDuration.nights}박 {viewDuration.days}일</span>)}
                     </div>
-                    <button type="button" onClick={startEditing} className="yume-button yume-button-secondary">⚙️ 정보 수정</button>
+                    <button type="button" onClick={startEditing} className="yume-button yume-button-secondary">정보 수정</button>
                   </div>
                   <div>
-                    <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-2 tracking-tight">{plan.planName}</h1>
-                    <div className="flex items-center gap-2 text-gray-500 font-medium"><span>📅</span><span className="font-mono text-lg">{plan.planStartDate} ~ {plan.planEndDate}</span></div>
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 tracking-tight break-keep [overflow-wrap:break-word]">{plan.planName}</h1>
+                    <div className="flex items-start gap-2 text-gray-600 font-medium text-sm"><span>📅</span><span className="font-mono">{plan.planStartDate} ~ {plan.planEndDate}</span></div>
                   </div>
-                  <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 mt-2">
-                    {plan.planMemo ? (<p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{plan.planMemo}</p>) : (<p className="text-gray-400 text-sm italic">작성된 메모가 없습니다.</p>)}
-                  </div>
+                  {plan.planMemo && <div className="bg-gray-50 rounded-xl p-2 border border-gray-100">
+                    <button type="button" aria-expanded={isMemoExpanded} aria-controls={`plan-memo-${plan.id}`} onClick={() => setIsMemoExpanded(open => !open)} className="inline-flex min-h-11 w-full items-center text-sm font-semibold text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg px-2">{isMemoExpanded ? '메모 접기' : '여행 메모 보기'}</button>
+                    <p id={`plan-memo-${plan.id}`} hidden={!isMemoExpanded} className="max-h-48 overflow-y-auto p-2 text-gray-700 text-sm leading-relaxed whitespace-pre-wrap break-words">{plan.planMemo}</p>
+                  </div>}
                 </div>
             ) : (
                 <div className="flex flex-col gap-5 animate-fade-in-up">
@@ -223,12 +224,12 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">여행 이름</label>
+                    <label className="block text-xs font-bold text-gray-600 mb-1 ml-1">여행 이름</label>
                     <input type="text" className="w-full text-3xl font-extrabold text-gray-900 border-b-2 border-blue-200 focus:border-blue-500 bg-transparent outline-none py-1 transition placeholder-gray-300" value={editForm.planName} onChange={(e) => setEditForm({ ...editForm, planName: e.target.value })} placeholder="여행 제목 입력" autoFocus />
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">시작일</label>
+                      <label className="block text-xs font-bold text-gray-600 mb-1 ml-1">시작일</label>
                       <input type="date" min="1900-01-01" max="2100-12-31" onInput={enforceFourDigitDateYear} className="yume-input yume-input-soft font-mono" value={editForm.planStartDate} onChange={(e) => setEditForm({ ...editForm, planStartDate: limitDateYear(e.target.value) })} />
                       <button
                         type="button"
@@ -239,7 +240,7 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                       </button>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">종료일</label>
+                      <label className="block text-xs font-bold text-gray-600 mb-1 ml-1">종료일</label>
                       <input type="date" min="1900-01-01" max="2100-12-31" onInput={enforceFourDigitDateYear} className="yume-input yume-input-soft font-mono" value={editForm.planEndDate} onChange={(e) => setEditForm({ ...editForm, planEndDate: limitDateYear(e.target.value) })} />
                       <button
                         type="button"
@@ -250,10 +251,10 @@ export default function PlanHeader({ plan, onRefresh, onDirtyChange }: Props) {
                       </button>
                     </div>
                   </div>
-                  <div className="text-center text-xs font-bold text-gray-400">현재 등록된 일정 {scheduleDayCount}일 기준</div>
+                  <div className="text-center text-xs font-bold text-gray-600">현재 등록된 일정 {scheduleDayCount}일 기준</div>
                   <div className={`text-center py-2 rounded-lg text-sm font-bold ${editDuration.valid ? 'text-blue-600 bg-blue-50' : 'text-red-500 bg-red-50'}`}>{editDuration.msg}</div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">메모</label>
+                    <label className="block text-xs font-bold text-gray-600 mb-1 ml-1">메모</label>
                     <textarea className="w-full bg-white border border-gray-300 rounded-xl p-4 text-sm text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none resize-none transition shadow-sm" rows={5} value={editForm.planMemo} onChange={(e) => setEditForm({ ...editForm, planMemo: e.target.value })} placeholder="여행에 대한 메모를 자유롭게 남겨보세요." />
                   </div>
                   {isOwner && <div className="pt-4 border-t border-gray-100 flex justify-center">

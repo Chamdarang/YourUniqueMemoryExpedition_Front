@@ -14,6 +14,7 @@ import { makeStaticGoogleMap } from "../api/mapApi";
 
 // Components
 import PlanHeader from "../components/plan/PlanHeader";
+import PlanReservationsModal from "../components/plan/PlanReservationsModal";
 import PlanCollaboratorsBar from "../components/plan/PlanCollaboratorsBar";
 import PlanShareModal from "../components/plan/PlanShareModal";
 import PlanDayItem from "../components/plan/PlanDayItem";
@@ -134,6 +135,7 @@ function PlanDetailContent() {
     } = usePlanRouteAudit(planId, { confirm, showToast });
     const [offlineSaveLoading, setOfflineSaveLoading] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [isReservationsModalOpen, setIsReservationsModalOpen] = useState(false);
     const [mapViewMode, setMapViewMode] = useState<'ALL' | 'PINS' | 'NONE'>('ALL');
     const [showInjury, setShowInjury] = useState(false);
     const [visibleDays, setVisibleDays] = useState<Set<number>>(new Set());
@@ -178,7 +180,6 @@ function PlanDetailContent() {
     const [dayRouteAuditLoadingId, setDayRouteAuditLoadingId] = useState<number | null>(null);
     const [dayRouteApplyLoading, setDayRouteApplyLoading] = useState(false);
     // 헤더 상태
-    const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
     const geocodingLibrary = useMapsLibrary("geocoding");
     const geocoder = useMemo(
@@ -260,7 +261,6 @@ function PlanDetailContent() {
         planToolsMenuRef.current?.removeAttribute('open');
         clearDirty();
         setMobileViewMode('LIST');
-        setIsHeaderExpanded(false);
         setDayRouteAudit(null);
         setDayRouteAuditOpen(false);
         setDayRouteAuditLoadingId(null);
@@ -790,6 +790,13 @@ function PlanDetailContent() {
                     }}
                 />
             )}
+            {isReservationsModalOpen && (
+                <PlanReservationsModal
+                    planId={plan.id}
+                    days={plan.days}
+                    onClose={() => setIsReservationsModalOpen(false)}
+                />
+            )}
             <div className="flex flex-col h-full w-full relative overflow-hidden bg-white">
                 <div className="flex w-full h-full relative">
                     <PlanMapPanel
@@ -815,10 +822,11 @@ function PlanDetailContent() {
                         onShowList={() => setMobileViewMode('LIST')}
                     />
                     <div className={`flex flex-col w-full h-full bg-white md:w-1/2 relative z-10 transition-transform duration-300 ${mobileViewMode === 'MAP' ? 'translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
-                        {/* 헤더 영역 (모바일 접기/펼치기 적용) */}
-                        <div data-guide-target="plan-detail-header" className={`relative bg-white z-30 flex-shrink-0 border-b border-gray-100 transition-all duration-300 ease-in-out ${!isHeaderExpanded ? 'max-h-[190px] overflow-hidden' : ''} md:max-h-none md:overflow-visible`}>
-                            <div className="px-5 py-4 pb-8">
+                        {/* 제목과 날짜를 항상 표시하고 메모만 별도로 펼칩니다. */}
+                        <div data-guide-target="plan-detail-header" className="relative bg-white z-30 shrink-0 max-h-[50dvh] overflow-y-auto border-b border-gray-100">
+                            <div className="p-3 md:p-4">
                                 <PlanHeader
+                                    key={plan.id}
                                     plan={plan}
                                     onRefresh={refreshPlanAfterMutation}
                                     onDirtyChange={handleHeaderDirty}
@@ -826,9 +834,6 @@ function PlanDetailContent() {
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <PlanCollaboratorsBar planId={plan.id} refreshVersion={collaboratorsRefreshVersion} />
                                 </div>
-                            </div>
-                            <div className="md:hidden absolute bottom-0 left-0 w-full h-12 flex justify-center items-end pb-1 bg-gradient-to-t from-white via-white/90 to-transparent">
-                                <button type="button" aria-expanded={isHeaderExpanded} onClick={() => setIsHeaderExpanded(!isHeaderExpanded)} className="yume-button yume-button-secondary rounded-full">{isHeaderExpanded ? '접기 ▲' : '상세 정보 ▼'}</button>
                             </div>
                         </div>
 
@@ -839,12 +844,20 @@ function PlanDetailContent() {
                                 <button type="button" disabled={isAnyDirty} onClick={() => void refreshForLiveUpdate()} className="min-h-9 rounded-md bg-white px-3 font-semibold text-blue-700 disabled:opacity-50">최신 내용 불러오기</button>
                             </div>}
                             <div data-guide-target="plan-detail-schedules" className="relative mb-4 flex flex-col gap-3 px-1 md:flex-row md:items-center md:justify-between">
-                                <div className="flex items-center gap-2 md:shrink-0">
+                                <div className="flex min-h-11 items-center gap-2 pr-14 md:min-h-0 md:shrink-0 md:pr-0">
                                     <h2 className="text-xl font-bold text-gray-800">상세 일정</h2>
-                                    {plan.accessRole === 'EDITOR' && <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">공동 편집</span>}
+                                    {plan.accessRole === 'EDITOR' && <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">공동 편집</span>}
                                     <SaveStatusIndicator isDirty={isAnyDirty} />
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center md:justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsReservationsModalOpen(true)}
+                                        className={planToolbarButtonClass}
+                                        title="항공, 숙소, 교통, 티켓 예약 정보를 관리"
+                                    >
+                                        예약 정보
+                                    </button>
                                     {plan.accessRole === 'OWNER' && <button
                                         type="button"
                                         onClick={() => setIsShareModalOpen(true)}
@@ -889,7 +902,7 @@ function PlanDetailContent() {
                                     </button>
                                     <details
                                         ref={planToolsMenuRef}
-                                        className="relative flex items-center"
+                                        className="absolute right-1 top-0 flex items-center md:relative md:right-auto md:top-auto"
                                         onKeyDownCapture={(event) => {
                                             if (event.key !== 'Escape') return;
                                             event.preventDefault();
@@ -955,13 +968,13 @@ function PlanDetailContent() {
                                                     event.currentTarget.closest('details')?.removeAttribute('open');
                                                     void runPlanAudit();
                                                 }}
-                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-50"
+                                                className="yume-button yume-button-secondary min-h-10 w-full justify-start gap-2 text-xs font-semibold shadow-sm disabled:cursor-wait disabled:opacity-50"
                                                 title="여행 전체의 빈 일정, 위치, 시간, 이동수단과 경로를 점검"
                                             >
-                                                {planAuditLoading && !planAuditResult ? (
-                                                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-emerald-200 border-t-emerald-600" aria-hidden="true" />
+                                                {planAuditLoading ? (
+                                                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" aria-hidden="true" />
                                                 ) : (
-                                                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-emerald-600">
+                                                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-slate-500">
                                                         <path d="M4 19V5m0 14h16M7 15l4-4 3 2 5-6" />
                                                         <path d="M16 7h3v3" />
                                                     </svg>
@@ -1032,13 +1045,12 @@ function PlanDetailContent() {
 
             {isExportMenuOpen && (
                 <div ref={exportDialogRef} role="dialog" aria-modal="true" aria-label="계획 내보내기" tabIndex={-1} className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}>
-                    <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={event => event.stopPropagation()}>
+                    <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl" onClick={event => event.stopPropagation()}>
                         <div className="mb-5 flex items-center justify-between">
                             <div>
-                                <div className="text-xs font-black text-blue-500">PLAN EXPORT</div>
-                                <h3 className="mt-1 text-xl font-black text-gray-900">계획 내보내기</h3>
+                                <h3 className="text-xl font-bold text-gray-900">계획 내보내기</h3>
                             </div>
-                            <button type="button" onClick={() => setIsExportMenuOpen(false)} className="min-h-11 min-w-11 rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="내보내기 창 닫기">✕</button>
+                            <button type="button" onClick={() => setIsExportMenuOpen(false)} className="yume-icon-button" aria-label="내보내기 창 닫기">✕</button>
                         </div>
                         <div className="space-y-2">
                             <button
@@ -1048,7 +1060,7 @@ function PlanDetailContent() {
                                 className="block w-full rounded-xl border border-gray-200 px-4 py-3.5 text-left text-sm font-bold text-gray-700 transition hover:border-blue-200 hover:bg-blue-50"
                             >
                                 📸 전체 이미지 저장
-                                <span className="mt-1 block text-[10px] font-medium text-gray-400">지도와 일차별 일정을 한 장의 이미지로 저장</span>
+                                <span className="mt-1 block text-xs font-medium text-gray-500">지도와 일차별 일정을 한 장의 이미지로 저장</span>
                             </button>
                             <button
                                 type="button"
@@ -1056,7 +1068,7 @@ function PlanDetailContent() {
                                 className="block w-full rounded-xl border border-gray-200 px-4 py-3.5 text-left text-sm font-bold text-blue-700 transition hover:border-blue-200 hover:bg-blue-50"
                             >
                                 💾 계획 파일 내보내기 (JSON)
-                                <span className="mt-1 block text-[10px] font-medium text-gray-400">다른 YUME 계정에서 다시 가져올 수 있는 원본 데이터</span>
+                                <span className="mt-1 block text-xs font-medium text-gray-500">다른 YUME 계정에서 다시 가져올 수 있는 원본 데이터</span>
                             </button>
                         </div>
                     </div>
@@ -1065,10 +1077,10 @@ function PlanDetailContent() {
 
             {copySourceDay && (
                 <div ref={copyDialogRef} role="dialog" aria-modal="true" aria-label="하루 일정 복제" tabIndex={-1} className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-                    <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
                         <div className="mb-5">
-                            <div className="text-xs font-black text-violet-500">하루 일정 복제</div>
-                            <h3 className="mt-1 text-xl font-black text-gray-900">{copySourceDay.dayName}</h3>
+                            <div className="text-xs font-semibold text-blue-600">하루 일정 복제</div>
+                            <h3 className="mt-1 text-xl font-bold text-gray-900">{copySourceDay.dayName}</h3>
                             <p className="mt-1 text-xs text-gray-400">장소·시간·이동·메모를 복사하고 방문 상태는 초기화합니다.</p>
                         </div>
                         <label className="block text-xs font-bold text-gray-600">
@@ -1092,14 +1104,14 @@ function PlanDetailContent() {
 
             {scheduleTransferSource && (
                 <div ref={transferDialogRef} role="dialog" aria-modal="true" aria-label="세부일정 이동·복사" tabIndex={-1} className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-                    <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
                         <div className="mb-5 flex items-start justify-between gap-4">
                             <div>
-                                <div className="text-xs font-black text-violet-500">세부일정 정리</div>
-                                <h3 className="mt-1 text-xl font-black text-gray-900">{scheduleTransferSource.schedule.spotName || '장소명 없음'}</h3>
+                                <div className="text-xs font-semibold text-blue-600">세부일정 정리</div>
+                                <h3 className="mt-1 text-xl font-bold text-gray-900">{scheduleTransferSource.schedule.spotName || '장소명 없음'}</h3>
                                 <p className="mt-1 text-xs text-gray-400">{scheduleTransferSource.sourceDay.dayName}에서 다른 일차로 옮깁니다.</p>
                             </div>
-                            <button type="button" disabled={scheduleTransferLoading} onClick={() => setScheduleTransferSource(null)} className="min-h-11 min-w-11 rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="이동·복사 창 닫기">✕</button>
+                            <button type="button" disabled={scheduleTransferLoading} onClick={() => setScheduleTransferSource(null)} className="yume-icon-button disabled:opacity-50" aria-label="이동·복사 창 닫기">✕</button>
                         </div>
 
                         <div className="yume-segmented mb-4 grid grid-cols-2">
@@ -1142,7 +1154,7 @@ function PlanDetailContent() {
             )}
             {spotLinkGroups && spotLinkGroups.length === 0 && (
                 <div ref={linkedDialogRef} role="dialog" aria-modal="true" aria-label="장소 연결 결과" tabIndex={-1} className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-                    <div className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-2xl">
+                    <div className="w-full max-w-sm rounded-2xl bg-white p-7 text-center shadow-xl">
                         <div className="text-4xl">✅</div>
                         <h2 className="mt-3 text-xl font-black text-gray-900">연결할 장소가 없습니다</h2>
                         <p className="mt-2 text-sm text-gray-500">이 계획의 장소는 모두 내 장소에 연결되어 있거나 장소명이 비어 있습니다.</p>
