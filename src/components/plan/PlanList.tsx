@@ -93,7 +93,7 @@ export default function PlanList({ plans, onDelete, onEdit, filtered, onReset, o
                                     e.stopPropagation(); // 상세페이지 이동 방지
                                     onEdit(plan);        // 팝업 열기
                                 }}
-                                className="min-h-11 min-w-11 text-gray-400 hover:text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors"
+                                className="min-h-11 min-w-11 text-gray-500 hover:text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors"
                                 aria-label={`${plan.planName} 수정`} title="수정"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -108,7 +108,7 @@ export default function PlanList({ plans, onDelete, onEdit, filtered, onReset, o
                                     e.stopPropagation();
                                     onDelete(plan.id);
                                 }}
-                                className="min-h-11 min-w-11 rounded-lg p-2 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:bg-amber-100 disabled:text-amber-600"
+                                className="min-h-11 min-w-11 rounded-lg p-2 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:bg-amber-100 disabled:text-amber-600"
                                 aria-label={`${plan.planName} 삭제`} title={isDeletePending ? "삭제 대기 중" : "삭제"}
                             >
                                 {isDeletePending ? <span className="whitespace-nowrap text-xs font-bold">삭제 대기 중…</span> : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">

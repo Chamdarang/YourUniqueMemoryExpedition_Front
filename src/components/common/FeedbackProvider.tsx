@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FeedbackContext, type ConfirmOptions, type ToastOptions, type UndoableOptions } from './feedbackContext';
 import { useDialogFocus } from '../../hooks/useDialogFocus';
-import { FEEDBACK_FLASH_KEY, FEEDBACK_TOAST_EVENT } from './feedbackBus';
+import { FEEDBACK_FLASH_KEY, FEEDBACK_FLASH_TTL_MS, FEEDBACK_TOAST_EVENT } from './feedbackBus';
 
 interface ToastItem extends ToastOptions {
   id: number;
@@ -33,7 +33,11 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       const raw = sessionStorage.getItem(FEEDBACK_FLASH_KEY);
       if (raw) {
         sessionStorage.removeItem(FEEDBACK_FLASH_KEY);
-        showToast(JSON.parse(raw) as ToastOptions);
+        const flash = JSON.parse(raw) as ToastOptions & { savedAt?: number };
+        const age = Date.now() - (flash.savedAt ?? 0);
+        if (Number.isFinite(flash.savedAt) && age >= 0 && age <= FEEDBACK_FLASH_TTL_MS) {
+          showToast(flash);
+        }
       }
     } catch { sessionStorage.removeItem(FEEDBACK_FLASH_KEY); }
     return () => window.removeEventListener(FEEDBACK_TOAST_EVENT, listener);
@@ -114,29 +118,63 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   return (
     <FeedbackContext.Provider value={value}>
       {children}
-      <div className="yume-toast-region fixed left-1/2 z-[20000] flex w-[min(92vw,430px)] -translate-x-1/2 flex-col gap-2" aria-live="polite">
+      <div className="yume-toast-region pointer-events-none fixed left-1/2 z-[20000] flex w-[min(92vw,430px)] -translate-x-1/2 flex-col gap-2" aria-live="polite">
         {toasts.map(toast => (
-          <div key={toast.id} className={`yume-card flex flex-wrap items-center gap-2 px-4 py-3 shadow-lg ${toast.type === 'error' ? 'yume-card-error' : toast.type === 'success' ? 'yume-card-success' : 'yume-card-toast-info'}`}>
-            <span className="min-w-0 flex-1 basis-24 text-sm font-bold">{toast.message}</span>
-            {toast.actions?.map(action => (
-              <button
-                key={action.label}
-                type="button"
-                onClick={action.onClick}
-                className={`yume-button shrink-0 px-3 ${action.danger ? 'yume-button-danger-solid' : 'yume-button-primary'}`}
-              >
-                {action.label}
-              </button>
-            ))}
+          <div
+            key={toast.id}
+            role={toast.type === 'error' ? 'alert' : 'status'}
+            aria-atomic="true"
+            className={`yume-toast yume-toast--${toast.type ?? 'info'} pointer-events-auto`}
+          >
+            <span className="yume-toast-icon" aria-hidden="true">
+              {toast.type === 'success' ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m5 12 4 4L19 6" />
+                </svg>
+              ) : toast.type === 'error' ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 8v4m0 4h.01" />
+                  <circle cx="12" cy="12" r="9" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 11v5m0-8h.01" />
+                </svg>
+              )}
+            </span>
+
+            <div className="min-w-0 flex-1">
+              <p className="yume-toast-message">{toast.message}</p>
+              {toast.actions?.length ? (
+                <div className="yume-toast-actions">
+                  {toast.actions.map(action => (
+                    <button
+                      key={action.label}
+                      type="button"
+                      onClick={action.onClick}
+                      className={`yume-button shrink-0 px-4 ${action.danger ? 'yume-button-danger-solid' : 'yume-button-primary'}`}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
             {!toast.actions?.length && (
-              <button type="button" onClick={() => dismiss(toast.id)} aria-label="알림 닫기" className="yume-icon-button min-h-11 min-w-11 shrink-0">×</button>
+              <button type="button" onClick={() => dismiss(toast.id)} aria-label="알림 닫기" className="yume-toast-dismiss">
+                <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <path d="m5 5 10 10M15 5 5 15" />
+                </svg>
+              </button>
             )}
           </div>
         ))}
       </div>
       {confirmState && (
         <div ref={dialogRef} tabIndex={-1} className="fixed inset-0 z-[21000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="feedback-confirm-title">
-          <div className="yume-card w-full max-w-sm p-6 shadow-2xl">
+          <div className="yume-card w-full max-w-sm p-6 shadow-xl">
             <h2 id="feedback-confirm-title" className="text-xl font-black text-gray-900">{confirmState.title}</h2>
             <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-gray-500">{confirmState.message}</p>
             <div className="mt-6 flex gap-2">

@@ -46,7 +46,7 @@ export default function DayList({ days, onDelete, searchKeyword, onResetSearch }
                                 <h3 className="truncate text-lg font-bold text-gray-900 transition-colors group-hover:text-blue-700 md:text-xl">
                                     {day.dayName}
                                 </h3>
-                                <span className="shrink-0 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700">
+                                <span className="shrink-0 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
                                     {day.scheduleMode === 'DETAILED' ? '상세 일정' : '간편 일정'}
                                 </span>
                             </div>
@@ -78,7 +78,7 @@ export default function DayList({ days, onDelete, searchKeyword, onResetSearch }
                                 e.stopPropagation();
                                 onDelete(day.id);
                             }}
-                            className="rounded-xl border border-transparent p-2 text-gray-400 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:border-amber-100 disabled:bg-amber-100 disabled:text-amber-600"
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-transparent p-2 text-gray-500 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:border-amber-100 disabled:bg-amber-100 disabled:text-amber-600"
                             title={isDeletePending ? "삭제 대기 중" : "삭제"}
                         >
                             {isDeletePending ? <span className="whitespace-nowrap text-xs font-bold">삭제 대기 중…</span> : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">

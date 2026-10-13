@@ -20,8 +20,8 @@ export default function DayCard({ day }: DayCardProps) {
             <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-xl">
               📅
             </div>
-            <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
-            DRAFT
+            <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">
+            독립 일정
           </span>
           </div>
 

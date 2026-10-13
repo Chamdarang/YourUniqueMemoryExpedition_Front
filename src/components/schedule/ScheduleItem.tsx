@@ -768,7 +768,7 @@ export default function ScheduleItem({
                                 <div className="mb-4 relative" ref={dropdownRef}>
                                     <div className="flex justify-between items-end mb-1">
                                         <label className="text-sm text-gray-500 font-bold">장소 이름</label>
-                                        <button onClick={onRequestMapPick} className={`schedule-compact-action min-h-9 text-[11px] font-bold px-2 rounded border transition flex items-center gap-1 ${isPickingMap ? 'bg-green-500 text-white border-green-500' : 'bg-white text-green-600 border-green-200 hover:bg-green-50'}`}>{isPickingMap ? '📍 선택 중...' : '🗺️ 지도에서 찍기'}</button>
+                                        <button onClick={onRequestMapPick} className={`schedule-compact-action min-h-9 text-xs font-semibold px-1.5 rounded border transition flex items-center gap-1 ${isPickingMap ? 'bg-green-500 text-white border-green-500' : 'bg-white text-green-600 border-green-200 hover:bg-green-50'}`}>{isPickingMap ? '📍 선택 중...' : '🗺️ 지도에서 찍기'}</button>
                                     </div>
                                     <div className="flex bg-gray-100 p-1 rounded-lg mb-2">
                                         <button onClick={() => { setSearchMode('MINE'); setSearchResults([]); setSelectedSpotInfo(null); setIsDropdownOpen(Boolean(searchTerm.trim())); }} className={`min-h-11 flex-1 py-1.5 text-xs font-bold rounded-md transition ${searchMode === 'MINE' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-600'}`}>내 장소</button>
@@ -843,7 +843,7 @@ export default function ScheduleItem({
                                             </label>
                                         </div>
                                         <input id={`schedule-start-${schedule.id}`} type="time" className={`yume-input yume-input-soft font-bold ${form.fixedStartTime ? 'yume-input-fixed' : ''}`} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})} />
-                                        {form.fixedStartTime && <p className="mt-1 text-xs font-medium text-violet-500">앞 일정과 이어 계산하지 않습니다.</p>}
+                                        {form.fixedStartTime && <p className="mt-1 text-xs font-medium text-violet-500">앞 일정 종료 시간과 관계없이, 입력한 시간에 시작합니다.</p>}
                                     </div>
                                     <div><label htmlFor={`schedule-stay-${schedule.id}`} className="mb-1 flex h-6 items-center text-sm text-gray-500 font-bold">기본 체류(분)</label><input id={`schedule-stay-${schedule.id}`} type="number" className="yume-input yume-input-soft font-bold" value={baseStay} onChange={e => setBaseStay(Math.max(0, Number(e.target.value)))} /></div>
                                 </div>
@@ -853,7 +853,7 @@ export default function ScheduleItem({
                                         <label className="text-xs text-orange-600 font-bold">일정 여유시간</label>
                                         <div className="flex flex-wrap items-center gap-1 min-w-0 sm:justify-end">
                                             {INJURY_OPTIONS.map(m => (
-                                                <button key={m} aria-label={`일정 여유시간 ${m}분`} aria-pressed={stayInjury === m} onClick={() => setStayInjury(m)} className={`schedule-injury-choice min-h-9 min-w-9 text-[11px] px-1 py-0.5 rounded-md border transition font-semibold ${stayInjury === m ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-500 border-gray-200'}`}>{m === 0 ? "0" : `+${m}`}</button>
+                                                <button key={m} aria-label={`일정 여유시간 ${m}분`} aria-pressed={stayInjury === m} onClick={() => setStayInjury(m)} className={`schedule-injury-choice min-h-9 min-w-9 text-xs px-1 py-0.5 rounded-md border transition font-semibold ${stayInjury === m ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-500 border-gray-200'}`}>{m === 0 ? "0" : `+${m}`}</button>
                                             ))}
                                             <input type="number" aria-label="일정 여유시간 직접 입력" className="schedule-injury-choice min-h-9 w-9 p-1 text-right border rounded-md text-xs font-semibold text-orange-600 outline-none" value={stayInjury} onChange={e => setStayInjury(Math.max(0, Number(e.target.value)))} />
                                             <span className="text-xs text-orange-600 font-bold">분</span>
@@ -877,7 +877,7 @@ export default function ScheduleItem({
                     {/* 일정 사이 추가 버튼 (onInsert 활용) */}
                     {!isDragging && (
                         <div className="mt-1.5 flex justify-center">
-                            <button type="button" aria-label={`${schedule.spotName || '일정'} 다음에 일정 추가`} className="schedule-compact-action min-h-9 rounded-lg border border-orange-200 bg-orange-50 px-3 text-[11px] font-bold text-orange-700 hover:bg-orange-100 focus-visible:ring-2 focus-visible:ring-orange-400" onClick={event => { event.stopPropagation(); onInsert(index + 1); }}>+ 다음 일정 추가</button>
+                            <button type="button" aria-label={`${schedule.spotName || '일정'} 다음에 일정 추가`} className="schedule-compact-action min-h-9 rounded-lg border border-orange-200 bg-orange-50 px-2 text-xs font-semibold text-orange-700 hover:bg-orange-100 focus-visible:ring-2 focus-visible:ring-orange-400" onClick={event => { event.stopPropagation(); onInsert(index + 1); }}>+ 다음 일정 추가</button>
                         </div>
                     )}
                 </div>

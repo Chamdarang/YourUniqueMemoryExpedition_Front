@@ -108,14 +108,14 @@ export default function SpotLinkModal({ planId, groups, onClose, onChanged }: Pr
 
   return (
     <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="일정의 장소 연결" className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
         <div className="flex items-start justify-between border-b border-gray-100 p-5">
           <div>
-            <div className="text-xs font-black text-blue-500">가져온 장소 연결 · {progress}/{groups.length}</div>
-            <h2 className="mt-1 text-xl font-black text-gray-900">{current.spotName}</h2>
-            <p className="mt-1 text-xs text-gray-400">같은 이름으로 가져온 {current.scheduleCount}개 일정에 한 번에 적용됩니다.</p>
+            <div className="text-xs font-semibold text-blue-600">가져온 장소 연결 · {progress}/{groups.length}</div>
+            <h2 className="mt-1 text-xl font-bold text-gray-900">{current.spotName}</h2>
+            <p className="mt-1 text-sm text-gray-500">같은 이름으로 가져온 {current.scheduleCount}개 일정에 한 번에 적용됩니다.</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg px-2 py-1 text-xl text-gray-400 hover:bg-gray-100">×</button>
+          <button type="button" onClick={onClose} className="yume-icon-button" aria-label="장소 연결 창 닫기">×</button>
         </div>
         {remaining.length > 1 && (
           <div className="flex gap-1 overflow-x-auto border-b border-gray-100 px-4 py-2">
@@ -123,14 +123,14 @@ export default function SpotLinkModal({ planId, groups, onClose, onChanged }: Pr
           </div>
         )}
         <div className="p-5">
-          <div className="mb-3 grid grid-cols-2 rounded-xl bg-gray-100 p-1">
-            <button type="button" onClick={() => setMode('MINE')} className={`rounded-lg py-2 text-xs font-bold ${mode === 'MINE' ? 'bg-white text-blue-700 shadow' : 'text-gray-500'}`}>내 장소</button>
-            <button type="button" onClick={() => setMode('GOOGLE')} className={`rounded-lg py-2 text-xs font-bold ${mode === 'GOOGLE' ? 'bg-white text-blue-700 shadow' : 'text-gray-500'}`}>Google 검색</button>
+          <div className="yume-segmented mb-3 grid grid-cols-2">
+            <button type="button" aria-pressed={mode === 'MINE'} onClick={() => setMode('MINE')} className="yume-segment">내 장소</button>
+            <button type="button" aria-pressed={mode === 'GOOGLE'} onClick={() => setMode('GOOGLE')} className="yume-segment">Google 검색</button>
           </div>
-          <input value={query} onChange={event => setQuery(event.target.value)} placeholder="연결할 장소 검색" className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-blue-400" autoFocus />
+          <input value={query} onChange={event => setQuery(event.target.value)} placeholder="연결할 장소 검색" className="yume-input" autoFocus />
           <div className="mt-3 max-h-72 overflow-y-auto rounded-xl border border-gray-100">
             {loading ? <p className="p-6 text-center text-sm text-gray-400">검색 중...</p> : results.length === 0 ? <p className="p-6 text-center text-sm text-gray-400">검색 결과가 없습니다. 검색어를 바꿔보세요.</p> : results.map((spot, index) => (
-              <button key={`${spot.id}-${spot.placeId}-${index}`} type="button" disabled={linking} onClick={() => void selectSpot(spot)} className="block w-full border-b border-gray-100 px-4 py-3 text-left last:border-0 hover:bg-blue-50 disabled:opacity-50">
+              <button key={`${spot.id}-${spot.placeId}-${index}`} type="button" disabled={linking} onClick={() => void selectSpot(spot)} className="block min-h-11 w-full border-b border-gray-100 px-4 py-2.5 text-left last:border-0 hover:bg-blue-50 disabled:opacity-50">
                 <div className="text-sm font-bold text-gray-800">{getSpotDisplayName(spot)}</div>
                 <div className="mt-0.5 truncate text-xs text-gray-400">{spot.address || (mode === 'GOOGLE' ? 'Google 장소' : '주소 없음')}</div>
               </button>

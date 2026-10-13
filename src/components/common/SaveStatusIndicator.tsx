@@ -56,7 +56,7 @@ export default function SaveStatusIndicator({ isDirty = false, className = '', s
         : 'text-emerald-700';
 
   return (
-    <span role="status" aria-live="polite" className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${textClass} ${className}`}>
+    <span role="status" aria-live="polite" className={`inline-flex items-center gap-1.5 text-xs font-semibold ${textClass} ${className}`}>
       <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} />
       {label}
     </span>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { useParams, useNavigate, useBlocker } from "react-router-dom";
+import { useParams, useBlocker } from "react-router-dom";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary, InfoWindow, Pin, type MapMouseEvent } from "@vis.gl/react-google-maps";
@@ -136,7 +136,6 @@ export default function DayDetailPage() {
 function DayDetailContent() {
     const { confirm, runUndoable, showToast } = useFeedback();
     const { id } = useParams<{ id: string }>();
-    const navigate = useNavigate();
     const dayId = Number(id);
 
     // ✅ 1. 스케줄 관리를 useSchedule 훅으로 전면 이관
@@ -262,7 +261,6 @@ function DayDetailContent() {
         setRouteAuditOpen(false);
         setRouteAuditCheckedAt(null);
         auditedRouteFingerprintRef.current = null;
-
         // 기본 정보와 일정 모두 확인한 뒤 화면을 표시합니다.
         void Promise.all([getPlanDayDetail(dayId), fetchSchedules(dayId)]).then(([data, schedulesLoaded]) => {
             if (!active) return;
@@ -756,12 +754,11 @@ function DayDetailContent() {
                     {/* [2] 일정 리스트 영역 */}
                     <div className={`flex flex-col w-full h-full bg-white md:w-1/2 relative z-10 transition-transform duration-300 ${mobileViewMode === 'MAP' ? 'translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
                         {/* 헤더 */}
-                        <div data-guide-target="day-detail-toolbar" className="yume-detail-toolbar px-4 py-3 md:px-5 md:py-4 border-b backdrop-blur z-30 flex-shrink-0 flex flex-col gap-3">
+                        <div data-guide-target="day-detail-toolbar" className="z-30 mx-4 my-3 flex flex-shrink-0 flex-col gap-3 rounded-3xl border border-gray-100 bg-white p-4 shadow-sm md:mx-5 md:my-4 md:p-6">
                             <div className="flex items-center gap-2 w-full">
-                                <button onClick={() => navigate(-1)} aria-label="이전 화면" className="yume-icon-button h-11 w-11 shrink-0">🔙</button>
                                 <input
                                     type="text"
-                                    className="flex-1 min-w-0 text-xl md:text-2xl font-black text-gray-900 outline-none bg-transparent placeholder-gray-300 truncate"
+                                    className="flex-1 min-w-0 truncate bg-transparent text-2xl font-extrabold tracking-tight text-gray-900 outline-none placeholder-gray-300 md:text-3xl"
                                     value={titleForm}
                                     onChange={e => setTitleForm(e.target.value)}
                                     onBlur={handleUpdateDayInfo}
@@ -771,7 +768,6 @@ function DayDetailContent() {
 
                             <div className="flex flex-wrap items-center gap-2">
                                 <SaveStatusIndicator isDirty={isAnyDirty} statusOverride={headerSaveState === 'ERROR' ? 'ERROR' : headerSaveState === 'SAVING' ? 'SAVING' : undefined} className="shrink-0" />
-                                <span className="text-xs text-slate-500">입력 후 다른 곳을 누르면 자동 저장됩니다.</span>
                                 {dayDetail.planId != null && <span role="status" className={`text-xs ${liveConnectionState === 'connected' ? 'text-emerald-700' : 'text-slate-500'}`}>
                                     {liveConnectionState === 'connected' ? '● 실시간 동기화 중' : liveConnectionState === 'unavailable' ? '실시간 연결을 사용할 수 없습니다' : liveConnectionState === 'paused' ? '탭이 숨겨져 있어 연결을 쉬는 중' : '실시간 연결 중…'}
                                 </span>}
@@ -787,30 +783,41 @@ function DayDetailContent() {
                             <div className="flex flex-wrap items-center gap-2">
                                 <button
                                     onClick={() => setShowInjury(!showInjury)}
-                                    className={`yume-button shrink-0 whitespace-nowrap ${showInjury ? 'yume-button-warm' : 'yume-button-secondary'}`}
+                                    className={`yume-button min-h-10 shrink-0 whitespace-nowrap text-xs font-semibold shadow-sm ${showInjury ? 'yume-button-warm' : 'yume-button-secondary'}`}
                                 >
-                                    ⚽ {showInjury ? '여유시간 표시' : '여유시간 숨김'}
+                                    ⏱️ {showInjury ? '여유시간 표시' : '여유시간 숨김'}
                                 </button>
-                                <button onClick={handleExportClick} className="yume-button yume-button-secondary shrink-0 whitespace-nowrap">
+                                <button onClick={handleExportClick} className="yume-button yume-button-secondary min-h-10 shrink-0 whitespace-nowrap text-xs font-semibold shadow-sm">
                                     📸 이미지로 내보내기
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => void handleRouteAudit()}
                                     disabled={routeAuditLoading}
-                                    className="yume-button yume-button-soft shrink-0 whitespace-nowrap disabled:cursor-wait"
+                                    title={`하루 일정의 이동 경로를 점검합니다. 점검 구간 ${routeAuditLegCount}개`}
+                                    className="yume-button yume-button-secondary min-h-10 shrink-0 whitespace-nowrap text-xs font-semibold shadow-sm disabled:cursor-wait disabled:opacity-50"
                                 >
-                                    {routeAuditLoading
-                                        ? '경로 점검 중…'
+                                    {routeAuditLoading ? (
+                                        <span className="mr-1 inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700 align-[-2px]" aria-hidden="true" />
+                                    ) : (
+                                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="mr-1 inline-block h-3.5 w-3.5 align-[-2px] text-slate-500">
+                                            <path d="M4 19V5m0 14h16M7 15l4-4 3 2 5-6" />
+                                            <path d="M16 7h3v3" />
+                                        </svg>
+                                    )}
+                                    {routeAuditLoading && routeAuditResult
+                                        ? '점검 중 · 결과 보기'
+                                        : routeAuditLoading
+                                        ? '전체 점검 중…'
                                         : routeAuditResult
-                                        ? `🧭 점검 결과 보기${routeAuditStale ? ' · 변경됨' : ''}`
-                                        : `🧭 전체 경로 점검 · ${routeAuditLegCount}구간`}
+                                        ? `점검 결과${routeAuditStale ? ' · 변경됨' : ''}`
+                                        : `전체 점검 · ${routeAuditLegCount}구간`}
                                 </button>
                             </div>
 
-                            <div className="rounded-xl border border-orange-100 bg-orange-50 p-3">
+                            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
                                 <textarea
-                                    className="w-full bg-transparent outline-none text-sm text-gray-600 resize-none font-medium"
+                                    className="w-full bg-transparent outline-none text-sm text-gray-700 resize-none font-medium"
                                     rows={2}
                                     value={memoForm}
                                     onChange={e => setMemoForm(e.target.value)}

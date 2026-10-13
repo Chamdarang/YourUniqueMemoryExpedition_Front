@@ -64,7 +64,7 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
         if (shouldTrackSave) finishTrackedSave(false);
         // 중복 알림 방지 (이미 로그아웃 처리 중이면 무시)
         if (localStorage.getItem('accessToken')) {
-            saveFeedbackFlash({ message: "세션이 만료되었습니다. 다시 로그인해 주세요. ✈️", type: 'info' });
+            saveFeedbackFlash({ message: "세션이 만료되었습니다. 다시 로그인해 주세요.", type: 'info' });
             
             // 토큰 삭제 및 로그인 페이지로 강제 이동
             localStorage.removeItem('accessToken');

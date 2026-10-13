@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { changeAccountPassword, deleteAccount, getAccountProfile, updateAccountNickname } from '../api/accountApi';
 import { useFeedback } from '../components/common/useFeedback';
-import { saveFeedbackFlash } from '../components/common/feedbackBus';
 import { clearOfflineHomeSnapshot } from '../utils/offlineHomeStorage';
 import { cacheAccountNickname } from '../utils/accountProfile';
 import type { AccountProfile } from '../types/account';
@@ -101,7 +100,6 @@ export default function AccountSettingsPage() {
       localStorage.removeItem('username');
       localStorage.removeItem('nickname');
       localStorage.removeItem('tokenExpiry');
-      saveFeedbackFlash({ message: '계정과 저장된 여행 데이터가 삭제되었습니다.', type: 'success' });
       navigate('/login', { replace: true });
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : '계정을 삭제하지 못했습니다.', type: 'error' });

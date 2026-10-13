@@ -25,7 +25,7 @@ const pageGuides: Record<string, GuideStep[]> = {
     { target: 'day-detail-schedules', title: '일정 순서와 방문 상태를 관리해요', description: '장소를 추가하고 순서를 바꾸거나 각 일정의 방문 완료를 표시해요.' },
   ],
   spots: [
-    { target: 'spots-tabs', title: '장소·그룹·기념품 탭을 살펴봐요', description: '세 탭에서 장소 보관함, 그룹, 수집 기록을 각각 확인할 수 있어요.' },
+    { target: 'spots-tabs', title: '장소·기념품·고슈인 탭을 살펴봐요', description: '내 기록에서 장소와 수집 기록을 관리해요. 장소 탭에서는 그룹별로 조회하고 그룹을 관리할 수 있어요.' },
     { target: 'spots-content', title: '선택한 탭의 항목을 관리해요', description: '검색과 필터로 원하는 장소나 수집 기록을 찾아 편집할 수 있어요.' },
   ],
   'spot-detail': [

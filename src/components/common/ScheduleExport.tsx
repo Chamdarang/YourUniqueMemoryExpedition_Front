@@ -35,13 +35,13 @@ export const DayScheduleExportView = ({ dayName, subTitle, memo, schedules, opti
                 {options.header && (
                     <div className="mb-8">
                         <div className="flex items-center gap-2 mb-3">
-                            <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest">Day Schedule</span>
+                            <span className="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-widest">Day Schedule</span>
                         </div>
-                        {subTitle && <h2 className="text-lg font-bold text-gray-400 mb-1 leading-none">{subTitle}</h2>}
+                        {subTitle && <h2 className="text-lg font-bold text-gray-600 mb-1 leading-none">{subTitle}</h2>}
                         <h1 className="text-4xl font-black text-gray-900 leading-tight mb-4 break-keep">{dayName || "나의 일정"}</h1>
                         {memo && (
                             <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                                <span className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Note.</span>
+                                <span className="block text-xs font-bold text-gray-600 uppercase mb-1">Note.</span>
                                 <p className="text-gray-600 text-sm font-medium leading-relaxed whitespace-pre-wrap">{memo}</p>
                             </div>
                         )}
@@ -70,12 +70,12 @@ export const PlanScheduleExportView = ({ planTitle, planMemo, sections, options,
                 {options.header && (
                     <div className="mb-8">
                         <div className="flex items-center gap-2 mb-2">
-                            <span className="bg-blue-100 text-blue-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">Travel Log</span>
+                            <span className="bg-blue-100 text-blue-600 text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-widest">Travel Log</span>
                         </div>
                         <h1 className="text-4xl font-black text-gray-900 leading-tight mb-4 break-keep">{planTitle || "나의 여행"}</h1>
                         {planMemo && (
                             <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-6">
-                                <span className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Trip Note.</span>
+                                <span className="block text-xs font-bold text-gray-600 uppercase mb-1">Trip Note.</span>
                                 <p className="text-gray-600 text-sm font-medium leading-relaxed whitespace-pre-wrap">{planMemo}</p>
                             </div>
                         )}
@@ -90,10 +90,10 @@ export const PlanScheduleExportView = ({ planTitle, planMemo, sections, options,
                     <div key={section.id} className="mb-10 last:mb-0">
                         <div className="flex items-center gap-3 mb-6 pb-2 border-b-2 border-gray-100">
                             <span className="text-2xl font-black text-blue-600">{section.title}</span>
-                            {section.memo && <span className="text-sm font-medium text-gray-400 truncate max-w-[400px]">{section.memo}</span>}
+                            {section.memo && <span className="text-sm font-medium text-gray-600 truncate max-w-[400px]">{section.memo}</span>}
                         </div>
                         <ScheduleList schedules={section.schedules} />
-                        {section.schedules.length === 0 && <div className="text-center py-4 text-xs text-gray-300 italic">일정이 없습니다.</div>}
+                        {section.schedules.length === 0 && <div className="text-center py-4 text-xs text-gray-500 italic">일정이 없습니다.</div>}
                     </div>
                 ))}
             </div>
@@ -123,15 +123,15 @@ const ScheduleList = ({ schedules }: { schedules: DayScheduleResponse[] }) => {
                         {idx !== schedules.length - 1 && <div className="absolute left-[79px] top-10 bottom-0 w-[2px] border-l-2 border-dashed border-gray-100" />}
                         <div className="w-[80px] pt-1.5 pr-6 text-right shrink-0 flex flex-col items-end">
                             <span className="text-sm font-black text-blue-600 font-mono tracking-tighter leading-none">{item.startTime?.substring(0, 5)}</span>
-                            {endTime && <span className="text-[10px] font-bold text-gray-300 font-mono mt-1 leading-none">{endTime.substring(0, 5)}</span>}
+                            {endTime && <span className="text-xs font-bold text-gray-500 font-mono mt-1 leading-none">{endTime.substring(0, 5)}</span>}
                         </div>
                         <div className="relative z-10 w-4 flex justify-center pt-[10px] shrink-0">
                             <div className="w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-500 shadow-[0_0_0_4px_rgba(59,130,246,0.1)]" />
                         </div>
                         <div className="flex-1 pl-6 pb-12">
                             <div className="flex items-center gap-2 mb-1.5">
-                                <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded uppercase tracking-wider">{typeInfo.label}</span>
-                                {pureMovingDuration > 0 && <span className="text-[9px] font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded flex items-center gap-1">{item.transportation ? transportIcons[item.transportation] || '➡️' : '➡️'} {pureMovingDuration}분 이동</span>}
+                                <span className="text-xs font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded uppercase tracking-wider">{typeInfo.label}</span>
+                                {pureMovingDuration > 0 && <span className="text-xs font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded flex items-center gap-1">{item.transportation ? transportIcons[item.transportation] || '➡️' : '➡️'} {pureMovingDuration}분 이동</span>}
                             </div>
                             <h3 className="text-xl font-bold text-gray-900 mb-1.5 break-all">{displaySpotName}</h3>
                             {cleanMemo && <p className="text-xs text-gray-500 leading-relaxed font-medium bg-gray-50/50 p-2 rounded-lg">{cleanMemo}</p>}
@@ -146,10 +146,10 @@ const ScheduleList = ({ schedules }: { schedules: DayScheduleResponse[] }) => {
 const Footer = () => (
     <div className="px-10 py-8 mt-4 border-t border-gray-100 flex justify-between items-end bg-gray-50/50">
         <div>
-            <span className="text-[10px] font-black text-gray-400 tracking-[0.2em] uppercase block mb-1">Your Unique Memory Expedition</span>
+            <span className="text-xs font-black text-gray-600 tracking-[0.2em] uppercase block mb-1">Your Unique Memory Expedition</span>
             <span className="text-[12px] font-black text-blue-600 tracking-widest uppercase">YUME • Travel log</span>
         </div>
-        <div className="text-[10px] font-bold text-gray-300">PLAN YOUR TRIP</div>
+        <div className="text-xs font-bold text-gray-500">PLAN YOUR TRIP</div>
     </div>
 );
 
@@ -227,7 +227,7 @@ export const ImageExportModal = ({ isOpen, onClose, onConfirm, options, setOptio
                                 </AdvancedMarker>
                             ))}
                         </Map>
-                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/70 text-white text-[10px] px-3 py-1 rounded-full pointer-events-none">지도를 움직여 저장할 범위를 맞추세요</div>
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/70 text-white text-xs px-3 py-1 rounded-full pointer-events-none">지도를 움직여 저장할 범위를 맞추세요</div>
                     </div>
                 )}
 

@@ -313,7 +313,7 @@ export default function PlanListPage() {
       await createPlan(createForm);
       setCreateForm({ planName: '', planStartDate: '', planEndDate: '', planDays: 4, planMemo: '' });
       setIsCreatingPlan(false);
-      showToast({ message: `'${createForm.planName}' 여행을 만들었습니다! ✈️`, type: 'success' });
+      showToast({ message: `'${createForm.planName}' 여행을 만들었습니다!`, type: 'success' });
       await fetchPlans(undefined, 0, 'ALL');
       currentStatusRef.current = 'ALL';
       setViewStatus('ALL');
@@ -386,14 +386,14 @@ export default function PlanListPage() {
       <div className="max-w-5xl mx-auto p-4 md:p-6 pb-20">
 
         {/* 헤더 */}
-        <div className="flex flex-row justify-between items-end mb-6 gap-4">
+        <div className="flex flex-col items-stretch justify-between mb-6 gap-4 sm:flex-row sm:items-end">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">나의 여행 🗺️</h1>
+            <h1 className="flex items-center gap-2 text-2xl md:text-3xl font-bold text-gray-900 leading-tight"><span>나의 여행</span><span aria-hidden="true">🗺️</span></h1>
             {/* 총 개수 표시 */}
             <p className="text-gray-500 mt-1 md:mt-2 text-sm">{loadError ? '목록을 다시 불러와 주세요.' : <>총 <span className="text-blue-600 font-bold">{totalElements}</span>개의 여행</>}</p>
           </div>
 
-          <div data-guide-target="plans-actions" className="flex items-center gap-2">
+          <div data-guide-target="plans-actions" className="grid grid-cols-2 items-center gap-2 sm:flex">
             <input
               ref={importInputRef}
               type="file"
@@ -406,7 +406,7 @@ export default function PlanListPage() {
               data-guide-target="plans-import"
               disabled={importing}
               onClick={() => importInputRef.current?.click()}
-              className="border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold py-2.5 px-3 md:px-4 rounded-xl shadow-sm transition text-sm shrink-0 disabled:cursor-not-allowed disabled:opacity-60"
+              className="yume-button yume-button-soft"
             >
               {importing ? '불러오는 중...' : '📂 불러오기'}
             </button>
@@ -417,34 +417,34 @@ export default function PlanListPage() {
         </div>
 
         {isCreatingPlan && (
-          <section data-guide-target="plans-create-form" className="mb-6 p-6 bg-white rounded-xl shadow-lg border border-gray-100 animate-fade-in-down">
+          <section data-guide-target="plans-create-form" className="yume-card mb-6 p-4 sm:p-6 animate-fade-in-down">
             <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><span>✨</span> 새로운 여행 만들기</h2>
             <form onSubmit={handleCreatePlanSubmit} className="space-y-4">
               <p className="text-xs text-gray-600">가는 날·오는 날과 기간은 함께 계산됩니다. 만든 뒤 여행을 열어 날짜별 일정을 추가하세요.</p>
               <div data-guide-target="plans-create-name">
-                <label className="block text-sm font-bold text-gray-700 mb-1">여행 제목</label>
-                <input type="text" required value={createForm.planName} onChange={event => setCreateForm(current => ({ ...current, planName: event.target.value }))} placeholder="예) 제주도 힐링 여행" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                <label htmlFor="new-plan-name" className="block text-sm font-bold text-gray-700 mb-1">여행 제목</label>
+                <input id="new-plan-name" type="text" required value={createForm.planName} onChange={event => setCreateForm(current => ({ ...current, planName: event.target.value }))} placeholder="예) 제주도 힐링 여행" className="yume-input" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4" data-guide-target="plans-create-dates">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">가는 날</label>
-                  <input type="date" max="9999-12-31" onInput={enforceFourDigitDateYear} value={createForm.planStartDate} onChange={event => handleCreateDateChange('planStartDate', event.target.value)} className="w-full px-3 py-2 border rounded-lg outline-none focus:border-blue-500" />
+                  <label htmlFor="new-plan-start" className="block text-sm font-bold text-gray-700 mb-1">가는 날</label>
+                  <input id="new-plan-start" type="date" max="9999-12-31" onInput={enforceFourDigitDateYear} value={createForm.planStartDate} onChange={event => handleCreateDateChange('planStartDate', event.target.value)} className="yume-input" />
                 </div>
                 <div data-guide-target="plans-create-duration">
-                  <label className="block text-sm font-bold text-gray-700 mb-1">기간 (일)</label>
-                  <input type="number" min="1" value={createForm.planDays} onChange={event => {
+                  <label htmlFor="new-plan-duration" className="block text-sm font-bold text-gray-700 mb-1">기간 (일)</label>
+                  <input id="new-plan-duration" type="number" min="1" value={createForm.planDays} onChange={event => {
                     const days = parseInt(event.target.value, 10) || 1;
                     setCreateForm(current => ({ ...current, planDays: days, planEndDate: addDaysToDate(current.planStartDate, days) }));
-                  }} className="w-full px-3 py-2 border rounded-lg outline-none focus:border-blue-500 text-center font-bold text-blue-600" />
+                  }} className="yume-input text-center font-bold text-blue-600" />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">오는 날</label>
-                  <input type="date" max="9999-12-31" onInput={enforceFourDigitDateYear} value={createForm.planEndDate} onChange={event => handleCreateDateChange('planEndDate', event.target.value)} className="w-full px-3 py-2 border rounded-lg outline-none focus:border-blue-500" />
+                  <label htmlFor="new-plan-end" className="block text-sm font-bold text-gray-700 mb-1">오는 날</label>
+                  <input id="new-plan-end" type="date" max="9999-12-31" onInput={enforceFourDigitDateYear} value={createForm.planEndDate} onChange={event => handleCreateDateChange('planEndDate', event.target.value)} className="yume-input" />
                 </div>
               </div>
               <div data-guide-target="plans-create-memo">
-                <label className="block text-sm font-bold text-gray-700 mb-1">간단 메모</label>
-                <textarea rows={3} value={createForm.planMemo} onChange={event => setCreateForm(current => ({ ...current, planMemo: event.target.value }))} placeholder="여행 테마나 계획을 적어보세요." className="w-full px-4 py-2 border rounded-lg outline-none resize-none" />
+                <label htmlFor="new-plan-memo" className="block text-sm font-bold text-gray-700 mb-1">간단 메모</label>
+                <textarea id="new-plan-memo" rows={3} value={createForm.planMemo} onChange={event => setCreateForm(current => ({ ...current, planMemo: event.target.value }))} placeholder="여행 테마나 계획을 적어보세요." className="yume-input resize-none" />
               </div>
               <button data-guide-target="plans-create-submit" type="submit" className="yume-button yume-button-primary w-full">여행 생성하기</button>
             </form>
@@ -506,7 +506,7 @@ export default function PlanListPage() {
                         </span>
                       </div>
                     </div>
-                    <span className="ml-3 shrink-0 self-end rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-bold text-blue-700 md:ml-0 md:self-auto">공동 편집</span>
+                    <span className="ml-3 shrink-0 self-end rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700 md:ml-0 md:self-auto">공동 편집</span>
                   </Link>
                 );
               })}
@@ -537,58 +537,58 @@ export default function PlanListPage() {
         {/* 수정 팝업 */}
         {editingPlan && (
             <div ref={editDialogRef} role="dialog" aria-modal="true" aria-label="여행 정보 수정" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-              <div className="bg-white rounded-3xl w-full max-w-2xl p-8 md:p-10 shadow-2xl animate-fade-in-down transform transition-all scale-100">
+              <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl animate-fade-in-down sm:p-6 md:p-8">
 
-                <div className="flex justify-between items-center mb-8">
-                  <h3 className="text-2xl font-extrabold text-gray-900">✏️ 여행 정보 수정</h3>
-                  <button type="button" aria-label="여행 정보 수정 닫기" onClick={() => setEditingPlan(null)} className="min-h-11 min-w-11 text-gray-400 hover:text-gray-600 text-2xl transition">✕</button>
+                <div className="mb-5 flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-gray-900">✏️ 여행 정보 수정</h3>
+                  <button type="button" aria-label="여행 정보 수정 닫기" onClick={() => setEditingPlan(null)} className="yume-icon-button">✕</button>
                 </div>
 
-                <form onSubmit={handleEditSubmit} className="space-y-6">
+                <form onSubmit={handleEditSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-base font-bold text-gray-700 mb-2">여행 이름</label>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700">여행 이름</label>
                     <input
                         type="text"
-                        className="w-full border border-gray-300 rounded-xl p-4 text-lg outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition shadow-sm"
+                        className="yume-input"
                         value={editForm.planName}
                         onChange={e => setEditForm({ ...editForm, planName: e.target.value })}
                         data-dialog-initial-focus
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="block text-base font-bold text-gray-700 mb-2">시작일</label>
+                      <label className="mb-1 block text-sm font-semibold text-gray-700">시작일</label>
                       <input
                           type="date"
                           max="9999-12-31"
                           onInput={enforceFourDigitDateYear}
-                          className="w-full border border-gray-300 rounded-xl p-4 text-gray-700 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition shadow-sm cursor-pointer"
+                          className="yume-input cursor-pointer"
                           value={editForm.planStartDate}
                           onChange={e => setEditForm({ ...editForm, planStartDate: limitDateYear(e.target.value) })}
                       />
                     </div>
                     <div>
-                      <label className="block text-base font-bold text-gray-700 mb-2">종료일</label>
+                      <label className="mb-1 block text-sm font-semibold text-gray-700">종료일</label>
                       <input
                           type="date"
                           max="9999-12-31"
                           onInput={enforceFourDigitDateYear}
-                          className="w-full border border-gray-300 rounded-xl p-4 text-gray-700 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition shadow-sm cursor-pointer"
+                          className="yume-input cursor-pointer"
                           value={editForm.planEndDate}
                           onChange={e => setEditForm({ ...editForm, planEndDate: limitDateYear(e.target.value) })}
                       />
                     </div>
                   </div>
 
-                  <div className={`p-4 rounded-xl text-base font-bold text-center border-2 border-dashed transition-colors ${durationInfo.valid ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-red-50 border-red-200 text-red-500'}`}>
+                  <div className={`rounded-xl border p-3 text-sm font-semibold text-center transition-colors ${durationInfo.valid ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-red-50 border-red-200 text-red-600'}`}>
                     {durationInfo.msg}
                   </div>
 
                   <div>
-                    <label className="block text-base font-bold text-gray-700 mb-2">메모</label>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700">메모</label>
                     <textarea
-                        className="w-full border border-gray-300 rounded-xl p-4 text-gray-700 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition shadow-sm resize-none"
+                        className="yume-input min-h-32 resize-y"
                         rows={5}
                         placeholder="여행에 대한 간단한 메모를 남겨보세요."
                         value={editForm.planMemo}
@@ -596,9 +596,9 @@ export default function PlanListPage() {
                     />
                   </div>
 
-                  <div className="flex gap-4 pt-4">
-                    <button type="button" onClick={() => setEditingPlan(null)} className="yume-button yume-button-secondary yume-button-large flex-1">취소</button>
-                    <button type="submit" className="yume-button yume-button-primary yume-button-large flex-1">저장하기</button>
+                  <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={() => setEditingPlan(null)} className="yume-button yume-button-secondary flex-1">취소</button>
+                    <button type="submit" className="yume-button yume-button-primary flex-1">저장하기</button>
                   </div>
                 </form>
               </div>
@@ -629,10 +629,10 @@ export default function PlanListPage() {
 
         {importCompletion && (
           <div ref={importReportRef} role="dialog" aria-modal="true" aria-label="여행 가져오기 결과" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl md:p-8">
+            <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl sm:p-6 md:p-8">
               <div className="mb-6 text-center">
                 <div className="mb-3 text-4xl">✅</div>
-                <h3 className="text-2xl font-black text-gray-900">계획을 가져왔습니다</h3>
+                <h3 className="text-xl font-bold text-gray-900">계획을 가져왔습니다</h3>
                 <p className="mt-1 text-sm font-bold text-blue-600">{importCompletion.plan.planName}</p>
                 <p className="mt-1 text-xs text-gray-400">{importCompletion.source} Import 결과</p>
               </div>
@@ -648,7 +648,7 @@ export default function PlanListPage() {
                 ].map(([label, value]) => (
                   <div key={String(label)} className="rounded-xl bg-blue-50 p-3 text-center">
                     <div className="text-xl font-black text-blue-700">{value}</div>
-                    <div className="text-[11px] font-bold text-blue-400">{label}</div>
+                    <div className="text-xs font-semibold text-blue-600">{label}</div>
                   </div>
                 ))}
               </div>
@@ -680,7 +680,7 @@ export default function PlanListPage() {
                     setImportCompletion(null);
                     void fetchPlans(undefined, 0);
                   }}
-                  className="flex-1 rounded-xl bg-gray-100 py-3 font-bold text-gray-600 hover:bg-gray-200"
+                  className="yume-button yume-button-secondary flex-1"
                 >
                   목록에 남기
                 </button>

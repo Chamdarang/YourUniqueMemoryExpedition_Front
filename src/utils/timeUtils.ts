@@ -66,13 +66,13 @@ export const getDurationInfo = (startStr: string, endStr: string): DurationInfo 
   if (!startStr || !endStr) return { valid: false, msg: '날짜를 입력해주세요' };
 
   if (!isValidDate(startStr) || !isValidDate(endStr)) {
-    return { valid: false, msg: '🚫 달력에 없는 날짜입니다' };
+    return { valid: false, msg: '달력에 없는 날짜입니다' };
   }
 
   const start = new Date(startStr).getTime();
   const end = new Date(endStr).getTime();
 
-  if (start > end) return { valid: false, msg: '🚫 종료일이 더 빠릅니다' };
+  if (start > end) return { valid: false, msg: '종료일이 더 빠릅니다' };
 
   const diff = (end - start) / (1000 * 60 * 60 * 24);
   const nights = Math.ceil(diff);

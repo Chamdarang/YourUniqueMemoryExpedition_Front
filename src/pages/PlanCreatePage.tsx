@@ -100,7 +100,7 @@ export default function PlanCreatePage() {
 
     try {
       await createPlan(form);
-      showToast({ message: `'${form.planName}' 여행을 만들었습니다! ✈️`, type: 'success' });
+      showToast({ message: `'${form.planName}' 여행을 만들었습니다!`, type: 'success' });
       navigate('/plans');
     } catch (err: unknown) {
       console.error(err);

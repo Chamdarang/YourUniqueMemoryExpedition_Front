@@ -239,13 +239,13 @@ export default function GeneralImportModal({ file, onClose, onImported }: Props)
 
   return (
     <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="여행 파일 가져오기" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b px-6 py-5 md:px-8">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-gray-100 px-6 py-5 md:px-8">
           <div>
             <h3 className="text-xl font-extrabold text-gray-900">파일에서 계획 가져오기</h3>
             <p className="mt-1 text-xs text-gray-500">{file.name}</p>
           </div>
-          <button type="button" disabled={busy} onClick={onClose} className="text-xl text-gray-400 hover:text-gray-700">✕</button>
+          <button type="button" disabled={busy} onClick={onClose} className="yume-icon-button disabled:opacity-50" aria-label="가져오기 창 닫기">✕</button>
         </div>
 
         {!preview && analysis && (

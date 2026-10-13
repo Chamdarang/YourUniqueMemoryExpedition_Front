@@ -321,16 +321,16 @@ export default function PlanDayItem({
             <div className={`rounded-2xl border bg-white shadow-sm transition ${isActionMenuOpen ? 'overflow-visible' : 'overflow-hidden'} ${isExpanded ? `border-[${dayColor}]` : 'border-gray-200'}`} style={isExpanded ? { borderColor: dayColor } : {}}>
 
                 <div className={`p-4 cursor-pointer relative flex flex-col justify-center min-h-[72px] ${isActionMenuOpen ? 'z-[100]' : 'z-10'}`} onClick={handleToggle}>
-                    <div className="flex items-start md:items-center gap-4 w-full">
+                    <div className={`grid w-full items-start gap-x-3 gap-y-2 ${isEditingInfo ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-[auto_auto_minmax(0,1fr)]'}`}>
                         {!isEditingInfo && (
-                            <div {...attributes} {...listeners} onClick={e => e.stopPropagation()} className="cursor-grab text-gray-300 text-xl px-1 hover:text-orange-500 mt-1 md:mt-0">⠿</div>
+                            <div {...attributes} {...listeners} onClick={e => e.stopPropagation()} className="cursor-grab text-gray-500 text-xl px-1 hover:text-orange-500 mt-1 md:mt-0">⠿</div>
                         )}
                         <div className="w-12 h-12 rounded-xl flex flex-col items-center justify-center border shrink-0 text-white shadow-sm" style={{ backgroundColor: dayColor, borderColor: dayColor }}>
                             <span className="text-xs uppercase font-bold opacity-80">Day</span>
                             <span className="text-xl font-extrabold leading-none">{dayOrder}</span>
                         </div>
 
-                        <div className="flex-1 min-w-0 mr-2">
+                        <div className="min-w-0">
                             {isEditingInfo ? (
                                 <div className="flex flex-col gap-2" onClick={e => e.stopPropagation()}>
                                     <input type="text" className="yume-input yume-input-soft font-bold" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} autoFocus />
@@ -342,23 +342,23 @@ export default function PlanDayItem({
                                 </div>
                             ) : (
                                 <div className="group relative">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="text-lg font-bold text-gray-900 truncate">{data.dayName}</h3>
+                                    <div className="flex items-start gap-1">
+                                        <h3 className="min-w-0 flex-1 break-words text-lg font-bold leading-snug text-gray-900">{data.dayName}</h3>
                                         <button onClick={(e) => {
                                             e.stopPropagation();
                                             setEditTitle(data.dayName);
                                             setEditMemo(data.memo || "");
                                             setIsEditingInfo(true);
                                             setIsExpanded(true);
-                                        }} aria-label={`${data.dayName} 제목과 메모 수정`} className="min-h-11 min-w-11 text-gray-500 hover:text-orange-600 transition rounded-lg p-1 focus-visible:ring-2 focus-visible:ring-orange-400">✎</button>
+                                        }} aria-label={`${data.dayName} 제목과 메모 수정`} className="-mt-1 min-h-11 min-w-11 shrink-0 text-gray-500 hover:text-blue-600 transition rounded-xl p-1 focus-visible:ring-2 focus-visible:ring-blue-400">✎</button>
                                     </div>
-                                    <p className={`text-xs truncate mt-0.5 ${data.memo ? 'text-gray-500' : 'text-gray-300'}`}>{data.memo || "메모 없음"}</p>
+                                    <p className="text-xs truncate mt-0.5 text-gray-500">{data.memo || "메모 없음"}</p>
                                 </div>
                             )}
                         </div>
 
                         {!isEditingInfo && (
-                            <div className="flex shrink-0 items-center gap-1.5 self-start md:self-center">
+                            <div className="col-span-2 col-start-2 flex items-center justify-end gap-1.5">
                                 <button
                                     type="button"
                                     onClick={(e) => { e.stopPropagation(); onToggleMapVisibility(data.id); }}
@@ -388,11 +388,11 @@ export default function PlanDayItem({
                                         <div className="absolute right-0 top-11 z-50 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
                                             {isOwner && <button type="button" onClick={handleDetachDay} className="block w-full px-4 py-2.5 text-left text-xs font-bold text-blue-700 hover:bg-blue-50">
                                                 여행에서 빼기
-                                                <span className="mt-0.5 block text-xs font-medium text-gray-400">내 하루 일정에 보관</span>
+                                                <span className="mt-0.5 block text-xs font-medium text-gray-600">내 하루 일정에 보관</span>
                                             </button>}
-                                            <button type="button" onClick={() => { setIsActionMenuOpen(false); onCopyDay(data); }} className="block w-full border-t border-gray-100 px-4 py-2.5 text-left text-xs font-bold text-violet-700 hover:bg-violet-50">
+                                            <button type="button" onClick={() => { setIsActionMenuOpen(false); onCopyDay(data); }} className="block w-full border-t border-gray-100 px-4 py-2.5 text-left text-xs font-bold text-blue-700 hover:bg-blue-50">
                                                 일정 복제
-                                                <span className="mt-0.5 block text-xs font-medium text-gray-400">다른 일차 또는 내 일정으로 복사</span>
+                                                <span className="mt-0.5 block text-xs font-medium text-gray-600">다른 일차 또는 내 일정으로 복사</span>
                                             </button>
                                             <button type="button" disabled={isDayDeletePending} onClick={handleDeleteDay} className="block w-full border-t border-gray-100 px-4 py-2.5 text-left text-xs font-bold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:bg-amber-50 disabled:text-amber-600">
                                                 {isDayDeletePending ? '삭제 대기 중…' : '완전히 삭제'}
@@ -406,7 +406,7 @@ export default function PlanDayItem({
                                     aria-label={isExpanded ? `${data.dayName} 접기` : `${data.dayName} 펼치기`}
                                     title={isExpanded ? '일정 접기' : '일정 펼치기'}
                                     onClick={(event) => { event.stopPropagation(); handleToggle(); }}
-                                    className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                    className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                                 >
                                     <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
                                         <path fillRule="evenodd" d="M5.22 7.47a.75.75 0 011.06 0L10 11.19l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 8.53a.75.75 0 010-1.06z" clipRule="evenodd" />

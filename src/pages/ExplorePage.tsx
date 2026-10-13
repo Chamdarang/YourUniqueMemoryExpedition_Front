@@ -16,7 +16,6 @@ import { MAP_COLORS } from '../utils/mapStyles';
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const DEFAULT_CENTER = { lat: 34.9858, lng: 135.7588 };
 const DEFAULT_ZOOM = 14;
-const STORAGE_KEY = "explore_map_state";
 
 type SearchMode = 'GOOGLE' | 'MINE';
 
@@ -90,16 +89,8 @@ function ExploreMapContent() {
     const navigate = useNavigate();
     const map = useMap();
 
-    const [initialState] = useState(() => {
-        try {
-            const saved = sessionStorage.getItem(STORAGE_KEY);
-            return saved ? JSON.parse(saved) : { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, mode: 'GOOGLE' as SearchMode, googleResults: [] };
-        } catch { return { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, mode: 'GOOGLE', googleResults: [] }; }
-    });
-
-    const [mode, setMode] = useState<SearchMode>(initialState.mode);
-    const [googleResults, setGoogleResults] = useState<GooglePlaceResult[]>(initialState.googleResults);
-    const [savedMapState, setSavedMapState] = useState({ center: initialState.center, zoom: initialState.zoom });
+    const [mode, setMode] = useState<SearchMode>('GOOGLE');
+    const [googleResults, setGoogleResults] = useState<GooglePlaceResult[]>([]);
     const [cameraTarget, setCameraTarget] = useState<{ center: { lat: number, lng: number }, zoom?: number } | null>(null);
 
     const [mySpots, setMySpots] = useState<SpotResponse[]>([]);
@@ -121,6 +112,10 @@ function ExploreMapContent() {
     const [pendingGroupNames, setPendingGroupNames] = useState<string[]>([]);
     const [groupLoadError, setGroupLoadError] = useState(false);
 
+    useEffect(() => {
+        try { sessionStorage.removeItem('explore_map_state'); } catch { /* Ignore storage restrictions. */ }
+    }, []);
+
     const placesLibrary = useMapsLibrary("places");
     const geocodingLibrary = useMapsLibrary("geocoding");
     const geocoder = useMemo(
@@ -129,12 +124,7 @@ function ExploreMapContent() {
     );
 
     useEffect(() => {
-        const stateToSave = { center: savedMapState.center, zoom: savedMapState.zoom, mode, googleResults };
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
-    }, [savedMapState, mode, googleResults]);
-
-    useEffect(() => {
-        if (!sessionStorage.getItem(STORAGE_KEY) && navigator.geolocation) {
+        if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => { setCameraTarget({ center: { lat: pos.coords.latitude, lng: pos.coords.longitude } }); },
                 () => console.warn("위치 권한 없음"), { enableHighAccuracy: true }
@@ -147,12 +137,6 @@ function ExploreMapContent() {
             .then(response => setMySpots(response.content))
             .catch(console.error);
     }, []);
-
-    const handleMapIdle = (map: google.maps.Map) => {
-        const center = map.getCenter();
-        const zoom = map.getZoom();
-        if (center && zoom) setSavedMapState({ center: { lat: center.lat(), lng: center.lng() }, zoom: zoom });
-    };
 
     const handleBackToList = () => {
         setSelectedMySpot(null);
@@ -359,7 +343,7 @@ function ExploreMapContent() {
                         await addSpotToGroup(group.id, newSpot.id);
                         setAvailableGroups(current => [...current, group]);
                     }
-                    showToast({ message: "내 장소와 그룹을 등록했습니다! 🎉", type: 'success' });
+                    showToast({ message: "내 장소와 그룹을 등록했습니다!", type: 'success' });
                 } catch {
                     showToast({ message: "장소는 저장했지만 그룹을 적용하지 못했습니다. 장소 상세에서 그룹을 관리해 주세요.", type: 'error' });
                 }
@@ -412,10 +396,10 @@ function ExploreMapContent() {
                 <div className="w-full h-full flex flex-col overflow-hidden">
                     <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100/90 px-5 py-4">
                         { (selectedMySpot || selectedResult) ? (
-                            <div className="flex min-w-0 items-center gap-3"><button type="button" aria-label="검색 결과 목록으로" onClick={handleBackToList} className="yume-icon-button shrink-0">←</button><div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-[0.14em] text-blue-600">장소 정보</p><span className="block truncate text-lg font-extrabold text-gray-900">상세 정보</span></div></div>
+                            <div className="flex min-w-0 items-center gap-3"><button type="button" aria-label="검색 결과 목록으로" onClick={handleBackToList} className="yume-icon-button shrink-0">←</button><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-blue-600">장소 정보</p><span className="block truncate text-lg font-extrabold text-gray-900">상세 정보</span></div></div>
                         ) : (
                             <div className="min-w-0 px-1">
-                                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-blue-600">장소 찾기</p>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">장소 찾기</p>
                                 <div className="mt-0.5 flex items-center gap-2"><h3 className="truncate text-lg font-extrabold text-gray-900">{mode === 'GOOGLE' ? '검색 결과' : '내 장소'}</h3><span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold tabular-nums text-gray-600">{mode === 'GOOGLE' ? googleResults.length : mySpots.length}</span></div>
                                 <p className="mt-0.5 text-xs text-gray-500">지도에서 장소를 고르고 여행에 담아보세요.</p>
                             </div>
@@ -429,17 +413,17 @@ function ExploreMapContent() {
                                     <div className="space-y-5">
                                         <div>
                                             <div className="flex flex-wrap items-center gap-2">
-                                                <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${getSpotTypeInfo(selectedMySpot.spotType).color}`}>{getSpotTypeInfo(selectedMySpot.spotType).label}</span>
-                                                <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${selectedMySpot.isVisit ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{selectedMySpot.isVisit ? '방문 완료' : '미방문'}</span>
+                                                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getSpotTypeInfo(selectedMySpot.spotType).color}`}>{getSpotTypeInfo(selectedMySpot.spotType).label}</span>
+                                                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedMySpot.isVisit ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{selectedMySpot.isVisit ? '방문 완료' : '미방문'}</span>
                                             </div>
                                             <h2 className="mt-3 break-words text-2xl font-extrabold leading-tight tracking-tight text-gray-900">{getSpotDisplayName(selectedMySpot)}</h2>
                                         </div>
                                         <div className="flex items-start gap-3 border-t border-gray-100 pt-4">
                                             <span className="mt-0.5 text-base text-blue-600">📍</span>
-                                            <div className="min-w-0"><p className="text-[11px] font-bold text-gray-400">주소</p><p className="mt-1 break-words text-sm leading-relaxed text-gray-700">{selectedMySpot.address || '주소 정보 없음'}</p></div>
+                                            <div className="min-w-0"><p className="text-xs font-semibold text-gray-500">주소</p><p className="mt-1 break-words text-sm leading-relaxed text-gray-700">{selectedMySpot.address || '주소 정보 없음'}</p></div>
                                         </div>
-                                        {selectedMySpot.description && <div className="border-t border-gray-100 pt-4"><p className="text-[11px] font-bold text-gray-400">내 메모</p><p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{selectedMySpot.description}</p></div>}
-                                        {getSavedSpotTags(selectedMySpot.userMetadata).length > 0 && <div className="border-t border-gray-100 pt-4"><p className="text-[11px] font-bold text-gray-400">태그</p><div className="mt-2 flex flex-wrap gap-1.5">{getSavedSpotTags(selectedMySpot.userMetadata).map(tag => <span key={tag} className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">#{tag}</span>)}</div></div>}
+                                        {selectedMySpot.description && <div className="border-t border-gray-100 pt-4"><p className="text-xs font-semibold text-gray-500">내 메모</p><p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{selectedMySpot.description}</p></div>}
+                                        {getSavedSpotTags(selectedMySpot.userMetadata).length > 0 && <div className="border-t border-gray-100 pt-4"><p className="text-xs font-semibold text-gray-500">태그</p><div className="mt-2 flex flex-wrap gap-1.5">{getSavedSpotTags(selectedMySpot.userMetadata).map(tag => <span key={tag} className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">#{tag}</span>)}</div></div>}
                                         <div className="space-y-2 border-t border-gray-100 pt-4">
                                             <button type="button" onClick={() => handleToggleVisit(selectedMySpot)} className={`yume-button w-full ${selectedMySpot.isVisit ? 'yume-button-success-outline' : 'yume-button-primary'}`}>{selectedMySpot.isVisit ? '✓ 방문 완료 · 취소하기' : '방문 완료로 표시'}</button>
                                             <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -452,8 +436,8 @@ function ExploreMapContent() {
                                     <div>
                                         <section className="space-y-5">
                                             <div className="flex flex-wrap items-center gap-2">
-                                                {selectedResult.googleTypeLabel && <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">Google 유형 · {selectedResult.googleTypeLabel}</span>}
-                                                {selectedResult.isOpen !== undefined && <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${selectedResult.isOpen ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{selectedResult.isOpen ? '영업 중' : '영업 종료'}</span>}
+                                                {selectedResult.googleTypeLabel && <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">Google 유형 · {selectedResult.googleTypeLabel}</span>}
+                                                {selectedResult.isOpen !== undefined && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedResult.isOpen ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{selectedResult.isOpen ? '영업 중' : '영업 종료'}</span>}
                                             </div>
                                             <div>
                                                 <h2 className="break-words text-2xl font-extrabold leading-tight tracking-tight text-gray-900">{selectedResult.name}</h2>
@@ -461,7 +445,7 @@ function ExploreMapContent() {
                                             </div>
                                             <div className="flex items-start gap-3 border-t border-gray-100 pt-4">
                                                 <span className="mt-0.5 text-base text-blue-600">📍</span>
-                                                <div className="min-w-0"><p className="text-[11px] font-bold text-gray-400">주소</p><p className="mt-1 break-words text-sm leading-relaxed text-gray-700">{selectedResult.address || '주소 정보 없음'}</p></div>
+                                                <div className="min-w-0"><p className="text-xs font-semibold text-gray-500">주소</p><p className="mt-1 break-words text-sm leading-relaxed text-gray-700">{selectedResult.address || '주소 정보 없음'}</p></div>
                                             </div>
                                             <div className="flex flex-wrap items-center gap-x-5 border-t border-gray-100 pt-3">
                                                 {selectedResult.websiteURI && <a href={selectedResult.websiteURI} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-1.5 text-sm font-bold text-blue-700 hover:text-blue-800">공식 웹사이트 방문 <span aria-hidden="true">↗</span></a>}
@@ -470,7 +454,7 @@ function ExploreMapContent() {
                                         </section>
                                         {allMyPlaceIds.has(selectedResult.place_id) ? (
                                             <section className="mt-8 border-t border-gray-200 pt-6">
-                                                <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-blue-600">내 보관함</p>
+                                                <p className="mb-2 text-xs font-semibold text-blue-600">내 보관함</p>
                                                 <span className="text-sm font-bold text-emerald-700">✓ 내 장소에 저장됨</span>
                                             </section>
                                         ) : (
@@ -494,7 +478,7 @@ function ExploreMapContent() {
                                                         <div className="mb-5 flex items-start justify-between gap-3">
                                                             <div className="flex items-start gap-3">
                                                                 <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg font-bold text-blue-600" aria-hidden="true">＋</span>
-                                                        <div><p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-blue-600">내 보관함</p><h3 id="explore-save-spot-heading" className="mt-1 text-base font-extrabold text-gray-900">내 장소에 추가</h3><p className="mt-1 text-xs leading-relaxed text-gray-500">내 장소 이름과 분류를 정하고, 메모를 남기거나 그룹에 추가해 보관함에서 함께 관리하세요.</p></div>
+                                                        <div><p className="text-xs font-semibold text-blue-600">내 보관함</p><h3 id="explore-save-spot-heading" className="mt-1 text-base font-extrabold text-gray-900">내 장소에 추가</h3><p className="mt-1 text-xs leading-relaxed text-gray-500">내 장소 이름과 분류를 정하고, 메모를 남기거나 그룹에 추가해 보관함에서 함께 관리하세요.</p></div>
                                                             </div>
                                                             <button type="button" aria-expanded="true" aria-controls="explore-save-spot-form" onClick={() => setIsSaveFormOpen(false)} className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">접기 <span aria-hidden="true">⌃</span></button>
                                                         </div>
@@ -520,7 +504,7 @@ function ExploreMapContent() {
                                                         ) : !groupLoadError && <p className="text-xs text-gray-400">아직 만든 그룹이 없습니다. 아래에서 새 그룹을 만들 수 있어요.</p>}
                                                         {pendingGroupNames.map(name => <div key={name} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{name}<button type="button" aria-label={`${name} 그룹 추가 취소`} onClick={() => setPendingGroupNames(current => current.filter(group => group !== name))} className="ml-1">×</button></div>)}
                                                         <div className="flex gap-2"><input aria-label="새 그룹 이름" type="text" maxLength={100} value={newGroupName} onChange={event => setNewGroupName(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addPendingGroup(); } }} className="yume-input min-w-0 bg-white" placeholder="새 그룹 이름" /><button type="button" onClick={addPendingGroup} disabled={!newGroupName.trim()} className="yume-button yume-button-secondary shrink-0">그룹 추가</button></div>
-                                                        <p className="text-[11px] text-gray-400">그룹은 장소를 묶어 보관함의 그룹 탭에서 함께 관리합니다.</p>
+                                                        <p className="text-xs text-gray-500">그룹은 장소를 묶어 보관함의 그룹 탭에서 함께 관리합니다.</p>
                                                     </fieldset>
                                                     <button type="button" onClick={() => handleRegisterSpot(selectedResult.place_id)} className="yume-button yume-button-primary w-full"><span>+ 내 장소에 저장</span></button>
                                                 </div>
@@ -540,13 +524,13 @@ function ExploreMapContent() {
                                             return (
                                                 <button type="button" key={place.place_id} className="group w-full rounded-2xl border border-gray-200/80 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" onClick={() => { if (isSaved) { const spot = mySpots.find(s => s.placeId === place.place_id); if (spot) handleSelectSpot(spot); } else { handleSelectSearchResult(place); } }}>
                                                     <div className="flex items-start justify-between gap-3">
-                                                        <div className="min-w-0">{place.googleTypeLabel && <span className="mb-1.5 inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">{place.googleTypeLabel}</span>}<span className="block truncate text-sm font-extrabold text-gray-900 group-hover:text-blue-700">{place.name}</span></div>
-                                                        <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${isSaved ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{isSaved ? '저장됨' : '상세 보기'}{!isSaved && <span aria-hidden="true"> ↗</span>}</span>
+                                                        <div className="min-w-0">{place.googleTypeLabel && <span className="mb-1.5 inline-flex rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{place.googleTypeLabel}</span>}<span className="block truncate text-sm font-extrabold text-gray-900 group-hover:text-blue-700">{place.name}</span></div>
+                                                        <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${isSaved ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{isSaved ? '저장됨' : '상세 보기'}{!isSaved && <span aria-hidden="true"> ↗</span>}</span>
                                                     </div>
                                                     <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-gray-500">{place.address || '주소 정보 없음'}</p>
                                                     <div className="mt-3 flex items-center gap-3 border-t border-gray-100 pt-2.5 text-xs">
                                                         {place.rating !== undefined && <span className="font-bold text-amber-700">★ {place.rating.toFixed(1)}{place.user_ratings_total !== undefined && <span className="ml-1 font-medium text-gray-400">후기 {place.user_ratings_total.toLocaleString()}</span>}</span>}
-                                                        <span className="ml-auto text-[11px] font-semibold text-blue-600">지도에서 보기 <span aria-hidden="true">→</span></span>
+                                                        <span className="ml-auto text-xs font-semibold text-blue-600">지도에서 보기 <span aria-hidden="true">→</span></span>
                                                     </div>
                                                 </button>
                                             );
@@ -555,9 +539,9 @@ function ExploreMapContent() {
                                     mySpots.length === 0 ? <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">저장된 장소가 없습니다.<p className="mt-1 text-xs text-gray-400">구글 탭에서 장소를 찾아 보관함에 추가해 보세요.</p></div> :
                                         mySpots.map(spot => (
                                             <button type="button" key={spot.id} className="group w-full rounded-2xl border border-gray-200/80 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" onClick={() => handleSelectSpot(spot)}>
-                                                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className={`mb-1.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${getSpotTypeInfo(spot.spotType).color}`}>{getSpotTypeInfo(spot.spotType).label}</span><span className="block truncate text-sm font-extrabold text-gray-900 group-hover:text-emerald-700">{getSpotDisplayName(spot)}</span></div><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${spot.isVisit ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{spot.isVisit ? '방문 완료' : '미방문'}</span></div>
+                                                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className={`mb-1.5 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getSpotTypeInfo(spot.spotType).color}`}>{getSpotTypeInfo(spot.spotType).label}</span><span className="block truncate text-sm font-extrabold text-gray-900 group-hover:text-emerald-700">{getSpotDisplayName(spot)}</span></div><span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${spot.isVisit ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{spot.isVisit ? '방문 완료' : '미방문'}</span></div>
                                                 <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-gray-500">{spot.shortAddress || spot.address}</p>
-                                                <div className="mt-3 border-t border-gray-100 pt-2.5 text-right text-[11px] font-semibold text-emerald-700">지도에서 보기 <span aria-hidden="true">→</span></div>
+                                                <div className="mt-3 border-t border-gray-100 pt-2.5 text-right text-xs font-semibold text-emerald-700">지도에서 보기 <span aria-hidden="true">→</span></div>
                                             </button>
                                         ))
                                 )}
@@ -569,7 +553,7 @@ function ExploreMapContent() {
             <button aria-label={showList ? '장소 목록 접기' : '장소 목록 펼치기'} onClick={() => setShowList(!showList)} className={`absolute top-1/2 z-30 hidden min-h-10 w-8 -translate-y-1/2 items-center justify-center rounded-r-lg border border-gray-300 bg-white px-1 text-gray-500 shadow-sm transition-all duration-300 hover:bg-gray-50 hover:text-blue-600 md:flex ${showList ? 'left-96' : 'left-0'}`}>{showList ? '◀' : '▶'}</button>
             <div data-guide-target="explore-map" className="absolute inset-0 w-full h-full z-0">
                 <MapCameraHandler target={cameraTarget} />
-                <Map defaultCenter={initialState.center} defaultZoom={initialState.zoom} mapId="EXPLORE_MAP_ID" disableDefaultUI={true} className="w-full h-full" onIdle={(ev) => handleMapIdle(ev.map)} onClick={(e) => { if (e.detail.placeId) { e.stop(); handlePoiClick(e.detail.placeId); } else if (e.detail.latLng) { handleReverseGeocode(e.detail.latLng.lat, e.detail.latLng.lng); } }}>
+                <Map defaultCenter={DEFAULT_CENTER} defaultZoom={DEFAULT_ZOOM} mapId="EXPLORE_MAP_ID" disableDefaultUI={true} className="w-full h-full" onClick={(e) => { if (e.detail.placeId) { e.stop(); handlePoiClick(e.detail.placeId); } else if (e.detail.latLng) { handleReverseGeocode(e.detail.latLng.lat, e.detail.latLng.lng); } }}>
                     <MapController mode={mode} onModeChange={handleModeChange} onSearchStart={handleBackToList} onSpotsFound={(spots) => { setMySpots(spots); if(spots.length > 0) setShowList(true); }} onGoogleFound={(results) => { setGoogleResults(results); if(results.length > 0) setShowList(true); }} showList={showList} />
                     {mode === 'MINE' && mySpots.map(spot => (<AdvancedMarker key={spot.id} position={{ lat: spot.lat, lng: spot.lng }} onClick={(e) => { e.domEvent.stopPropagation(); handleSelectSpot(spot); }} zIndex={10}><MarkerIcon color={MAP_COLORS.saved} borderColor={MAP_COLORS.savedBorder} /></AdvancedMarker>))}
                     {mode === 'GOOGLE' && googleResults.map(place => { const isSaved = allMyPlaceIds.has(place.place_id); const isSelected = selectedResult?.place_id === place.place_id; return (<AdvancedMarker key={place.place_id} position={place.location} onClick={(e) => { e.domEvent.stopPropagation(); if (isSaved) { const spot = mySpots.find(s => s.placeId === place.place_id); if (spot) handleSelectSpot(spot); } else { handleSelectSearchResult(place); } }} zIndex={isSelected ? 100 : (isSaved ? 50 : 20)}><MarkerIcon color={isSaved ? MAP_COLORS.saved : (isSelected ? MAP_COLORS.route : MAP_COLORS.searchResult)} borderColor={isSaved ? MAP_COLORS.savedBorder : (isSelected ? MAP_COLORS.selectedBorder : MAP_COLORS.searchResultBorder)} scale={isSelected || isSaved ? 1.2 : 1.0} /></AdvancedMarker>); })}
@@ -604,13 +588,25 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
     const selectedKeyword = useRef<string | null>(null);
     const suggestionRequest = useRef(0);
 
+    const dismissSuggestions = () => {
+        selectedKeyword.current = keyword;
+        suggestionRequest.current++;
+        setSuggestions([]);
+        setActiveSuggestion(-1);
+    };
+
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
-            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) { setSuggestions([]); }
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+                selectedKeyword.current = keyword;
+                suggestionRequest.current++;
+                setSuggestions([]);
+                setActiveSuggestion(-1);
+            }
         }
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+    }, [keyword]);
 
     useEffect(() => {
         let active = true;
@@ -623,8 +619,8 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
                         const { suggestions } = await placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions({
                             input: keyword, locationBias: map?.getCenter(),
                         });
-                        if (active && request === suggestionRequest.current) { setSuggestions(suggestions.filter(s => s.placePrediction)); setActiveSuggestion(-1); }
-                    } catch (e) { console.error("Autocomplete Error", e); if (active) setSuggestions([]); }
+                        if (active && request === suggestionRequest.current && keyword !== selectedKeyword.current) { setSuggestions(suggestions.filter(s => s.placePrediction)); setActiveSuggestion(-1); }
+                    } catch (e) { console.error("Autocomplete Error", e); if (active && request === suggestionRequest.current) setSuggestions([]); }
                 }
             }, 300);
             return () => { active = false; clearTimeout(timer); };
@@ -633,7 +629,7 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
 
     const handleGoogleTextSearch = async () => {
         if (!placesLibrary || !keyword.trim()) return;
-        onSearchStart(); setSuggestions([]);
+        dismissSuggestions(); onSearchStart();
         try {
             const { places } = await placesLibrary.Place.searchByText({
                 textQuery: keyword,
@@ -663,6 +659,7 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
 
     const handleGoogleSelectSuggestion = async (suggestion: google.maps.places.AutocompleteSuggestion) => {
         if (!placesLibrary || !suggestion.placePrediction) return;
+        dismissSuggestions();
         onSearchStart();
         const placeId = suggestion.placePrediction.placeId;
         try {
@@ -689,7 +686,7 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
     };
 
     const handleMySpotSearch = async () => {
-        setSuggestions([]); if (!keyword.trim()) return;
+        dismissSuggestions(); if (!keyword.trim()) return;
         onSearchStart();
         try {
             const res = await getMySpots({ keyword: keyword, page: 0, size: 50 });
@@ -700,7 +697,7 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
     return (
         <div data-guide-target="explore-search" ref={wrapperRef} className={`absolute top-4 right-4 z-10 flex flex-col gap-2 md:w-96 transition-all duration-300 ease-in-out left-4 ${showList ? 'md:left-[25rem]' : 'md:left-4'}`}>
             <div className="bg-white rounded-xl shadow-lg p-2 flex items-center gap-2">
-                <button data-guide-target="explore-mode" onClick={() => { onModeChange(mode === 'GOOGLE' ? 'MINE' : 'GOOGLE'); setKeyword(""); setSuggestions([]); }} className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition shrink-0 border ${mode === 'GOOGLE' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
+                <button data-guide-target="explore-mode" onClick={() => { dismissSuggestions(); onModeChange(mode === 'GOOGLE' ? 'MINE' : 'GOOGLE'); setKeyword(""); }} className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition shrink-0 border ${mode === 'GOOGLE' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
                     {mode === 'GOOGLE' ? (
                         <><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg><span>구글</span></>
                     ) : (
@@ -708,12 +705,13 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
                     )}
                 </button>
                 <input aria-label="장소명 또는 주소 검색" role="combobox" aria-autocomplete="list" aria-expanded={mode === 'GOOGLE' && suggestions.length > 0} aria-controls="explore-suggestions" aria-activedescendant={suggestions[activeSuggestion] ? `explore-suggestion-${activeSuggestion}` : undefined} data-guide-target="explore-query" type="text" className="flex-1 outline-none text-sm font-medium text-gray-700 min-w-0" placeholder={mode === 'GOOGLE' ? "장소, 주소 검색 (엔터)" : "이름 검색 (엔터)"} value={keyword} onChange={e => {
+                    suggestionRequest.current++;
                     selectedKeyword.current = null;
                     setKeyword(e.target.value);
                     setSuggestions([]); setActiveSuggestion(-1);
                 }} onKeyDown={(e) => {
                     if (e.nativeEvent.isComposing) return;
-                    if (e.key === 'Escape') { suggestionRequest.current++; setSuggestions([]); setActiveSuggestion(-1); return; }
+                    if (e.key === 'Escape') { dismissSuggestions(); return; }
                     if (suggestions.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
                         e.preventDefault();
                         const next = e.key === 'ArrowDown' ? (activeSuggestion + 1) % suggestions.length : (activeSuggestion <= 0 ? suggestions.length - 1 : activeSuggestion - 1);
@@ -740,7 +738,7 @@ function SearchBox({ mode, onModeChange, onSearchStart, map, onGoogleSearch, onM
                         return (
                             <button type="button" role="option" aria-selected={activeSuggestion === index} id={`explore-suggestion-${index}`} key={placePrediction.placeId} onClick={() => void handleGoogleSelectSuggestion(suggestion)} className={`w-full text-left p-3 border-b hover:bg-blue-50 flex flex-col gap-0.5 ${activeSuggestion === index ? 'bg-blue-50' : ''}`}>
                                 <span className="text-sm font-bold text-gray-800">{placePrediction.mainText?.text || placePrediction.text.text || "이름 없음" }</span>
-                                <span className="text-[10px] text-gray-400">{placePrediction.secondaryText?.text || ""}</span>
+                                <span className="text-xs text-gray-500">{placePrediction.secondaryText?.text || ""}</span>
                             </button>
                         );
                     })}

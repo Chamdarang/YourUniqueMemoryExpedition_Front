@@ -40,7 +40,7 @@ export default function EditConflictPanel({ title, fields, onApply, onUseLatest,
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4" role="presentation">
-      <section role="dialog" aria-modal="true" aria-labelledby={titleId} className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+      <section role="dialog" aria-modal="true" aria-labelledby={titleId} className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
         <h2 id={titleId} className="text-lg font-black text-slate-900">{title}</h2>
         <p className="mt-1 text-sm text-slate-600">저장 중 다른 사용자가 내용을 바꿨습니다. 원래 내용과 각 변경값을 비교해 주세요. 한쪽에서만 바뀐 항목은 자동으로 병합되고, 양쪽에서 다르게 바꾼 항목은 선택이 필요합니다.</p>
         <div className="mt-4 space-y-3">

@@ -154,21 +154,23 @@ export default function DayListPage() {
                         <div data-guide-target="days-create-mode" className="yume-segmented grid grid-cols-2">
                             <button type="button" aria-pressed={newDayMode === 'SIMPLE'} onClick={() => setNewDayMode('SIMPLE')} className="yume-segment flex-col text-center">
                                 간편 일정
-                                <span className="mt-0.5 block text-xs font-medium opacity-75">장소 · 시간 · 메모만</span>
+                                <span className="mt-0.5 block text-xs font-medium opacity-75">장소·시간·메모</span>
                             </button>
                             <button type="button" aria-pressed={newDayMode === 'DETAILED'} onClick={() => setNewDayMode('DETAILED')} className="yume-segment flex-col text-center">
                                 상세 일정
-                                <span className="mt-0.5 block text-xs font-medium opacity-75">체류 · 이동 · 교통수단 포함</span>
+                                <span className="mt-0.5 block text-xs font-medium opacity-75">체류·이동·교통</span>
                             </button>
                         </div>
-                        <div className="flex gap-3">
+                        <label htmlFor="new-day-name" className="block text-sm font-semibold text-gray-700">코스 제목</label>
+                        <div className="flex flex-col gap-3 sm:flex-row">
                         <input
+                            id="new-day-name"
                             data-guide-target="days-create-name"
                             type="text"
                             placeholder="예) 오사카 맛집 탐방 (1일차 후보)"
                             value={newDayName}
                             onChange={(e) => setNewDayName(e.target.value)}
-                            className="flex-1 px-4 py-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white transition"
+                            className="yume-input min-w-0 flex-1"
                             autoFocus
                         />
                         <button data-guide-target="days-create-submit" type="submit" className="yume-button yume-button-primary whitespace-nowrap">

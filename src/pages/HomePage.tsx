@@ -141,6 +141,7 @@ export default function HomePage() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [nowMinutes, setNowMinutes] = useState(getCurrentMinutes());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scheduleToolbarRef = useRef<HTMLDivElement>(null);
   const activeItemRef = useRef<HTMLDivElement>(null);
   const [hasUserScrolled, setHasUserScrolled] = useState(false);
   const [todayDayId, setTodayDayId] = useState<number | null>(null);
@@ -269,7 +270,10 @@ export default function HomePage() {
         const container = scrollContainerRef.current;
         const item = activeItemRef.current;
         if (!container || !item) return;
-        const scrollTarget = item.offsetTop - (container.clientHeight / 2) + (item.clientHeight / 2);
+        const toolbarHeight = scheduleToolbarRef.current?.offsetHeight ?? 0;
+        const visibleHeight = Math.max(0, container.clientHeight - toolbarHeight);
+        const itemTop = container.scrollTop + item.getBoundingClientRect().top - container.getBoundingClientRect().top;
+        const scrollTarget = itemTop - toolbarHeight - Math.max(0, (visibleHeight - item.clientHeight) / 2);
         container.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
       });
     }
@@ -348,7 +352,7 @@ export default function HomePage() {
   };
 
   return (
-      <div className="flex flex-col h-screen max-w-3xl mx-auto bg-white overflow-hidden px-4 md:px-0 font-sans">
+      <div className="flex h-full min-h-0 max-w-3xl mx-auto flex-col bg-white overflow-hidden px-4 md:px-0 font-sans">
         {(isOffline || isUsingCachedData) && (
           <div role="status" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
             {isOffline
@@ -380,7 +384,7 @@ export default function HomePage() {
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="animate-pulse w-2 h-2 bg-green-500 rounded-full"></span>
-                      <span className="text-xs font-bold text-blue-600 tracking-wide uppercase">ONGOING</span>
+                      <span className="text-xs font-bold text-blue-600">여행 중</span>
                     </div>
                     <h2 className="text-lg font-bold text-gray-900">{currentDayN}일차 여행 중 ✈️</h2>
                     {upcomingPlanIsShared && <p className="mt-1 text-xs font-medium text-gray-500">{upcomingPlan.ownerNickname}님과 함께하는 여행</p>}
@@ -389,7 +393,7 @@ export default function HomePage() {
                 </div>
 
                     <>
-                      <div className="h-64 md:h-72 w-full relative border-b border-gray-100 shrink-0">
+                      <div className="h-[clamp(8rem,20dvh,12rem)] md:h-72 w-full relative border-b border-gray-100 shrink-0">
                         {isOffline || isUsingCachedData ? (
                           <div className="flex h-full items-center justify-center bg-slate-50 px-6 text-center text-sm font-semibold text-slate-500">
                             지도는 연결 후 표시됩니다. 아래 일정 목록과 저장된 장소 정보는 볼 수 있어요.
@@ -422,16 +426,16 @@ export default function HomePage() {
                         )}
                       </div>
 
-                      <div data-guide-target="home-today-schedule" ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-gray-50 scrollbar-hide relative" onWheel={handleManualScroll} onTouchStart={handleManualScroll}>
-                        <div className="p-4">
+                      <div data-guide-target="home-today-schedule" ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto bg-gray-50 scrollbar-hide relative" onWheel={handleManualScroll} onTouchStart={handleManualScroll}>
+                        <div className="p-3 md:p-4">
                           {/* ✅ 헤더 영역: 공간을 침범하지 않으면서 최대한 많이 노출하도록 보정 */}
-                          <div className="sticky top-0 bg-gray-50 z-30 border-b border-gray-100/50 flex flex-col py-1">
-                            <div className="flex items-center justify-between gap-3">
+                          <div ref={scheduleToolbarRef} className="sticky top-0 bg-gray-50 z-30 border-b border-gray-100/50 flex flex-col py-1">
+                            <div className="grid grid-cols-[1fr_auto] items-center gap-2 sm:flex sm:justify-between sm:gap-3">
                               {/* 타이틀: shrink-0으로 절대 밀려나지 않게 고정 */}
                               <span className="text-sm font-black text-gray-800 shrink-0">오늘의 스케줄</span>
 
                               {/* 💡 핵심 수정 부분: flex-1과 min-w-0으로 '남는 공간'을 계산하고 배지 배치 */}
-                              <div className="flex-1 min-w-0 flex justify-center items-center overflow-hidden">
+                              <div className="col-span-2 row-start-2 flex min-w-0 items-center sm:flex-1 sm:justify-center">
                                 {currentStatusText && (
                                     <div className="inline-flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100 shadow-sm animate-in fade-in slide-in-from-right-1 w-auto max-w-full">
                                       <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse shrink-0"></span>
@@ -444,21 +448,21 @@ export default function HomePage() {
                               </div>
 
                               {/* 시간 표시: 우측 고정 */}
-                              <span className="text-xs text-gray-500 font-mono shrink-0">
+                              <span className="col-start-2 row-start-1 shrink-0 text-xs text-gray-500 font-mono">
                                 {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                               </span>
                             </div>
-                            <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-blue-100 bg-white px-3 py-2">
-                              <div>
-                                <div className="text-xs font-bold text-gray-500">당일 지연 보정</div>
+                            <div className="mt-2 flex flex-col gap-2 rounded-xl border border-blue-100 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="flex items-center justify-between gap-2 sm:block">
+                                <div className="whitespace-nowrap text-xs font-bold text-gray-500">당일 지연 보정</div>
                                 <div className={`text-sm font-black ${delayMinutes === 0 ? 'text-gray-500' : 'text-orange-600'}`}>
                                   {delayMinutes === 0 ? '원래 시간' : `${delayMinutes > 0 ? '+' : ''}${delayMinutes}분`}
                                 </div>
                               </div>
-                              <div className="flex gap-1.5">
-                                <button type="button" onClick={() => changeDelay(delayMinutes - 5)} className="yume-button yume-button-secondary px-3">-5분</button>
-                                <button type="button" onClick={() => changeDelay(delayMinutes + 5)} className="yume-button yume-button-warm px-3">+5분</button>
-                                <button type="button" onClick={() => changeDelay(0)} disabled={delayMinutes === 0} className="yume-button yume-button-secondary px-3">초기화</button>
+                              <div className="grid grid-cols-3 gap-1.5 sm:flex">
+                                <button type="button" onClick={() => changeDelay(delayMinutes - 5)} className="yume-button yume-button-secondary whitespace-nowrap px-3">-5분</button>
+                                <button type="button" onClick={() => changeDelay(delayMinutes + 5)} className="yume-button yume-button-warm whitespace-nowrap px-3">+5분</button>
+                                <button type="button" onClick={() => changeDelay(0)} disabled={delayMinutes === 0} className="yume-button yume-button-secondary whitespace-nowrap px-3">초기화</button>
                               </div>
                             </div>
                             <p className="text-xs text-orange-600 font-medium mt-1">※ 주황색 시간은 여유시간 포함</p>

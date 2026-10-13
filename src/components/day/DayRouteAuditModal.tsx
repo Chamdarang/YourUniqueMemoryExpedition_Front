@@ -29,15 +29,15 @@ export default function DayRouteAuditModal({ result, onClose, onApplyLeg, onAppl
   const dialogRef = useDialogFocus(true, onClose);
   return (
     <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="하루 전체 경로 점검" tabIndex={-1} className="fixed inset-0 z-[18000] flex items-end justify-center bg-black/45 p-0 md:items-center md:p-6" onClick={onClose}>
-      <section className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-t-3xl bg-white shadow-2xl md:rounded-3xl" onClick={event => event.stopPropagation()}>
+      <section className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-t-2xl bg-white shadow-xl md:rounded-2xl" onClick={event => event.stopPropagation()}>
         <header className="flex items-start justify-between border-b border-gray-100 p-5 md:p-6">
           <div>
-            <div className="text-xs font-black tracking-wider text-blue-500">DAY ROUTE AUDIT</div>
-            <h2 className="mt-1 text-xl font-black text-gray-900">하루 전체 경로 점검</h2>
+            <div className="text-xs font-semibold tracking-wide text-blue-600">DAY ROUTE AUDIT</div>
+            <h2 className="mt-1 text-xl font-bold text-gray-900">하루 전체 경로 점검</h2>
             <p className="mt-1 text-xs text-gray-500">결과를 확인한 뒤 원하는 이동시간만 일정에 적용할 수 있습니다.</p>
-            {checkedAt && <p className="mt-1 text-xs font-bold text-gray-500">마지막 점검 {new Date(checkedAt).toLocaleString('ko-KR')}</p>}
+            {checkedAt && <p className="mt-1 text-xs font-medium text-gray-500">마지막 점검 {new Date(checkedAt).toLocaleString('ko-KR')}</p>}
           </div>
-          <button type="button" onClick={onClose} className="min-h-11 min-w-11 rounded-xl px-3 py-1 text-2xl text-gray-500 hover:bg-gray-100" aria-label="닫기">×</button>
+          <button type="button" onClick={onClose} className="yume-icon-button" aria-label="닫기">×</button>
         </header>
 
         <div className="max-h-[calc(90vh-112px)] overflow-y-auto p-5 md:p-6">
@@ -63,14 +63,14 @@ export default function DayRouteAuditModal({ result, onClose, onApplyLeg, onAppl
                 <article key={`${leg.fromScheduleId}-${leg.toScheduleId}`} className="rounded-2xl border border-gray-100 p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-xs font-black text-gray-500">구간 {index + 1}</div>
-                      <div className="mt-1 truncate text-sm font-black text-gray-800">{leg.fromSpotName} → {leg.toSpotName}</div>
+                      <div className="text-xs font-semibold text-gray-500">구간 {index + 1}</div>
+                      <div className="mt-1 truncate text-sm font-semibold text-gray-800">{leg.fromSpotName} → {leg.toSpotName}</div>
                     </div>
-                    <span className={`shrink-0 rounded-full border px-2 py-1 text-xs font-black ${statusStyle[leg.status]}`}>
+                    <span className={`shrink-0 rounded-full border px-2 py-1 text-xs font-semibold ${statusStyle[leg.status]}`}>
                       {statusLabel[leg.status]}
                     </span>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-gray-500">
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-gray-500">
                     <span className="rounded-lg bg-gray-50 px-2 py-1">{leg.transportation ?? '수단 미지정'}</span>
                     <span className="rounded-lg bg-blue-50 px-2 py-1 text-blue-600">입력 {leg.plannedDurationMinutes}분</span>
                     {leg.estimatedDurationMinutes != null && <span className="rounded-lg bg-violet-50 px-2 py-1 text-violet-600">예상 {leg.estimatedDurationMinutes}분</span>}
@@ -84,7 +84,7 @@ export default function DayRouteAuditModal({ result, onClose, onApplyLeg, onAppl
                       type="button"
                       disabled={applying}
                       onClick={() => onApplyLeg(leg)}
-                      className="min-h-11 min-w-11 mt-3 w-full rounded-xl border border-blue-200 bg-blue-50 py-2 text-xs font-black text-blue-700 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-50"
+                      className="yume-button yume-button-soft mt-3 w-full disabled:cursor-wait"
                     >
                       이 구간 예상시간 적용
                     </button>

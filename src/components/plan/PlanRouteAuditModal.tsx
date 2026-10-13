@@ -34,15 +34,15 @@ export default function PlanRouteAuditModal({ result, loading, checkedAt, stale,
 
   return (
     <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="여행 일정 점검" className="fixed inset-0 z-[18000] flex items-end justify-center bg-black/45 md:items-center md:p-6" onClick={onClose}>
-      <section className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-t-3xl bg-white shadow-2xl md:rounded-3xl" onClick={event => event.stopPropagation()}>
+      <section className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-t-2xl bg-white shadow-xl md:rounded-2xl" onClick={event => event.stopPropagation()}>
         <header className="flex items-start justify-between border-b border-gray-100 p-5 md:p-6">
           <div>
-            <div className="text-xs font-black tracking-wider text-blue-500">PLAN CHECK</div>
-            <h2 className="mt-1 text-xl font-black text-gray-900">여행 전체 일정 점검</h2>
+            <div className="text-xs font-semibold tracking-wide text-blue-600">PLAN CHECK</div>
+            <h2 className="mt-1 text-xl font-bold text-gray-900">여행 전체 일정 점검</h2>
             <p className="mt-1 text-xs text-gray-500">문제 항목을 선택하면 해당 일정이 펼쳐지고 바로 수정할 수 있습니다.</p>
-            {checkedAt && <p className="mt-1 text-[10px] font-bold text-gray-400">마지막 점검 {new Date(checkedAt).toLocaleString('ko-KR')}</p>}
+            {checkedAt && <p className="mt-1 text-xs font-medium text-gray-500">마지막 점검 {new Date(checkedAt).toLocaleString('ko-KR')}</p>}
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl px-3 py-1 text-2xl text-gray-400 hover:bg-gray-100" aria-label="닫기">×</button>
+          <button type="button" onClick={onClose} className="yume-icon-button" aria-label="닫기">×</button>
         </header>
 
         <div className="max-h-[calc(92vh-112px)] overflow-y-auto p-5 md:p-6">
@@ -73,7 +73,7 @@ export default function PlanRouteAuditModal({ result, loading, checkedAt, stale,
                   )}
                   {progress && (
                     <div className="mt-2">
-                      <div className="mb-1 flex justify-between text-[10px] font-black text-blue-700">
+                      <div className="mb-1 flex justify-between text-xs font-semibold text-blue-700">
                         <span>{progress.completedDays}/{progress.totalDays}일 점검</span>
                         <span>{progress.completedLegs}/{progress.totalLegs}구간</span>
                       </div>
@@ -119,9 +119,9 @@ export default function PlanRouteAuditModal({ result, loading, checkedAt, stale,
                   <article key={`audit-day-${day.dayOrder}`} className="rounded-2xl border border-gray-100 p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-[10px] font-black text-blue-500">DAY {day.dayOrder}</div>
+                        <div className="text-xs font-semibold text-blue-600">DAY {day.dayOrder}</div>
                         <div className="mt-0.5 text-sm font-black text-gray-900">{day.dayName}</div>
-                        <div className="mt-1 text-[11px] font-bold text-gray-400">일정 {day.scheduleCount}개 · 확인 {day.issueCount}개</div>
+                        <div className="mt-1 text-xs font-medium text-gray-500">일정 {day.scheduleCount}개 · 확인 {day.issueCount}개</div>
                       </div>
                       {day.dayId != null && (
                         <div className="flex shrink-0 flex-col items-end gap-2">
@@ -202,7 +202,7 @@ export default function PlanRouteAuditModal({ result, loading, checkedAt, stale,
 function Summary({ label, value, warning = false }: { label: string; value: string; warning?: boolean }) {
   return (
     <div className={`rounded-2xl p-3 ${warning ? 'bg-amber-50' : 'bg-gray-50'}`}>
-      <div className={`text-[10px] font-bold ${warning ? 'text-amber-500' : 'text-gray-400'}`}>{label}</div>
+      <div className={`text-xs font-medium ${warning ? 'text-amber-700' : 'text-gray-500'}`}>{label}</div>
       <div className={`mt-1 text-lg font-black ${warning ? 'text-amber-700' : 'text-gray-800'}`}>{value}</div>
     </div>
   );
